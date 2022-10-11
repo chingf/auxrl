@@ -1,0 +1,5 @@
+*.pdf
+__pycache__
+nnets
+params
+scores
