@@ -147,6 +147,7 @@ class LearningRateController(Controller):
         if self._periodicity <= 1 or self._epoch_count % self._periodicity == 0:
             agent._learning_algo.setLearningRate(self._lr)
             self._lr *= self._lr_decay
+        agent._learning_algo.step_scheduler()
 
 class EpsilonController(Controller):
     """ A controller that modifies the probability "epsilon" of taking a random action periodically (only in training mode, i.e., agent.mode() == -1).

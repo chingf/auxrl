@@ -4,7 +4,7 @@
 import numpy as np
 
 from deer.base_classes import Environment
-
+import torch
 import matplotlib
 #matplotlib.use('agg')
 # matplotlib.use('qt5agg')
@@ -103,236 +103,266 @@ class MyEnv(Environment):
         """ Plot of the low-dimensional representation of the environment built by the model
         """
 
-        all_possib_inp=[] # Will store all possible inputs (=observation) for the CRAR agent
-        labels_maze=[]
-        self.create_map()
-        for y_a in range(self._size_maze):
-            for x_a in range(self._size_maze):                
-                state=copy.deepcopy(self._map)
-                state[self._size_maze//2,self._size_maze//2]=0
-                if(state[x_a,y_a]==0):
-                    if(self._higher_dim_obs==True):
-                        all_possib_inp.append(self.get_higher_dim_obs([[x_a,y_a]],[self._pos_goal]))
-                    else:
-                        state[x_a,y_a]=0.5
-                        all_possib_inp.append(state)
-                    
-                    ## labels
-                    #if(y_a<self._size_maze//2):
-                    #    labels_maze.append(0.)
-                    #elif(y_a==self._size_maze//2):
-                    #    labels_maze.append(1.)
-                    #else:
-                    #    labels_maze.append(2.)
-        
-        #arr=np.array(all_possib_inp)
-        #if(self._higher_dim_obs==False):
-        #    arr=arr.reshape(arr.shape[0],-1)
-        #else:
-        #    arr=arr.reshape(arr.shape[0],-1)
-        #    
-        #np.savetxt('tsne_python/mazesH_X.txt',arr.reshape(arr.shape[0],-1))
-        #np.savetxt('tsne_python/mazesH_labels.txt',np.array(labels_maze))
-        
-        all_possib_inp=np.expand_dims(np.array(all_possib_inp,dtype='float'),axis=1)
+        with torch.no_grad():
+            all_possib_inp=[] # Will store all possible inputs (=observation) for the CRAR agent
+            labels_maze=[]
+            self.create_map()
+            for y_a in range(self._size_maze):
+                for x_a in range(self._size_maze):                
+                    state=copy.deepcopy(self._map)
+                    state[self._size_maze//2,self._size_maze//2]=0
+                    if(state[x_a,y_a]==0):
+                        if(self._higher_dim_obs==True):
+                            all_possib_inp.append(self.get_higher_dim_obs([[x_a,y_a]],[self._pos_goal]))
+                        else:
+                            state[x_a,y_a]=0.5
+                            all_possib_inp.append(state)
+                        
+                        ## labels
+                        #if(y_a<self._size_maze//2):
+                        #    labels_maze.append(0.)
+                        #elif(y_a==self._size_maze//2):
+                        #    labels_maze.append(1.)
+                        #else:
+                        #    labels_maze.append(2.)
+            
+            #arr=np.array(all_possib_inp)
+            #if(self._higher_dim_obs==False):
+            #    arr=arr.reshape(arr.shape[0],-1)
+            #else:
+            #    arr=arr.reshape(arr.shape[0],-1)
+            #    
+            #np.savetxt('tsne_python/mazesH_X.txt',arr.reshape(arr.shape[0],-1))
+            #np.savetxt('tsne_python/mazesH_labels.txt',np.array(labels_maze))
 
-        all_possib_abs_states=learning_algo.encoder.predict(all_possib_inp)
-        if(all_possib_abs_states.ndim==4):
-            all_possib_abs_states=np.transpose(all_possib_abs_states, (0, 3, 1, 2))    # data_format='channels_last' --> 'channels_first'
-        
-        n=1000
-        historics=[]
-        for i,observ in enumerate(test_data_set.observations()[0][0:n]):
-            historics.append(np.expand_dims(observ,axis=0))
-        historics=np.array(historics)
-
-        abs_states=learning_algo.encoder.predict(historics)
-        if(abs_states.ndim==4):
-            abs_states=np.transpose(abs_states, (0, 3, 1, 2))    # data_format='channels_last' --> 'channels_first'
-
-        actions=test_data_set.actions()[0:n]
-        
-        if self.inTerminalState() == False:
-            self._mode_episode_count += 1
-        print("== Mean score per episode is {} over {} episodes ==".format(self._mode_score / (self._mode_episode_count+0.0001), self._mode_episode_count))
+            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+            all_possib_inp=np.expand_dims(np.array(all_possib_inp,dtype='float'),axis=1)
+   
+            try:
+                all_possib_abs_states=learning_algo.encoder(
+                    torch.tensor(all_possib_inp).float().to(device)
+                    ).cpu().numpy()
+                if(all_possib_abs_states.ndim==4):
+                    all_possib_abs_states=np.transpose(all_possib_abs_states, (0, 3, 1, 2))    # data_format='channels_last' --> 'channels_first'
                 
+                n=1000
+                historics=[]
+                for i,observ in enumerate(test_data_set.observations()[0][0:n]):
+                    historics.append(np.expand_dims(observ,axis=0))
+                historics=np.array(historics)
+            except:
+                import pdb; pdb.set_trace()
+   
+            try:
+                abs_states=learning_algo.encoder(
+                    torch.tensor(historics).float().to(device)
+                    )
+                if(abs_states.ndim==4):
+                    abs_states=np.transpose(abs_states, (0, 3, 1, 2))    # data_format='channels_last' --> 'channels_first'
         
-        m = cm.ScalarMappable(cmap=cm.jet)
-        
-        x = np.array(abs_states)[:,0]
-        y = np.array(abs_states)[:,1]
-        if(self.intern_dim>2):
-            z = np.array(abs_states)[:,2]
+                actions=test_data_set.actions()[0:n]
+            except:
+                import pdb; pdb.set_trace()
+            
+            if self.inTerminalState() == False:
+                self._mode_episode_count += 1
+            print("== Mean score per episode is {} over {} episodes ==".format(self._mode_score / (self._mode_episode_count+0.0001), self._mode_episode_count))
                     
-        fig = plt.figure()
-        if(self.intern_dim==2):
-            ax = fig.add_subplot(111)
-            ax.set_xlabel(r'$X_1$')
-            ax.set_ylabel(r'$X_2$')
-        else:
-            ax = fig.add_subplot(111,projection='3d')
-            ax.set_xlabel(r'$X_1$')
-            ax.set_ylabel(r'$X_2$')
-            ax.set_zlabel(r'$X_3$')
-                    
-        # Plot the estimated transitions
-        for i in range(n-1):
-            predicted1=learning_algo.transition.predict([abs_states[i:i+1],np.array([[1,0,0,0]])])
-            predicted2=learning_algo.transition.predict([abs_states[i:i+1],np.array([[0,1,0,0]])])
-            predicted3=learning_algo.transition.predict([abs_states[i:i+1],np.array([[0,0,1,0]])])
-            predicted4=learning_algo.transition.predict([abs_states[i:i+1],np.array([[0,0,0,1]])])
+            
+            m = cm.ScalarMappable(cmap=cm.jet)
+           
+            abs_states_np = abs_states.cpu().numpy()
+            x = np.array(abs_states_np)[:,0]
+            y = np.array(abs_states_np)[:,1]
+            if(self.intern_dim>2):
+                z = np.array(abs_states)[:,2]
+                        
+            fig = plt.figure()
             if(self.intern_dim==2):
-                ax.plot(np.concatenate([x[i:i+1],predicted1[0,:1]]), np.concatenate([y[i:i+1],predicted1[0,1:2]]), color="0.9", alpha=0.75)
-                ax.plot(np.concatenate([x[i:i+1],predicted2[0,:1]]), np.concatenate([y[i:i+1],predicted2[0,1:2]]), color="0.65", alpha=0.75)
-                ax.plot(np.concatenate([x[i:i+1],predicted3[0,:1]]), np.concatenate([y[i:i+1],predicted3[0,1:2]]), color="0.4", alpha=0.75)
-                ax.plot(np.concatenate([x[i:i+1],predicted4[0,:1]]), np.concatenate([y[i:i+1],predicted4[0,1:2]]), color="0.15", alpha=0.75)
+                ax = fig.add_subplot(111)
+                ax.set_xlabel(r'$X_1$')
+                ax.set_ylabel(r'$X_2$')
             else:
-                ax.plot(np.concatenate([x[i:i+1],predicted1[0,:1]]), np.concatenate([y[i:i+1],predicted1[0,1:2]]), np.concatenate([z[i:i+1],predicted1[0,2:3]]), color="0.9", alpha=0.75)
-                ax.plot(np.concatenate([x[i:i+1],predicted2[0,:1]]), np.concatenate([y[i:i+1],predicted2[0,1:2]]), np.concatenate([z[i:i+1],predicted2[0,2:3]]), color="0.65", alpha=0.75)
-                ax.plot(np.concatenate([x[i:i+1],predicted3[0,:1]]), np.concatenate([y[i:i+1],predicted3[0,1:2]]), np.concatenate([z[i:i+1],predicted3[0,2:3]]), color="0.4", alpha=0.75)
-                ax.plot(np.concatenate([x[i:i+1],predicted4[0,:1]]), np.concatenate([y[i:i+1],predicted4[0,1:2]]), np.concatenate([z[i:i+1],predicted4[0,2:3]]), color="0.15", alpha=0.75)            
-        
-        # Plot the dots at each time step depending on the action taken
-        length_block=[[0,18],[18,19],[19,31]]
-        for i in range(3):
-            colors=['blue','orange','green']
+                ax = fig.add_subplot(111,projection='3d')
+                ax.set_xlabel(r'$X_1$')
+                ax.set_ylabel(r'$X_2$')
+                ax.set_zlabel(r'$X_3$')
+                        
+            # Plot the estimated transitions
+            print(abs_states)
+            for i in range(n-1):
+                predicted1 = learning_algo.transition(torch.cat([
+                        abs_states[i:i+1],
+                        torch.as_tensor([[1,0,0,0]], device=device).float()
+                        ], dim=1)).cpu().numpy()
+                predicted2 = learning_algo.transition(torch.cat([
+                        abs_states[i:i+1],
+                        torch.as_tensor([[0,1,0,0]], device=device).float()
+                        ], dim=1)).cpu().numpy()
+                predicted3 = learning_algo.transition(torch.cat([
+                        abs_states[i:i+1],
+                        torch.as_tensor([[0,0,1,0]], device=device).float()
+                        ], dim=1)).cpu().numpy()
+                predicted4 = learning_algo.transition(torch.cat([
+                        abs_states[i:i+1],
+                        torch.as_tensor([[0,0,0,1]], device=device).float()
+                        ], dim=1)).cpu().numpy()
+                if(self.intern_dim==2):
+                    ax.plot(np.concatenate([x[i:i+1],predicted1[0,:1]]), np.concatenate([y[i:i+1],predicted1[0,1:2]]), color="0.9", alpha=0.75)
+                    ax.plot(np.concatenate([x[i:i+1],predicted2[0,:1]]), np.concatenate([y[i:i+1],predicted2[0,1:2]]), color="0.65", alpha=0.75)
+                    ax.plot(np.concatenate([x[i:i+1],predicted3[0,:1]]), np.concatenate([y[i:i+1],predicted3[0,1:2]]), color="0.4", alpha=0.75)
+                    ax.plot(np.concatenate([x[i:i+1],predicted4[0,:1]]), np.concatenate([y[i:i+1],predicted4[0,1:2]]), color="0.15", alpha=0.75)
+                else:
+                    ax.plot(np.concatenate([x[i:i+1],predicted1[0,:1]]), np.concatenate([y[i:i+1],predicted1[0,1:2]]), np.concatenate([z[i:i+1],predicted1[0,2:3]]), color="0.9", alpha=0.75)
+                    ax.plot(np.concatenate([x[i:i+1],predicted2[0,:1]]), np.concatenate([y[i:i+1],predicted2[0,1:2]]), np.concatenate([z[i:i+1],predicted2[0,2:3]]), color="0.65", alpha=0.75)
+                    ax.plot(np.concatenate([x[i:i+1],predicted3[0,:1]]), np.concatenate([y[i:i+1],predicted3[0,1:2]]), np.concatenate([z[i:i+1],predicted3[0,2:3]]), color="0.4", alpha=0.75)
+                    ax.plot(np.concatenate([x[i:i+1],predicted4[0,:1]]), np.concatenate([y[i:i+1],predicted4[0,1:2]]), np.concatenate([z[i:i+1],predicted4[0,2:3]]), color="0.15", alpha=0.75)            
+            
+            # Plot the dots at each time step depending on the action taken
+            length_block=[[0,18],[18,19],[19,31]]
+            for i in range(3):
+                colors=['blue','orange','green']
+                if(self.intern_dim==2):
+                    line3 = ax.scatter(all_possib_abs_states[length_block[i][0]:length_block[i][1],0], all_possib_abs_states[length_block[i][0]:length_block[i][1],1], c=colors[i], marker='x', edgecolors='k', alpha=0.5, s=100)
+                else:
+                    line3 = ax.scatter(all_possib_abs_states[length_block[i][0]:length_block[i][1],0], all_possib_abs_states[length_block[i][0]:length_block[i][1],1] ,all_possib_abs_states[length_block[i][0]:length_block[i][1],2], marker='x', depthshade=True, edgecolors='k', alpha=0.5, s=50)
+    
             if(self.intern_dim==2):
-                line3 = ax.scatter(all_possib_abs_states[length_block[i][0]:length_block[i][1],0], all_possib_abs_states[length_block[i][0]:length_block[i][1],1], c=colors[i], marker='x', edgecolors='k', alpha=0.5, s=100)
+                axes_lims=[ax.get_xlim(),ax.get_ylim()]
             else:
-                line3 = ax.scatter(all_possib_abs_states[length_block[i][0]:length_block[i][1],0], all_possib_abs_states[length_block[i][0]:length_block[i][1],1] ,all_possib_abs_states[length_block[i][0]:length_block[i][1],2], marker='x', depthshade=True, edgecolors='k', alpha=0.5, s=50)
+                axes_lims=[ax.get_xlim(),ax.get_ylim(),ax.get_zlim()]
+            
+            # Plot the legend for transition estimates
+            box1b = TextArea(" Estimated transitions (action 0, 1, 2 and 3): ", textprops=dict(color="k"))
+            box2b = DrawingArea(90, 20, 0, 0)
+            el1b = Rectangle((5, 10), 15,2, fc="0.9", alpha=0.75)
+            el2b = Rectangle((25, 10), 15,2, fc="0.65", alpha=0.75) 
+            el3b = Rectangle((45, 10), 15,2, fc="0.4", alpha=0.75)
+            el4b = Rectangle((65, 10), 15,2, fc="0.15", alpha=0.75) 
+            box2b.add_artist(el1b)
+            box2b.add_artist(el2b)
+            box2b.add_artist(el3b)
+            box2b.add_artist(el4b)
+            
+            boxb = HPacker(children=[box1b, box2b],
+                          align="center",
+                          pad=0, sep=5)
+            
+            anchored_box = AnchoredOffsetbox(loc=3,
+                                             child=boxb, pad=0.,
+                                             frameon=True,
+                                             bbox_to_anchor=(0., 0.98),
+                                             bbox_transform=ax.transAxes,
+                                             borderpad=0.,
+                                             )        
+            ax.add_artist(anchored_box)
+            
+            
+            #plt.show()
+            plt.savefig('fig_base'+str(learning_algo.update_counter)+'.pdf')
 
-        if(self.intern_dim==2):
-            axes_lims=[ax.get_xlim(),ax.get_ylim()]
-        else:
-            axes_lims=[ax.get_xlim(),ax.get_ylim(),ax.get_zlim()]
-        
-        # Plot the legend for transition estimates
-        box1b = TextArea(" Estimated transitions (action 0, 1, 2 and 3): ", textprops=dict(color="k"))
-        box2b = DrawingArea(90, 20, 0, 0)
-        el1b = Rectangle((5, 10), 15,2, fc="0.9", alpha=0.75)
-        el2b = Rectangle((25, 10), 15,2, fc="0.65", alpha=0.75) 
-        el3b = Rectangle((45, 10), 15,2, fc="0.4", alpha=0.75)
-        el4b = Rectangle((65, 10), 15,2, fc="0.15", alpha=0.75) 
-        box2b.add_artist(el1b)
-        box2b.add_artist(el2b)
-        box2b.add_artist(el3b)
-        box2b.add_artist(el4b)
-        
-        boxb = HPacker(children=[box1b, box2b],
-                      align="center",
-                      pad=0, sep=5)
-        
-        anchored_box = AnchoredOffsetbox(loc=3,
-                                         child=boxb, pad=0.,
-                                         frameon=True,
-                                         bbox_to_anchor=(0., 0.98),
-                                         bbox_transform=ax.transAxes,
-                                         borderpad=0.,
-                                         )        
-        ax.add_artist(anchored_box)
-        
-        
-        #plt.show()
-        plt.savefig('fig_base'+str(learning_algo.update_counter)+'.pdf')
-
-
-#        # Plot the Q_vals
-#        c = learning_algo.Q.predict(np.concatenate((np.expand_dims(x,axis=1),np.expand_dims(y,axis=1),np.expand_dims(z,axis=1)),axis=1))
-#        #print "actions,C"
-#        #print actions
-#        #print c
-#        #c=np.max(c,axis=1)
-#        m1=ax.scatter(x, y, z+zrange/20, c=c[:,0], vmin=-1., vmax=1., cmap=plt.cm.RdYlGn)
-#        m2=ax.scatter(x, y, z+3*zrange/40, c=c[:,1], vmin=-1., vmax=1., cmap=plt.cm.RdYlGn)
-#        
-#        #plt.colorbar(m3)
-#        ax2 = fig.add_axes([0.85, 0.15, 0.025, 0.7])
-#        cmap = matplotlib.cm.RdYlGn
-#        norm = matplotlib.colors.Normalize(vmin=-1, vmax=1)
-#
-#        # ColorbarBase derives from ScalarMappable and puts a colorbar
-#        # in a specified axes, so it has everything needed for a
-#        # standalone colorbar.  There are many more kwargs, but the
-#        # following gives a basic continuous colorbar with ticks
-#        # and labels.
-#        cb1 = matplotlib.colorbar.ColorbarBase(ax2, cmap=cmap,norm=norm,orientation='vertical')
-#        cb1.set_label('Estimated expected return')
-#
-#        #plt.show()
-#        plt.savefig('fig_w_V'+str(learning_algo.update_counter)+'.pdf')
-#
-#
-#        # fig_visuV
-#        fig = plt.figure()
-#        ax = fig.add_subplot(111, projection='3d')
-#        
-#        x = np.array([i for i in range(5) for jk in range(25)])/4.*(axes_lims[0][1]-axes_lims[0][0])+axes_lims[0][0]
-#        y = np.array([j for i in range(5) for j in range(5) for k in range(5)])/4.*(axes_lims[1][1]-axes_lims[1][0])+axes_lims[1][0]
-#        z = np.array([k for i in range(5) for j in range(5) for k in range(5)])/4.*(axes_lims[2][1]-axes_lims[2][0])+axes_lims[2][0]
-#
-#        c = learning_algo.Q.predict(np.concatenate((np.expand_dims(x,axis=1),np.expand_dims(y,axis=1),np.expand_dims(z,axis=1)),axis=1))
-#        c=np.max(c,axis=1)
-#        #print "c"
-#        #print c
-#        
-#        m=ax.scatter(x, y, z, c=c, vmin=-1., vmax=1., cmap=plt.hot())
-#        #plt.colorbar(m)
-#        fig.subplots_adjust(right=0.8)
-#        ax2 = fig.add_axes([0.875, 0.15, 0.025, 0.7])
-#        cmap = matplotlib.cm.hot
-#        norm = matplotlib.colors.Normalize(vmin=-1, vmax=1)
-#
-#        # ColorbarBase derives from ScalarMappable and puts a colorbar
-#        # in a specified axes, so it has everything needed for a
-#        # standalone colorbar.  There are many more kwargs, but the
-#        # following gives a basic continuous colorbar with ticks
-#        # and labels.
-#        cb1 = matplotlib.colorbar.ColorbarBase(ax2, cmap=cmap,norm=norm,orientation='vertical')
-#        cb1.set_label('Estimated expected return')
-#
-#        #plt.show()
-#        plt.savefig('fig_visuV'+str(learning_algo.update_counter)+'.pdf')
-#
-#
-#        # fig_visuR
-#        fig = plt.figure()
-#        ax = fig.add_subplot(111, projection='3d')
-#        
-#        x = np.array([i for i in range(5) for jk in range(25)])/4.*(axes_lims[0][1]-axes_lims[0][0])+axes_lims[0][0]
-#        y = np.array([j for i in range(5) for j in range(5) for k in range(5)])/4.*(axes_lims[1][1]-axes_lims[1][0])+axes_lims[1][0]
-#        z = np.array([k for i in range(5) for j in range(5) for k in range(5)])/4.*(axes_lims[2][1]-axes_lims[2][0])+axes_lims[2][0]
-#
-#        coords=np.concatenate((np.expand_dims(x,axis=1),np.expand_dims(y,axis=1),np.expand_dims(z,axis=1)),axis=1)
-#        repeat_nactions_coord=np.repeat(coords,self.nActions(),axis=0)
-#        identity_matrix = np.diag(np.ones(self.nActions()))
-#        tile_identity_matrix=np.tile(identity_matrix,(5*5*5,1))
-#
-#        c = learning_algo.R.predict([repeat_nactions_coord,tile_identity_matrix])
-#        c=np.max(np.reshape(c,(125,self.nActions())),axis=1)
-#        #print "c"
-#        #print c
-#        #mini=np.min(c)
-#        #maxi=np.max(c)
-#        
-#        m=ax.scatter(x, y, z, c=c, vmin=-1., vmax=1., cmap=plt.hot())
-#        #plt.colorbar(m)
-#        fig.subplots_adjust(right=0.8)
-#        ax2 = fig.add_axes([0.875, 0.15, 0.025, 0.7])
-#        cmap = matplotlib.cm.hot
-#        norm = matplotlib.colors.Normalize(vmin=-1, vmax=1)
-#
-#        # ColorbarBase derives from ScalarMappable and puts a colorbar
-#        # in a specified axes, so it has everything needed for a
-#        # standalone colorbar.  There are many more kwargs, but the
-#        # following gives a basic continuous colorbar with ticks
-#        # and labels.
-#        cb1 = matplotlib.colorbar.ColorbarBase(ax2, cmap=cmap,norm=norm,orientation='vertical')
-#        cb1.set_label('Estimated expected return')
-#
-#        #plt.show()
-#        plt.savefig('fig_visuR'+str(learning_algo.update_counter)+'.pdf')
-
-        matplotlib.pyplot.close("all") # avoids memory leaks
+            plt.figure()
+            plt.plot(np.log(learning_algo.tracked_losses))
+            plt.savefig('tracked_losses.png')
+    
+    
+    #        # Plot the Q_vals
+    #        c = learning_algo.Q.predict(np.concatenate((np.expand_dims(x,axis=1),np.expand_dims(y,axis=1),np.expand_dims(z,axis=1)),axis=1))
+    #        #print "actions,C"
+    #        #print actions
+    #        #print c
+    #        #c=np.max(c,axis=1)
+    #        m1=ax.scatter(x, y, z+zrange/20, c=c[:,0], vmin=-1., vmax=1., cmap=plt.cm.RdYlGn)
+    #        m2=ax.scatter(x, y, z+3*zrange/40, c=c[:,1], vmin=-1., vmax=1., cmap=plt.cm.RdYlGn)
+    #        
+    #        #plt.colorbar(m3)
+    #        ax2 = fig.add_axes([0.85, 0.15, 0.025, 0.7])
+    #        cmap = matplotlib.cm.RdYlGn
+    #        norm = matplotlib.colors.Normalize(vmin=-1, vmax=1)
+    #
+    #        # ColorbarBase derives from ScalarMappable and puts a colorbar
+    #        # in a specified axes, so it has everything needed for a
+    #        # standalone colorbar.  There are many more kwargs, but the
+    #        # following gives a basic continuous colorbar with ticks
+    #        # and labels.
+    #        cb1 = matplotlib.colorbar.ColorbarBase(ax2, cmap=cmap,norm=norm,orientation='vertical')
+    #        cb1.set_label('Estimated expected return')
+    #
+    #        #plt.show()
+    #        plt.savefig('fig_w_V'+str(learning_algo.update_counter)+'.pdf')
+    #
+    #
+    #        # fig_visuV
+    #        fig = plt.figure()
+    #        ax = fig.add_subplot(111, projection='3d')
+    #        
+    #        x = np.array([i for i in range(5) for jk in range(25)])/4.*(axes_lims[0][1]-axes_lims[0][0])+axes_lims[0][0]
+    #        y = np.array([j for i in range(5) for j in range(5) for k in range(5)])/4.*(axes_lims[1][1]-axes_lims[1][0])+axes_lims[1][0]
+    #        z = np.array([k for i in range(5) for j in range(5) for k in range(5)])/4.*(axes_lims[2][1]-axes_lims[2][0])+axes_lims[2][0]
+    #
+    #        c = learning_algo.Q.predict(np.concatenate((np.expand_dims(x,axis=1),np.expand_dims(y,axis=1),np.expand_dims(z,axis=1)),axis=1))
+    #        c=np.max(c,axis=1)
+    #        #print "c"
+    #        #print c
+    #        
+    #        m=ax.scatter(x, y, z, c=c, vmin=-1., vmax=1., cmap=plt.hot())
+    #        #plt.colorbar(m)
+    #        fig.subplots_adjust(right=0.8)
+    #        ax2 = fig.add_axes([0.875, 0.15, 0.025, 0.7])
+    #        cmap = matplotlib.cm.hot
+    #        norm = matplotlib.colors.Normalize(vmin=-1, vmax=1)
+    #
+    #        # ColorbarBase derives from ScalarMappable and puts a colorbar
+    #        # in a specified axes, so it has everything needed for a
+    #        # standalone colorbar.  There are many more kwargs, but the
+    #        # following gives a basic continuous colorbar with ticks
+    #        # and labels.
+    #        cb1 = matplotlib.colorbar.ColorbarBase(ax2, cmap=cmap,norm=norm,orientation='vertical')
+    #        cb1.set_label('Estimated expected return')
+    #
+    #        #plt.show()
+    #        plt.savefig('fig_visuV'+str(learning_algo.update_counter)+'.pdf')
+    #
+    #
+    #        # fig_visuR
+    #        fig = plt.figure()
+    #        ax = fig.add_subplot(111, projection='3d')
+    #        
+    #        x = np.array([i for i in range(5) for jk in range(25)])/4.*(axes_lims[0][1]-axes_lims[0][0])+axes_lims[0][0]
+    #        y = np.array([j for i in range(5) for j in range(5) for k in range(5)])/4.*(axes_lims[1][1]-axes_lims[1][0])+axes_lims[1][0]
+    #        z = np.array([k for i in range(5) for j in range(5) for k in range(5)])/4.*(axes_lims[2][1]-axes_lims[2][0])+axes_lims[2][0]
+    #
+    #        coords=np.concatenate((np.expand_dims(x,axis=1),np.expand_dims(y,axis=1),np.expand_dims(z,axis=1)),axis=1)
+    #        repeat_nactions_coord=np.repeat(coords,self.nActions(),axis=0)
+    #        identity_matrix = np.diag(np.ones(self.nActions()))
+    #        tile_identity_matrix=np.tile(identity_matrix,(5*5*5,1))
+    #
+    #        c = learning_algo.R.predict([repeat_nactions_coord,tile_identity_matrix])
+    #        c=np.max(np.reshape(c,(125,self.nActions())),axis=1)
+    #        #print "c"
+    #        #print c
+    #        #mini=np.min(c)
+    #        #maxi=np.max(c)
+    #        
+    #        m=ax.scatter(x, y, z, c=c, vmin=-1., vmax=1., cmap=plt.hot())
+    #        #plt.colorbar(m)
+    #        fig.subplots_adjust(right=0.8)
+    #        ax2 = fig.add_axes([0.875, 0.15, 0.025, 0.7])
+    #        cmap = matplotlib.cm.hot
+    #        norm = matplotlib.colors.Normalize(vmin=-1, vmax=1)
+    #
+    #        # ColorbarBase derives from ScalarMappable and puts a colorbar
+    #        # in a specified axes, so it has everything needed for a
+    #        # standalone colorbar.  There are many more kwargs, but the
+    #        # following gives a basic continuous colorbar with ticks
+    #        # and labels.
+    #        cb1 = matplotlib.colorbar.ColorbarBase(ax2, cmap=cmap,norm=norm,orientation='vertical')
+    #        cb1.set_label('Estimated expected return')
+    #
+    #        #plt.show()
+    #        plt.savefig('fig_visuR'+str(learning_algo.update_counter)+'.pdf')
+    
+            matplotlib.pyplot.close("all") # avoids memory leaks
 
     def inputDimensions(self):
         if(self._higher_dim_obs==True):

@@ -295,6 +295,7 @@ class NN():
         enc_x = encoder_model(inputs[:half]) #s --> x
         enc_x_ = encoder_model(inputs[half:]) #s --> x
 
+        print(plan_depth)
         Tx= enc_x
         for d in range(plan_depth+1):
             inputs.append(Input(shape=(self._n_actions,)))
@@ -333,6 +334,7 @@ class NN():
         model with output E(s1)-T(E(s1))
     
         """
+        print(plan_depth)
         inputs=[]
         for i, dim in enumerate(self._input_dimensions):
             if(len(dim) == 4):
@@ -453,7 +455,7 @@ class NN():
                 inputs.append(input)
         
         enc_x = encoder_model(inputs[:]) #s --> x
-        
+        print(plan_depth)
         Tx= enc_x
         for d in range(plan_depth):
             inputs.append(Input(shape=(self._n_actions,)))
