@@ -69,6 +69,10 @@ class CRAR(LearningAlgo):
         self.loss_disambiguate2=0
         self.loss_gamma=0
         self.tracked_losses = []
+        self.tracked_T_err = []
+        self.tracked_disamb1 = []
+        self.tracked_disamb2 = []
+        self.tracked_disentang = []
         self.device = torch.device(
             "cuda:0" if torch.cuda.is_available() else "cpu"
             )
@@ -91,12 +95,6 @@ class CRAR(LearningAlgo):
         # used to fit gamma
         self.full_gamma = self.learn_and_plan.full_float(self.encoder,self.gamma)
         
-        # used to fit transitions
-        self.diff_Tx_x_ = self.learn_and_plan.diff_Tx_x_(self.encoder,self.transition)
-        
-        # constraint on consecutive t
-        self.diff_s_s_ = self.learn_and_plan.diff_encoder(self.encoder)
-
         # used to force features variations
         if(self._high_int_dim==False):
             self.force_features=self.learn_and_plan.force_features(self.encoder,self.transition)
@@ -105,9 +103,7 @@ class CRAR(LearningAlgo):
         for model in [self.encoder, self.R, self.gamma, self.transition]:
             self.params.extend([p for p in model.parameters()])
         self.optimizer = torch.optim.Adam(self.params, lr=lr)
-        self.scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=0.85)
-
-        # Make targets
+        self.scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=0.9)
 
     def getAllParams(self):
         """ Provides all parameters used by the learning algorithm
@@ -193,14 +189,14 @@ class CRAR(LearningAlgo):
             print("R[0]")
             print(R[0])
 
-        # Fit transition
-        loss_T = torch.nn.functional.mse_loss(
-            self.diff_Tx_x_(Esp, TEs, torch.tensor(terminals_val).to(self.device)),
-            torch.zeros_like(Es)
-            )
+        # Transition loss
+        loss_T = torch.nn.functional.mse_loss(TEs, Esp, reduction='none')
+        terminals_mask = torch.tensor(1-terminals_val).float().to(self.device)
+        loss_T = loss_T * terminals_mask[:, None]
+        loss_T = torch.mean(loss_T)
         self.loss_T += loss_T.item()
 
-        # Fit rewards
+        # Rewards loss
         loss_R = torch.nn.functional.mse_loss(
             self.full_R(Es_and_actions),
             torch.tensor(rewards_val).view(-1,1).to(self.device)
@@ -216,23 +212,22 @@ class CRAR(LearningAlgo):
 
         # Loss to ensure entropy but limited volume in abstract state space, avg=0 and sigma=1
         # reduce the squared value of the abstract features
-        loss_disambiguate1 = torch.nn.functional.mse_loss(Es, torch.zeros_like(Es))
+        loss_disambiguate1 = torch.pow(torch.norm(Es, p=float('inf'), dim=1), 2) - 1
+        loss_disambiguate1 = torch.clip(loss_disambiguate1, min=0)
+        loss_disambiguate1 = torch.mean(loss_disambiguate1)
         self.loss_disambiguate1 += loss_disambiguate1.item()
 
         # Increase the entropy in the abstract features of two states
         # This works only when states_val is made up of only one observation --> FIXME
         rolled = torch.roll(Es, 1, dims=0)
-        loss_disambiguate2 = torch.nn.functional.mse_loss(
-                self.diff_s_s_(Es, rolled),
-                torch.reshape(torch.zeros_like(Es),(self._batch_size,-1))
-                )
+        Cd = 5.
+        loss_disambiguate2 = torch.exp(-Cd * torch.norm(Es - rolled, dim=1))
+        loss_disambiguate2 = torch.mean(loss_disambiguate2)
         self.loss_disambiguate2 += loss_disambiguate2.item()
 
         # Some other disentangling loss
-        loss_disentangle_t = torch.nn.functional.mse_loss(
-                self.diff_s_s_(Es, Esp),
-                torch.reshape(torch.zeros_like(Es),(self._batch_size,-1))
-                )
+        loss_disentangle_t = torch.exp(-Cd * torch.norm(Es - Esp, dim=1))
+        loss_disentangle_t = torch.mean(loss_disentangle_t)
         self.loss_disentangle_t += loss_disentangle_t.item()
 
 #        # Interpretable AI
@@ -260,8 +255,16 @@ class CRAR(LearningAlgo):
 
 #        all_losses = loss_T + loss_R + loss_gamma + loss_disambiguate1 + \
 #            loss_disambiguate2 + loss_disentangle_t #+ loss_interpret
-        all_losses = loss_T + -1*1E-1*loss_disentangle_t + -1*1E-2*loss_disambiguate2
+
+        all_losses = loss_T \
+            + 0.2*loss_disentangle_t \
+            + loss_disambiguate2 \
+            + loss_disambiguate1
         self.tracked_losses.append(all_losses.item())
+        self.tracked_T_err.append(loss_T.item())
+        self.tracked_disamb1.append(loss_disambiguate1.item())
+        self.tracked_disamb2.append(loss_disambiguate2.item())
+        self.tracked_disentang.append(loss_disentangle_t.item())
         all_losses.backward()
         self.optimizer.step()
         self.update_counter += 1

@@ -263,8 +263,23 @@ class MyEnv(Environment):
 
             plt.figure()
             plt.plot(np.log(learning_algo.tracked_losses))
-            plt.savefig('tracked_losses.png')
+            plt.savefig('tracked_losses.pdf')
+
+            plt.figure()
+            plt.plot(np.log(learning_algo.tracked_disamb1))
+            plt.savefig('tracked_disamb1.pdf')
+
+            plt.figure()
+            plt.plot(np.log(learning_algo.tracked_disamb2))
+            plt.savefig('tracked_disamb2.pdf')
     
+            plt.figure()
+            plt.plot(np.log(learning_algo.tracked_disentang))
+            plt.savefig('tracked_disentang.pdf')   
+
+            plt.figure()
+            plt.plot(np.log(learning_algo.tracked_T_err))
+            plt.savefig('tracked_T_err.pdf')   
     
     #        # Plot the Q_vals
     #        c = learning_algo.Q.predict(np.concatenate((np.expand_dims(x,axis=1),np.expand_dims(y,axis=1),np.expand_dims(z,axis=1)),axis=1))
