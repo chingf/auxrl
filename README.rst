@@ -41,6 +41,6 @@ The documentation is available at : http://deer.readthedocs.io/
 Torch Model
 ==================
 
-The main representation learning algorithms are in `deer/deer/learning_algos`. In this directory are the torch files: `NN_CRAR_torch.py` and `CRAR_torch.py`. `NN_CRAR_torch.py` contains code to make the transition model, rewards model, gamma model, and Q model. `CRAR_torch.py` initializes these models and creates the relevant loss functions and auxiliary tasks.
+The main representation learning algorithms are in ``deer/deer/learning_algos``. In this directory are the torch files: ``NN_CRAR_torch.py`` and ``CRAR_torch.py``. ``NN_CRAR_torch.py`` contains code to make the transition model, rewards model, gamma model, and Q model. ``CRAR_torch.py`` initializes these models and creates the relevant loss functions and auxiliary tasks.
 
-This encoder learning algorithm is used by the agent in `deer/deer/agent.py`. The agent is initialized and run in `deer/examples/test_CRAR/torch_maze.ipynb` which uses the environment from `deer/examples/test_CRAR/simple_maze_env.ipynb` 
+This encoder learning algorithm is used by the agent in ``deer/deer/agent.py``. The agent is initialized and run in ``deer/examples/test_CRAR/torch_maze.ipynb`` which uses the environment from ``deer/examples/test_CRAR/simple_maze_env.ipynb`` 
