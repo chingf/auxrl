@@ -4,6 +4,7 @@ import yaml
 from pathlib import Path
 import torch
 import torch.nn as nn
+from copy import deepcopy
 from ..base_classes import LearningAlgo
 from .NN_CRAR_torch import NN # Default Neural network used
 
@@ -57,9 +58,9 @@ class CRAR(LearningAlgo):
         self._double_Q = double_Q
         self._random_state = random_state
         self.update_counter = 0    
-        self._high_int_dim = kwargs.get('high_int_dim',False)
-        self._internal_dim = kwargs.get('internal_dim',2)
-        self._div_entrop_loss = kwargs.get('div_entrop_loss',5.)
+        self._high_int_dim = kwargs.get('high_int_dim', False)
+        self._internal_dim = kwargs.get('internal_dim', 2)
+        self._entropy_temp = kwargs.get('entropy_temp', 5.)
         self.loss_interpret=0
         self.loss_T=0
         self.loss_R=0
@@ -77,33 +78,26 @@ class CRAR(LearningAlgo):
             "cuda:0" if torch.cuda.is_available() else "cpu"
             )
 
-        self.learn_and_plan = neural_network(
+        self.crar = neural_network(
             self._batch_size, self._input_dimensions, self._n_actions,
             self._random_state, high_int_dim=self._high_int_dim,
-            internal_dim=self._internal_dim
+            internal_dim=self._internal_dim, device=self.device
             )
-        self.encoder = self.learn_and_plan.encoder_model().to(self.device)
-        self.R = self.learn_and_plan.float_model().to(self.device)
-        self.Q = self.learn_and_plan.Q_model()
-        self.gamma = self.learn_and_plan.float_model().to(self.device)
-        self.transition = self.learn_and_plan.transition_model().to(self.device)
-        self.full_Q = self.learn_and_plan.full_Q_model(self.encoder,self.Q,0,self._df)
-
-        # used to fit rewards
-        self.full_R = self.learn_and_plan.full_float(self.encoder,self.R)
-        
-        # used to fit gamma
-        self.full_gamma = self.learn_and_plan.full_float(self.encoder,self.gamma)
-        
-        # used to force features variations
-        if(self._high_int_dim==False):
-            self.force_features=self.learn_and_plan.force_features(self.encoder,self.transition)
-                
-        self.params = []
-        for model in [self.encoder, self.R, self.gamma, self.transition]:
-            self.params.extend([p for p in model.parameters()])
-        self.optimizer = torch.optim.Adam(self.params, lr=lr)
+        self.optimizer = torch.optim.Adam(self.crar.params, lr=lr)
         self.scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=0.9)
+
+        self.crar_target = neural_network(
+            self._batch_size, self._input_dimensions, self._n_actions,
+            self._random_state, high_int_dim=self._high_int_dim,
+            internal_dim=self._internal_dim, device=self.device
+            )
+        self.optimizer_target = torch.optim.Adam(
+            self.crar_target.Q.parameters(), lr=lr
+            )
+        self.scheduler_target = torch.optim.lr_scheduler.ExponentialLR(
+            self.optimizer_target, gamma=0.9
+            )
+        self._resetQHat()
 
     def getAllParams(self):
         """ Provides all parameters used by the learning algorithm
@@ -167,11 +161,11 @@ class CRAR(LearningAlgo):
         states_val = torch.as_tensor(states_val, device=self.device).float()
         next_states_val = torch.as_tensor(next_states_val, device=self.device).float()
 
-        Esp = self.encoder(next_states_val)
-        Es = self.encoder(states_val)
+        Esp = self.crar.encoder(next_states_val)
+        Es = self.crar.encoder(states_val)
         Es_and_actions = torch.cat([Es, onehot_actions], dim=1)
-        TEs = self.transition(Es_and_actions)
-        R = self.R(Es_and_actions)
+        TEs = self.crar.transition(Es_and_actions)
+        R = self.crar.R(Es_and_actions)
 
         if(self.update_counter%500==0):
             print("Printing a few elements useful for debugging:")
@@ -197,40 +191,45 @@ class CRAR(LearningAlgo):
         self.loss_T += loss_T.item()
 
         # Rewards loss
+        rewards_val = torch.tensor(rewards_val).view(-1,1).to(self.device).float()
         loss_R = torch.nn.functional.mse_loss(
-            self.full_R(Es_and_actions),
-            torch.tensor(rewards_val).view(-1,1).to(self.device)
+            self.crar.R(Es_and_actions), rewards_val
             )
         self.loss_R += loss_R.item()
 
         # Fit gammas
+        gamma_val = terminals_mask * self._df
+        gamma_val = gamma_val.view(-1,1).float().to(self.device)
         loss_gamma = torch.nn.functional.mse_loss(
-            self.full_gamma(Es_and_actions),
-            torch.tensor((1-terminals_val[:])*self._df).view(-1,1).float().to(self.device)
+            self.crar.gamma(Es_and_actions), gamma_val
             )
         self.loss_gamma += loss_gamma.item()
 
-        # Loss to ensure entropy but limited volume in abstract state space, avg=0 and sigma=1
-        # reduce the squared value of the abstract features
-        loss_disambiguate1 = torch.pow(torch.norm(Es, p=float('inf'), dim=1), 2) - 1
+        # Enforce limited volume in abstract state space
+        loss_disambiguate1 = torch.pow(
+            torch.norm(Es, p=float('inf'), dim=1),
+            2) - 1
         loss_disambiguate1 = torch.clip(loss_disambiguate1, min=0)
         loss_disambiguate1 = torch.mean(loss_disambiguate1)
         self.loss_disambiguate1 += loss_disambiguate1.item()
 
-        # Increase the entropy in the abstract features of two states
-        # This works only when states_val is made up of only one observation --> FIXME
+        # Increase entropy of randomly sampled states
+        # This works only when states_val is made up of only one observation
         rolled = torch.roll(Es, 1, dims=0)
-        Cd = 5.
-        loss_disambiguate2 = torch.exp(-Cd * torch.norm(Es - rolled, dim=1))
+        loss_disambiguate2 = torch.exp(
+            -self._entropy_temp * torch.norm(Es - rolled, dim=1)
+            )
         loss_disambiguate2 = torch.mean(loss_disambiguate2)
         self.loss_disambiguate2 += loss_disambiguate2.item()
 
-        # Some other disentangling loss
-        loss_disentangle_t = torch.exp(-Cd * torch.norm(Es - Esp, dim=1))
+        # Increase entropy of neighboring states
+        loss_disentangle_t = torch.exp(
+            -self._entropy_temp * torch.norm(Es - Esp, dim=1)
+            )
         loss_disentangle_t = torch.mean(loss_disentangle_t)
         self.loss_disentangle_t += loss_disentangle_t.item()
 
-#        # Interpretable AI
+#        # Interpretable AI # not implemented
 #        target_modif_features=np.zeros((self._n_actions,self._internal_dim))
 #        ## Catcher
 #        #target_modif_features[0,0]=1    # dir
@@ -256,6 +255,30 @@ class CRAR(LearningAlgo):
 #        all_losses = loss_T + loss_R + loss_gamma + loss_disambiguate1 + \
 #            loss_disambiguate2 + loss_disentangle_t #+ loss_interpret
 
+        # Q network stuff
+        if self.update_counter % self._freeze_interval == 0:
+            self._resetQHat()
+        next_q_target = self.crar_target.Q(
+            self.crar_target.encoder(next_states_val)
+            )
+
+        if self._double_Q: # Action selection by Q
+            next_q = self.crar.Q(Esp)
+            argmax_next_q = torch.argmax(next_q, axis=1)
+            max_next_q = next_q_target[
+                np.arange(self._batch_size), argmax_next_q
+                ].reshape((-1, 1))
+        else: # Action selection by Q'
+            max_next_q = np.max(next_q_target, axis=1, keepdims=True)
+        target = rewards_val.squeeze() + terminals_mask*self._df*max_next_q.squeeze()
+        q_vals = self.crar.Q(Es)
+        q_vals = q_vals[np.arange(self._batch_size), actions_val]
+        loss_Q = torch.nn.functional.mse_loss(q_vals, target, reduction='none')
+        loss_Q_unreduced = loss_Q
+        loss_Q = torch.mean(loss_Q)
+        self.loss_Q += loss_Q.item()
+
+        # Aggregate all losses and update parameters
         all_losses = loss_T \
             + 0.2*loss_disentangle_t \
             + loss_disambiguate2 \
@@ -269,15 +292,16 @@ class CRAR(LearningAlgo):
         self.optimizer.step()
         self.update_counter += 1
 
+        # Occasional logging
         if(self.update_counter%500==0):
-            print ("self.loss_T/500., self.lossR/500., self.loss_gamma/500., self.loss_Q/500., self.loss_disentangle_t/500., self.loss_disambiguate1/500., self.loss_disambiguate2/500.")
-            print (self.loss_T/500., self.loss_R/500.,self.loss_gamma/500., self.loss_Q/500., self.loss_disentangle_t/500., self.loss_disambiguate1/500., self.loss_disambiguate2/500.)
+            print('self.loss_T, self.loss_R, self.loss_gamma, self.loss_Q, self.loss_disentangle_t, self.loss_disambiguate1, self.loss_disambiguate2')
+            print(self.loss_T/500., self.loss_R/500.,self.loss_gamma/500., self.loss_Q/500., self.loss_disentangle_t/500., self.loss_disambiguate1/500., self.loss_disambiguate2/500.)
 
             if(self._high_int_dim==False):
                 print ("self.loss_interpret/500.")
                 print (self.loss_interpret/500.)
 
-            self.lossR=0
+            self.loss_R=0
             self.loss_gamma=0
             self.loss_Q=0
             self.loss_T=0
@@ -287,14 +311,13 @@ class CRAR(LearningAlgo):
             self.loss_disambiguate1=0
             self.loss_disambiguate2=0
 
-        # Q network stuff
-        return 0., 0.
+        return loss_Q.item(), loss_Q_unreduced
 
     def step_scheduler(self):
-        print("adjusting learning rate!!!")
         self.scheduler.step()
+        self.scheduler_target.step()
 
-    def qValues(self, state_val):
+    def qValues(self, x, d=5, from_target=False):
         """ Get the q values for one pseudo-state (without planning)
 
         Arguments
@@ -308,58 +331,23 @@ class CRAR(LearningAlgo):
         The q values for the provided pseudo state
         """ 
 
-        return None
-
-    def qValues_planning(self, state_val, R, gamma, T, Q, d=5):
-        """ Get the average Q-values up to planning depth d for one pseudo-state.
-        
-        Arguments
-        ---------
-        state_val : array of objects (or list of objects)
-            Each object is a numpy array that relates to one of the observations
-            with size [1 * history size * size of punctual observation (which is 2D,1D or scalar)]).
-        R : float_model
-            Model that fits the reward
-        gamma : float_model
-            Model that fits the discount factor
-        T : transition_model
-            Model that fits the transition between abstract representation
-        Q : Q_model
-            Model that fits the optimal Q-value
-        d : int
-            planning depth
-
-        Returns
-        -------
-        The average q values with planning depth up to d for the provided pseudo-state
-        """
-
-        return None
-
-    def qValues_planning_abstr(self, state_abstr_val, R, gamma, T, Q, d, branching_factor=None):
-        """ Get the q values for pseudo-state(s) with a planning depth d. 
-        This function is called recursively by decreasing the depth d at every step.
-
-        Arguments
-        ---------
-        state_abstr_val : internal state(s).
-        R : float_model
-            Model that fits the reward
-        gamma : float_model
-            Model that fits the discount factor
-        T : transition_model
-            Model that fits the transition between abstract representation
-        Q : Q_model
-            Model that fits the optimal Q-value
-        d : int
-            planning depth
-
-        Returns
-        -------
-        The Q-values with planning depth d for the provided encoded state(s)
-        """
-
-        return None
+        crar_net = self.crar_target if from_target else self.crar
+        with torch.no_grad():
+            import pdb; pdb.set_trace()
+            if d == 0:
+                return crar_net.Q(x)
+            else:
+                q_plan_values = []
+                for a in range(self._n_actions):
+                    actions = torch.tensor([a] * x.shape[0], device=self.device)
+                    state_and_actions = torch.cat([x, actions.float().view(-1, 1)], 1) 
+                    rewards = crar_net.R(state_and_actions)
+                    discounts = torch.tensor([self._df]*rewards.shape[0], device=self.device)
+                    next_x = crar_net.transition(state_and_actions)
+                    q_plan_values.append(
+                        rewards + discounts * torch.max(self.qValues(next_x, d-1, from_target), dim=1)[0]
+                        )
+                return torch.cat(q_plan_values, dim=1)
 
     def chooseBestAction(self, state, mode, *args, **kwargs):
         """ Get the best action for a pseudo-state
@@ -375,35 +363,23 @@ class CRAR(LearningAlgo):
         -------
         The best action : int
         """
-        copy_state=copy.deepcopy(state) #Required because of the "hack" below
 
         if(mode==None):
             mode=0
         di=[0,1,3,6]
         # We use the mode to define the planning depth
-        q_vals = self.qValues_planning([np.expand_dims(s,axis=0) for s in copy_state],self.R,self.gamma, self.transition, self.Q, d=di[mode])
-
+        q_vals = self.qValues(
+            [np.expand_dims(s,axis=0) for s in copy_state],
+            d=di[mode]
+            )
         return np.argmax(q_vals),np.max(q_vals)
-
-    def _compile(self):
-        """ Compile all the optimizers for the different losses
-        """
-        pass
 
     def _resetQHat(self):
         """ Set the target Q-network weights equal to the main Q-network weights
         """
-        pass
 
-    def setLearningRate(self, lr):
-        """ Setting the learning rate
-
-        Parameters
-        -----------
-        lr : float
-            The learning rate that has to be set
-        """
-        pass
+        for target_model, model in zip(self.crar_target.models, self.crar.models):
+            target_model.load_state_dict(model.state_dict())
 
     def transfer(self, original, transfer, epochs=1):
-        pass
+        raise ValueError("Not implemented.")

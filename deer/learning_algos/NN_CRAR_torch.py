@@ -62,20 +62,31 @@ class NN():
         Whether the abstract state should be high dimensional in the form of frames/vectors or whether it should 
         be low-dimensional
     """
-    def __init__(self, batch_size, input_dimensions, n_actions, random_state, **kwargs):
+    def __init__(
+            self, batch_size, input_dimensions, n_actions,
+            random_state, device, **kwargs):
         self._input_dimensions=input_dimensions
         self._batch_size=batch_size
         self._random_state=random_state
         self._n_actions=n_actions
-        self._high_int_dim=kwargs["high_int_dim"]
+        self._high_int_dim = kwargs.get('high_int_dim', False)
+        self.device = device
+        self.ddqn_only = kwargs.get('ddqn_only', False)
         if self._high_int_dim:
+            self.n_channels_internal_dim = kwargs["internal_dim"] #dim[-3]
             raise ValueError("Not implemented")
-
-        if(self._high_int_dim==True):
-            self.n_channels_internal_dim=kwargs["internal_dim"] #dim[-3]
         else:
             self.internal_dim=kwargs["internal_dim"]    #2 for laby
                                                         #3 for catcher
+        self.encoder = self.encoder_model().to(self.device)
+        self.R = self.float_model().to(self.device)
+        self.Q = self.Q_model().to(self.device)
+        self.gamma = self.float_model().to(self.device)
+        self.transition = self.transition_model().to(self.device)
+        self.models = [self.encoder, self.R, self.gamma, self.transition, self.Q]
+        self.params = []
+        for model in self.models:
+            self.params.extend([p for p in model.parameters()])
 
     def encoder_model(self): # MODULE
         """ Instantiate a Keras model for the encoder of the CRAR learning algorithm.
@@ -199,69 +210,6 @@ class NN():
         scalar_predictor = ScalarPredictor(abstract_dim, num_actions, fc)
         return scalar_predictor
 
-    def force_features(self, encoder_model, transition_model, plan_depth=0):
-        """ Instantiate a Keras model that provides the vector of the transition at E(s1). It is calculated as the different between E(s1) and E(T(s1)). 
-        Used to force the directions of the transitions.
-        
-        The model takes the four following inputs:
-        s1 : list of objects
-            Each object is a numpy array that relates to one of the observations
-            with size [batch_size * history size * size of punctual observation (which is 2D,1D or scalar)]).
-        a : list of ints with length (plan_depth+1)
-            the action(s) considered at s1
-        
-        Parameters
-        -----------
-        encoder_model: instantiation of a Keras model for the encoder (E)
-        transition_model: instantiation of a Keras model for the transition (T)
-        plan_depth: if>1, it provides the possibility to consider a sequence of transitions between s1 and s2 
-        (input a is then a list of actions)
-            
-        Returns
-        -------
-        model with output E(s1)-T(E(s1))
-    
-        """
-
-        if plan_depth > 0: raise ValueError('Not implemented.')
-
-        def f(Es, TEs):
-            diff_features = Es - TEs
-        return f
-
-    def full_float(
-            self, encoder_model, float_model,
-            plan_depth=0, transition_model=None
-            ):
-        """ Instantiate a Keras model for fitting a float from s.
-                
-        The model takes the four following inputs:
-        s : list of objects
-            Each object is a numpy array that relates to one of the observations
-            with size [batch_size * history size * size of punctual observation (which is 2D,1D or scalar)]).
-        a : list of ints with length (plan_depth+1)
-            the action(s) considered at s
-                
-        Parameters
-        -----------
-        encoder_model: instantiation of a Keras model for the encoder (E)
-        float_model: instantiation of a Keras model for fitting a float from x
-        plan_depth: if>1, it provides the possibility to consider a sequence of transitions following s 
-        (input a is then a list of actions)
-        transition_model: instantiation of a Keras model for the transition (T)
-            
-        Returns
-        -------
-        model with output the reward r
-        """
-
-        if plan_depth > 0: raise ValueError('Not implemented.')
-
-        def f(Es_and_actions):
-            out = float_model(Es_and_actions)
-            return out
-        return f
-
     def Q_model(self):
         """ Instantiate a  a Keras model for the Q-network from x.
 
@@ -276,33 +224,34 @@ class NN():
         model that outputs the Q-values for each action
         """
 
-        return None
+        class QNetwork(nn.Module):
+            def __init__(self, convs, fc):
+                super().__init__()
+                self.convs = convs
+                self.fc = fc
 
-    def full_Q_model(self, encoder_model, Q_model, plan_depth=0, transition_model=None, R_model=None, discount_model=None):
-        """ Instantiate a  a Keras model for the Q-network from s.
+            def forward(self, x):
+                if self.convs is not None:
+                    x = self.convs(x)
+                    x = x.view(x.size(0), -1)
+                x = self.fc(x)
+                return x
 
-        The model takes the following inputs:
-        s : list of objects
-            Each object is a numpy array that relates to one of the observations
-            with size [batch_size * history size * size of punctual observation (which is 2D,1D or scalar)]).
-        a : list of ints with length plan_depth; if plan_depth=0, there isn't any input for a.
-            the action(s) considered at s
-    
-        Parameters
-        -----------
-        encoder_model: instantiation of a Keras model for the encoder (E)
-        Q_model: instantiation of a Keras model for the Q-network from x.
-        plan_depth: if>1, it provides the possibility to consider a sequence of transitions following s 
-        (input a is then a list of actions)
-        transition_model: instantiation of a Keras model for the transition (T)
-        R_model: instantiation of a Keras model for the reward
-        discount_model: instantiation of a Keras model for the discount
-            
-        Returns
-        -------
-        model with output the Q-values
-        """
+            def act(self, state):
+                q_values = self(state)
+                action = torch.argmax(q_value).item()
+                return action
+                
+        with open(HERE / "network.yaml") as f:
+            config = yaml.load(f, Loader=yaml.FullLoader)
+        qnet_config = config['qnet']
+        if self.ddqn_only:
+            convs = make_convs(self._input_dimensions[0], qnet_config['convs'])
+            feature_size = compute_feature_size(self._input_dimensions[0], convs)
+        else:
+            convs = None
+            feature_size = self.internal_dim
+        fc = make_fc(self.internal_dim, self._n_actions, qnet_config['fc'])
+        qnet = QNetwork(convs, fc)
+        return qnet
 
-        if plan_depth > 0: raise ValueError('Not implemented.')
-
-        return None

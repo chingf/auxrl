@@ -372,40 +372,8 @@ class CRAR(LearningAlgo):
         -------
         The average q values with planning depth up to d for the provided pseudo-state
         """
+
         encoded_x = self.encoder.predict(state_val)
-
-#        ## DEBUG PURPOSES
-#        print ( "self.full_Q.predict(state_val)[0]" )
-#        print ( self.full_Q.predict(state_val)[0] )
-#        identity_matrix = np.diag(np.ones(self._n_actions))
-#        if(encoded_x.ndim==2):
-#            tile3_encoded_x=np.tile(encoded_x,(self._n_actions,1))
-#        elif(encoded_x.ndim==4):
-#            tile3_encoded_x=np.tile(encoded_x,(self._n_actions,1,1,1))
-#        else:
-#            print ("error")
-#        
-#        repeat_identity=np.repeat(identity_matrix,len(encoded_x),axis=0)
-#        ##print tile3_encoded_x
-#        ##print repeat_identity
-#        r_vals_d0=np.array(R.predict([tile3_encoded_x,repeat_identity]))
-#        #print "r_vals_d0"
-#        #print r_vals_d0
-#        r_vals_d0=r_vals_d0.flatten()
-#        print "r_vals_d0"
-#        print r_vals_d0
-#        next_x_predicted=T.predict([tile3_encoded_x,repeat_identity])
-#        #print "next_x_predicted"
-#        #print next_x_predicted
-#        one_hot_first_action=np.zeros((1,self._n_actions))
-#        one_hot_first_action[0]=1
-#        next_x_predicted=T.predict([next_x_predicted[0:1],one_hot_first_action])
-#        next_x_predicted=T.predict([next_x_predicted[0:1],one_hot_first_action])
-#        next_x_predicted=T.predict([next_x_predicted[0:1],one_hot_first_action])
-#        #print "next_x_predicted action 0 t4"
-#        #print next_x_predicted
-#        ## END DEBUG PURPOSES
-
         QD_plan=0
         for i in range(d+1):
             Qd=self.qValues_planning_abstr(encoded_x, R, gamma, T, Q, d=i, branching_factor=[self._n_actions,2,2,2,2,2,2,2]).reshape(len(encoded_x),-1)
