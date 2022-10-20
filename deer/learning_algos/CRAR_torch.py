@@ -74,6 +74,9 @@ class CRAR(LearningAlgo):
         self.tracked_disamb1 = []
         self.tracked_disamb2 = []
         self.tracked_disentang = []
+        self.tracked_gamma_err = []
+        self.tracked_R_err = []
+        self.tracked_Q_err = []
         self.device = torch.device(
             "cuda:0" if torch.cuda.is_available() else "cpu"
             )
@@ -282,12 +285,18 @@ class CRAR(LearningAlgo):
         all_losses = loss_T \
             + 0.2*loss_disentangle_t \
             + loss_disambiguate2 \
-            + loss_disambiguate1
+            + loss_disambiguate1 \
+            + loss_gamma \
+            + loss_R \
+            + loss_Q
         self.tracked_losses.append(all_losses.item())
         self.tracked_T_err.append(loss_T.item())
         self.tracked_disamb1.append(loss_disambiguate1.item())
         self.tracked_disamb2.append(loss_disambiguate2.item())
         self.tracked_disentang.append(loss_disentangle_t.item())
+        self.tracked_gamma_err.append(loss_gamma.item())
+        self.tracked_R_err.append(loss_R.item())
+        self.tracked_Q_err.append(loss_Q.item())
         all_losses.backward()
         self.optimizer.step()
         self.update_counter += 1
@@ -333,7 +342,6 @@ class CRAR(LearningAlgo):
 
         crar_net = self.crar_target if from_target else self.crar
         with torch.no_grad():
-            import pdb; pdb.set_trace()
             if d == 0:
                 return crar_net.Q(x)
             else:
@@ -366,13 +374,12 @@ class CRAR(LearningAlgo):
 
         if(mode==None):
             mode=0
-        di=[0,1,3,6]
-        # We use the mode to define the planning depth
-        q_vals = self.qValues(
-            [np.expand_dims(s,axis=0) for s in copy_state],
-            d=di[mode]
-            )
-        return np.argmax(q_vals),np.max(q_vals)
+        depths = [0,1,3,6] # Mode defines the planning depth di
+        with torch.no_grad():
+            state = torch.as_tensor(state, device=self.device).float()
+            xs = self.crar.encoder(state)
+        q_vals = self.qValues(xs, d=depths[mode])
+        return torch.argmax(q_vals), torch.max(q_vals)
 
     def _resetQHat(self):
         """ Set the target Q-network weights equal to the main Q-network weights

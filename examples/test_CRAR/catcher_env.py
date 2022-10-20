@@ -2,7 +2,7 @@
 
 """
 import numpy as np
-
+import torch
 from deer.base_classes import Environment
 
 import matplotlib
@@ -105,16 +105,23 @@ class MyEnv(Environment):
         #np.savetxt('tsne_python/catcherH_X.txt',arr.reshape(arr.shape[0],-1))
         #np.savetxt('tsne_python/cacherH_labels.txt',np.array(labels))
 
-        all_possib_inp=np.expand_dims(all_possib_inp,axis=1)
-        all_possib_abs_states=learning_algo.encoder.predict(all_possib_inp)
+        all_possib_inp = np.expand_dims(all_possib_inp,axis=1)
+        all_possib_inp = torch.tensor(all_possib_inp).to(
+            learning_algo.device).float()
+        with torch.no_grad():
+            all_possib_abs_states = learning_algo.crar.encoder(all_possib_inp)
+            all_possib_abs_states = all_possib_abs_states.cpu().numpy()
         
         n=self._height-1
         historics=[]
         for i,observ in enumerate(test_data_set.observations()[0][0:n]):
             historics.append(np.expand_dims(observ,axis=0))
         historics=np.array(historics)
-        abs_states=learning_algo.encoder.predict(historics)
-        actions=test_data_set.actions()[0:n]
+        historics = torch.tensor(historics).to(
+            learning_algo.device).float()
+        with torch.no_grad():
+            abs_states = learning_algo.crar.encoder(historics)
+        actions = test_data_set.actions()[0:n]
         if self.inTerminalState() == False:
             self._mode_episode_count += 1
         print("== Mean score per episode is {} over {} episodes ==".format(self._mode_score / (self._mode_episode_count+0.0001), self._mode_episode_count))
@@ -124,10 +131,11 @@ class MyEnv(Environment):
         from mpl_toolkits.mplot3d import Axes3D
         import matplotlib.cm as cm
         m = cm.ScalarMappable(cmap=cm.jet)
-        
-        x = np.array(abs_states)[:,0]
-        y = np.array(abs_states)[:,1]
-        z = np.array(abs_states)[:,2]
+
+        abs_states_cpu = abs_states.cpu().numpy()
+        x = np.array(abs_states_cpu)[:,0]
+        y = np.array(abs_states_cpu)[:,1]
+        z = np.array(abs_states_cpu)[:,2]
         
         fig = plt.figure()
         ax = fig.add_subplot(111,projection='3d')
@@ -142,8 +150,15 @@ class MyEnv(Environment):
 
         # Plot the estimated transitions
         for i in range(n-1):
-            predicted1=learning_algo.transition.predict([abs_states[i:i+1],np.array([[1,0]])])
-            predicted2=learning_algo.transition.predict([abs_states[i:i+1],np.array([[0,1]])])
+            with torch.no_grad():
+                predicted1 = learning_algo.crar.transition(torch.cat([
+                    abs_states[i:i+1],
+                    torch.as_tensor([[1,0]], device=learning_algo.device).float()
+                    ], dim=1)).cpu().numpy()
+                predicted2 = learning_algo.crar.transition(torch.cat([
+                    abs_states[i:i+1],
+                    torch.as_tensor([[0,1]], device=learning_algo.device).float()
+                    ], dim=1)).cpu().numpy()
             ax.plot(np.concatenate([x[i:i+1],predicted1[0,:1]]), np.concatenate([y[i:i+1],predicted1[0,1:2]]), np.concatenate([z[i:i+1],predicted1[0,2:3]]), color="0.75", alpha=0.75)
             ax.plot(np.concatenate([x[i:i+1],predicted2[0,:1]]), np.concatenate([y[i:i+1],predicted2[0,1:2]]), np.concatenate([z[i:i+1],predicted2[0,2:3]]), color="0.25", alpha=0.75)        
 
@@ -166,8 +181,17 @@ class MyEnv(Environment):
         # Plot the dots at each time step depending on the action taken
         length_block=self._height*(self._width-self._width_paddle+1)
         for i in range(self._nx_block):
-            line3 = ax.scatter(all_possib_abs_states[i*length_block:(i+1)*length_block,0], all_possib_abs_states[i*length_block:(i+1)*length_block,1] ,all_possib_abs_states[i*length_block:(i+1)*length_block,2], s=10, marker='x', depthshade=True, edgecolors='k', alpha=0.3)
-        line2 = ax.scatter(x, y ,z , c=np.tile(np.expand_dims(1-actions/2.,axis=1),(1,3))-0.25, s=50, marker='o', edgecolors='k', alpha=0.75, depthshade=True)
+            line3 = ax.scatter(
+                all_possib_abs_states[i*length_block:(i+1)*length_block,0],
+                all_possib_abs_states[i*length_block:(i+1)*length_block,1],
+                all_possib_abs_states[i*length_block:(i+1)*length_block,2],
+                s=10, marker='x', depthshade=True, edgecolors='k', alpha=0.3
+                )
+        line2 = ax.scatter(
+            x, y, z,
+            c=np.tile(np.expand_dims(1-actions/2.,axis=1),(1,3))-0.25,
+            s=50, marker='o', edgecolors='k', alpha=0.75, depthshade=True
+            )
         axes_lims=[ax.get_xlim(),ax.get_ylim(),ax.get_zlim()]
         zrange=axes_lims[2][1]-axes_lims[2][0]
         
@@ -229,9 +253,19 @@ class MyEnv(Environment):
 
 
         # Plot the Q_vals
-        c = learning_algo.Q.predict(np.concatenate((np.expand_dims(x,axis=1),np.expand_dims(y,axis=1),np.expand_dims(z,axis=1)),axis=1))
-        m1=ax.scatter(x, y, z+zrange/20, c=c[:,0], vmin=-1., vmax=1., cmap=plt.cm.RdYlGn)
-        m2=ax.scatter(x, y, z+3*zrange/40, c=c[:,1], vmin=-1., vmax=1., cmap=plt.cm.RdYlGn)
+        q_inputs = torch.cat([
+            torch.tensor(x).reshape((-1, 1)),
+            torch.tensor(y).reshape((-1, 1)),
+            torch.tensor(z).reshape((-1, 1))
+            ], dim=1).to(learning_algo.device).float()
+        with torch.no_grad():
+            c = learning_algo.crar.Q(q_inputs).cpu().numpy()
+        m1 = ax.scatter(
+            x, y, z+zrange/20, c=c[:,0], vmin=-1., vmax=1., cmap=plt.cm.RdYlGn
+            )
+        m2 = ax.scatter(
+            x, y, z+3*zrange/40, c=c[:,1], vmin=-1., vmax=1., cmap=plt.cm.RdYlGn
+            )
         
         #plt.colorbar(m3)
         ax2 = fig.add_axes([0.85, 0.15, 0.025, 0.7])
@@ -243,14 +277,15 @@ class MyEnv(Environment):
         # standalone colorbar.  There are many more kwargs, but the
         # following gives a basic continuous colorbar with ticks
         # and labels.
-        cb1 = matplotlib.colorbar.ColorbarBase(ax2, cmap=cmap,norm=norm,orientation='vertical')
+        cb1 = matplotlib.colorbar.ColorbarBase(
+            ax2, cmap=cmap,norm=norm,orientation='vertical'
+            )
         cb1.set_label('Estimated expected return')
 
         plt.show()
         for ii in range(-15,345,30):
             ax.view_init(elev=20., azim=ii)
-            plt.savefig('fig_w_V_div5_forcelr_forcessdiv2'+str(learning_algo.update_counter)+'_'+str(ii)+'.pdf')
-
+            plt.savefig(f'fig_w_V_div5_forcelr_forcessdiv2_{learning_algo.update_counter}_{ii}.pdf')
 
         # fig_visuV
         fig = plt.figure()
@@ -260,8 +295,14 @@ class MyEnv(Environment):
         y = np.array([j for i in range(5) for j in range(5) for k in range(5)])/4.*(axes_lims[1][1]-axes_lims[1][0])+axes_lims[1][0]
         z = np.array([k for i in range(5) for j in range(5) for k in range(5)])/4.*(axes_lims[2][1]-axes_lims[2][0])+axes_lims[2][0]
 
-        c = learning_algo.Q.predict(np.concatenate((np.expand_dims(x,axis=1),np.expand_dims(y,axis=1),np.expand_dims(z,axis=1)),axis=1))
-        c=np.max(c,axis=1)
+        q_inputs = torch.cat([
+            torch.tensor(x).reshape((-1, 1)),
+            torch.tensor(y).reshape((-1, 1)),
+            torch.tensor(z).reshape((-1, 1))
+            ], dim=1).to(learning_algo.device).float()
+        with torch.no_grad():
+            c = learning_algo.crar.Q(q_inputs).cpu().numpy()
+        c = np.max(c,axis=1)
         
         m=ax.scatter(x, y, z, c=c, vmin=-1., vmax=1., cmap=plt.hot())
         fig.subplots_adjust(right=0.8)
@@ -294,8 +335,14 @@ class MyEnv(Environment):
         identity_matrix = np.diag(np.ones(self.nActions()))
         tile_identity_matrix=np.tile(identity_matrix,(5*5*5,1))
 
-        c = learning_algo.R.predict([repeat_nactions_coord,tile_identity_matrix])
-        c=np.max(np.reshape(c,(125,self.nActions())),axis=1)
+        with torch.no_grad():
+            c = learning_algo.crar.R(torch.cat([
+                torch.tensor(repeat_nactions_coord),
+                torch.tensor(tile_identity_matrix)
+                ], dim=1).to(learning_algo.device).float()
+                )
+            c = c.cpu().numpy()
+        c = np.max(np.reshape(c,(125,self.nActions())),axis=1)
         
         m=ax.scatter(x, y, z, c=c, vmin=-1., vmax=1., cmap=plt.hot())
         fig.subplots_adjust(right=0.8)
@@ -313,6 +360,17 @@ class MyEnv(Environment):
 
         #plt.show()
         #plt.savefig('fig_visuR'+str(learning_algo.update_counter)+'.pdf')
+
+        plt.figure()
+        plt.plot(learning_algo.tracked_disamb1, label='disamb1')
+        plt.plot(learning_algo.tracked_disamb2, label='disamb2')
+        plt.plot(learning_algo.tracked_disentang, label='disentang')
+        plt.plot(learning_algo.tracked_T_err, label='T error')
+        plt.plot(learning_algo.tracked_gamma_err, label='Gamma error')
+        plt.plot(learning_algo.tracked_R_err, label='R error')
+        plt.plot(learning_algo.tracked_Q_err, label='Q error')
+        plt.legend()
+        plt.savefig('errors.pdf')
 
         matplotlib.pyplot.close("all") # avoids memory leaks
 

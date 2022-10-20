@@ -139,7 +139,7 @@ class MyEnv(Environment):
             all_possib_inp=np.expand_dims(np.array(all_possib_inp,dtype='float'),axis=1)
    
             try:
-                all_possib_abs_states=learning_algo.encoder(
+                all_possib_abs_states=learning_algo.crar.encoder(
                     torch.tensor(all_possib_inp).float().to(device)
                     ).cpu().numpy()
                 if(all_possib_abs_states.ndim==4):
@@ -154,7 +154,7 @@ class MyEnv(Environment):
                 import pdb; pdb.set_trace()
    
             try:
-                abs_states=learning_algo.encoder(
+                abs_states=learning_algo.crar.encoder(
                     torch.tensor(historics).float().to(device)
                     )
                 if(abs_states.ndim==4):
@@ -191,19 +191,19 @@ class MyEnv(Environment):
             # Plot the estimated transitions
             print(abs_states)
             for i in range(n-1):
-                predicted1 = learning_algo.transition(torch.cat([
+                predicted1 = learning_algo.crar.transition(torch.cat([
                         abs_states[i:i+1],
                         torch.as_tensor([[1,0,0,0]], device=device).float()
                         ], dim=1)).cpu().numpy()
-                predicted2 = learning_algo.transition(torch.cat([
+                predicted2 = learning_algo.crar.transition(torch.cat([
                         abs_states[i:i+1],
                         torch.as_tensor([[0,1,0,0]], device=device).float()
                         ], dim=1)).cpu().numpy()
-                predicted3 = learning_algo.transition(torch.cat([
+                predicted3 = learning_algo.crar.transition(torch.cat([
                         abs_states[i:i+1],
                         torch.as_tensor([[0,0,1,0]], device=device).float()
                         ], dim=1)).cpu().numpy()
-                predicted4 = learning_algo.transition(torch.cat([
+                predicted4 = learning_algo.crar.transition(torch.cat([
                         abs_states[i:i+1],
                         torch.as_tensor([[0,0,0,1]], device=device).float()
                         ], dim=1)).cpu().numpy()
