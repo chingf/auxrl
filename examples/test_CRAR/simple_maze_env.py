@@ -138,31 +138,25 @@ class MyEnv(Environment):
             device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
             all_possib_inp=np.expand_dims(np.array(all_possib_inp,dtype='float'),axis=1)
    
-            try:
-                all_possib_abs_states=learning_algo.crar.encoder(
-                    torch.tensor(all_possib_inp).float().to(device)
-                    ).cpu().numpy()
-                if(all_possib_abs_states.ndim==4):
-                    all_possib_abs_states=np.transpose(all_possib_abs_states, (0, 3, 1, 2))    # data_format='channels_last' --> 'channels_first'
-                
-                n=1000
-                historics=[]
-                for i,observ in enumerate(test_data_set.observations()[0][0:n]):
-                    historics.append(np.expand_dims(observ,axis=0))
-                historics=np.array(historics)
-            except:
-                import pdb; pdb.set_trace()
+            all_possib_abs_states=learning_algo.crar.encoder(
+                torch.tensor(all_possib_inp).float().to(device)
+                ).cpu().numpy()
+            if(all_possib_abs_states.ndim==4):
+                all_possib_abs_states=np.transpose(all_possib_abs_states, (0, 3, 1, 2))    # data_format='channels_last' --> 'channels_first'
+            
+            n=1000
+            historics=[]
+            for i,observ in enumerate(test_data_set.observations()[0][0:n]):
+                historics.append(np.expand_dims(observ,axis=0))
+            historics=np.array(historics)
    
-            try:
-                abs_states=learning_algo.crar.encoder(
-                    torch.tensor(historics).float().to(device)
-                    )
-                if(abs_states.ndim==4):
-                    abs_states=np.transpose(abs_states, (0, 3, 1, 2))    # data_format='channels_last' --> 'channels_first'
+            abs_states=learning_algo.crar.encoder(
+                torch.tensor(historics).float().to(device)
+                )
+            if(abs_states.ndim==4):
+                abs_states=np.transpose(abs_states, (0, 3, 1, 2))    # data_format='channels_last' --> 'channels_first'
         
-                actions=test_data_set.actions()[0:n]
-            except:
-                import pdb; pdb.set_trace()
+            actions=test_data_set.actions()[0:n]
             
             if self.inTerminalState() == False:
                 self._mode_episode_count += 1
@@ -384,6 +378,12 @@ class MyEnv(Environment):
             return [(1,self._size_maze*6,self._size_maze*6)]
         else:
             return [(1,self._size_maze,self._size_maze)]
+
+    def singleInputDimensions(self):
+        if(self._higher_dim_obs==True):
+            return [(self._size_maze*6,self._size_maze*6)]
+        else:
+            return [(self._size_maze,self._size_maze)]
 
     def observationType(self, subject):
         return np.float

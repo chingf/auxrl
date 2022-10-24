@@ -106,7 +106,6 @@ class Controller(object):
 
         pass
 
-
 class LearningRateController(Controller):
     """A controller that modifies the learning rate periodically upon epochs end (only in training mode, i.e., agent.mode() == -1).
     
@@ -232,8 +231,6 @@ class EpsilonController(Controller):
             agent._train_policy.setEpsilon(self._e)
             self._e = max(self._e - self._e_decay, self._e_min)
 
-
-
 class DiscountFactorController(Controller):
     """A controller that modifies the q-network discount periodically (only in training mode, i.e., agent.mode() == -1).
     More informations in : Francois-Lavet Vincent et al. (2015) - How to Discount Deep Reinforcement Learning: Towards New Dynamic Strategies (http://arxiv.org/abs/1512.02011).
@@ -283,7 +280,6 @@ class DiscountFactorController(Controller):
             if (self._df < self._df_max):
                 agent._learning_algo.setDiscountFactor(self._df)
                 self._df = 1 - (1 - self._df) * self._df_growth
-
 
 class InterleavedTestEpochController(Controller):
     """A controller that interleaves a valid/test epoch between training epochs of the agent (only in training mode, i.e., agent.mode() == -1).
@@ -347,7 +343,6 @@ class InterleavedTestEpochController(Controller):
             if self._summary_periodicity > 0 and self._summary_counter % self._summary_periodicity == 0:
                 agent.summarizeTestPerformance()
             agent.resumeTrainingMode()
-
 
 class TrainerController(Controller):
     """A controller that makes the agent train on its current database periodically (only in training mode, i.e., agent.mode() == -1).
@@ -415,7 +410,6 @@ class TrainerController(Controller):
         if self._periodicity <= 1 or self._count % self._periodicity == 0:
             agent.train()
         self._count += 1
-            
 
 class VerboseController(Controller):
     """A controller that print various agent information periodically:
@@ -520,7 +514,9 @@ class FindBestController(Controller):
         A unique filename (basename for score and network dumps).
     """
 
-    def __init__(self, validationID=0, testID=None, unique_fname="nnet"):
+    def __init__(
+        self, validationID=0, testID=None, unique_fname="nnet", save_dir=None
+        ):
         super(self.__class__, self).__init__()
 
         self._validationScores = []
@@ -530,6 +526,7 @@ class FindBestController(Controller):
         self._testID = testID
         self._validationID = validationID
         self._filename = unique_fname
+        self._save_dir = save_dir
         self._bestValidationScoreSoFar = -9999999
 
     def onEpochEnd(self, agent):
@@ -583,8 +580,6 @@ class FindBestController(Controller):
             pass
         basename = "scores/" + self._filename
         joblib.dump({"vs": self._validationScores, "ts": self._testScores}, basename + "_scores.jldump")
-
-
 
 if __name__ == "__main__":
     pass

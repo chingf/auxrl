@@ -43,7 +43,8 @@ class CRAR(LearningAlgo):
             self, environment, rho=0.9, rms_epsilon=0.0001, momentum=0,
             clip_norm=0, freeze_interval=1000, batch_size=32,
             update_rule="rmsprop", random_state=np.random.RandomState(),
-            double_Q=False, neural_network=NN, lr=1E-4, **kwargs
+            double_Q=False, neural_network=NN, lr=1E-4, nn_yaml='network.yaml',
+            **kwargs
             ):
         """ Initialize the environment. """
 
@@ -84,7 +85,8 @@ class CRAR(LearningAlgo):
         self.crar = neural_network(
             self._batch_size, self._input_dimensions, self._n_actions,
             self._random_state, high_int_dim=self._high_int_dim,
-            internal_dim=self._internal_dim, device=self.device
+            internal_dim=self._internal_dim, device=self.device,
+            yaml=nn_yaml
             )
         self.optimizer = torch.optim.Adam(self.crar.params, lr=lr)
         self.scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=0.9)
@@ -92,7 +94,8 @@ class CRAR(LearningAlgo):
         self.crar_target = neural_network(
             self._batch_size, self._input_dimensions, self._n_actions,
             self._random_state, high_int_dim=self._high_int_dim,
-            internal_dim=self._internal_dim, device=self.device
+            internal_dim=self._internal_dim, device=self.device,
+            yaml=nn_yaml
             )
         self.optimizer_target = torch.optim.Adam(
             self.crar_target.Q.parameters(), lr=lr
@@ -110,18 +113,29 @@ class CRAR(LearningAlgo):
         Values of the parameters: list of numpy arrays
         """
 
-        return None # TODO
+        crar_state_dicts = []
+        crar_target_state_dicts = []
+        for model in self.crar.models:
+            crar_state_dicts.append(model.state_dict())
+        for model in self.crar_target.models:
+            crar_target_state_dicts.append(model.state_dict())
+        params = {'crar': crar_state_dicts, 'crar_target': crar_target_state_dicts}
+        return params
 
-    def setAllParams(self, list_of_values):
+    def setAllParams(self, params):
         """ Set all parameters used by the learning algorithm
 
         Arguments
         ---------
-        list_of_values : list of numpy arrays
-             list of the parameters to be set (same order than given by getAllParams()).
+        params: dict as created in getAllParams
         """
 
-        pass # TODO
+        crar_state_dicts = params['crar']
+        crar_target_state_dicts = params['crar_target']
+        for model, p_to_load in zip(self.crar.models, crar_state_dicts):
+            model.load_state_dict(p_to_load)
+        for model, p_to_load in zip(self.crar_target.models, crar_target_state_dicts):
+            model.load_state_dict(p_to_load)
 
     def train(self, states_val, actions_val, rewards_val, next_states_val, terminals_val):
         """
@@ -166,6 +180,8 @@ class CRAR(LearningAlgo):
 
         Esp = self.crar.encoder(next_states_val)
         Es = self.crar.encoder(states_val)
+        print(Es.shape)
+        import pdb; pdb.set_trace()
         Es_and_actions = torch.cat([Es, onehot_actions], dim=1)
         TEs = self.crar.transition(Es_and_actions)
         R = self.crar.R(Es_and_actions)
@@ -390,3 +406,4 @@ class CRAR(LearningAlgo):
 
     def transfer(self, original, transfer, epochs=1):
         raise ValueError("Not implemented.")
+

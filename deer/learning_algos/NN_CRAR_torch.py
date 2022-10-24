@@ -64,7 +64,7 @@ class NN():
     """
     def __init__(
             self, batch_size, input_dimensions, n_actions,
-            random_state, device, **kwargs):
+            random_state, device, yaml='network.yaml', **kwargs):
         self._input_dimensions=input_dimensions
         self._batch_size=batch_size
         self._random_state=random_state
@@ -72,6 +72,7 @@ class NN():
         self._high_int_dim = kwargs.get('high_int_dim', False)
         self.device = device
         self.ddqn_only = kwargs.get('ddqn_only', False)
+        self._yaml = yaml
         if self._high_int_dim:
             self.n_channels_internal_dim = kwargs["internal_dim"] #dim[-3]
             raise ValueError("Not implemented")
@@ -124,17 +125,17 @@ class NN():
 
         input_shape = self._input_dimensions[0]
         abstract_dim = self.internal_dim
-        if (len(self._input_dimensions) > 1) or (len(self._input_dimensions[0]) < 3):
-            raise ValueError('Not implemented')
 
-        with open(HERE / "network.yaml") as f:
+        with open(HERE / self._yaml) as f:
             config = yaml.load(f, Loader=yaml.FullLoader)
 
         encoder_config = config["encoder"]
-        convs, feature_size = None, input_shape[0]
         if encoder_config["convs"] is not None:
             convs = make_convs(input_shape, encoder_config["convs"])
             feature_size = compute_feature_size(input_shape, convs)
+        else:
+            convs = None
+            feature_size = input_shape[0]
         fc = make_fc(feature_size, abstract_dim, encoder_config["fc"])
         encoder = Encoder(input_shape, fc, convs)
         return encoder
@@ -167,7 +168,7 @@ class NN():
                 tr = self.fc(x.float())
                 return x[:, :self.abstract_state_dim] + tr
 
-        with open(HERE / "network.yaml") as f:
+        with open(HERE / self._yaml) as f:
             config = yaml.load(f, Loader=yaml.FullLoader)
         num_actions = self._n_actions
         abstract_dim = self.internal_dim
@@ -201,7 +202,7 @@ class NN():
             def forward(self, x):
                 x = self.fc(x.float())
                 return x
-        with open(HERE / "network.yaml") as f:
+        with open(HERE / self._yaml) as f:
             config = yaml.load(f, Loader=yaml.FullLoader)
         num_actions = self._n_actions
         abstract_dim = self.internal_dim
@@ -242,7 +243,7 @@ class NN():
                 action = torch.argmax(q_value).item()
                 return action
                 
-        with open(HERE / "network.yaml") as f:
+        with open(HERE / self._yaml) as f:
             config = yaml.load(f, Loader=yaml.FullLoader)
         qnet_config = config['qnet']
         if self.ddqn_only:

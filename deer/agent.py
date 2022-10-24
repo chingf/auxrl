@@ -53,8 +53,8 @@ class NeuralAgent(object):
         
         if replay_start_size == None:
             replay_start_size = max(inputDims[i][0] for i in range(len(inputDims)))
-        elif replay_start_size < max(inputDims[i][0] for i in range(len(inputDims))) :
-            raise AgentError("Replay_start_size should be greater than the biggest history of a state.")
+        #elif replay_start_size < max(inputDims[i][0] for i in range(len(inputDims))) : #TODO
+        #    raise AgentError("Replay_start_size should be greater than the biggest history of a state.")
         
         self._controllers = []
         self._environment = environment
@@ -338,7 +338,7 @@ class NeuralAgent(object):
         initState = self._environment.reset(self._mode)
         inputDims = self._environment.inputDimensions()
         for i in range(len(inputDims)):
-            if inputDims[i][0] > 1:
+            if (inputDims[i][0] > 1) and (len(inputDims[i]) > 1):
                 self._state[i][1:] = initState[i][1:]
         
         self._Vs_on_last_episode = []
@@ -349,9 +349,13 @@ class NeuralAgent(object):
             if(self.gathering_data==True or self._mode!=-1):
                 obs = self._environment.observe()
                 
-                for i in range(len(obs)):
-                    self._state[i][0:-1] = self._state[i][1:]
-                    self._state[i][-1] = obs[i]
+                if len(inputDims[i]) > 1:
+                    for i in range(len(obs)):
+                        self._state[i][0:-1] = self._state[i][1:]
+                        self._state[i][-1] = obs[i]
+                else:
+                    for i in range(len(obs)):
+                        self._state[i] = obs[i]
                 
                 V, action, reward = self._step()
                 
@@ -392,7 +396,7 @@ class NeuralAgent(object):
         """
 
         action, V = self._chooseAction()
-        reward=0
+        reward = 0
         for i in range(self.sticky_action):
             reward += self._environment.act(action)
 
@@ -458,7 +462,7 @@ class DataSet(object):
         """
 
         self._batch_dimensions = env.inputDimensions()
-        self._max_history_size = np.max([self._batch_dimensions[i][0] for i in range (len(self._batch_dimensions))])
+        self._max_history_size = 1 #np.max([self._batch_dimensions[i][0] for i in range (len(self._batch_dimensions))]) #TODO
         self._size = max_size
         self._use_priority = use_priority
         self._only_full_history = only_full_history
@@ -475,7 +479,10 @@ class DataSet(object):
         self._observations = np.zeros(len(self._batch_dimensions), dtype='object')
         # Initialize the observations container if necessary
         for i in range(len(self._batch_dimensions)):
-            self._observations[i] = CircularBuffer(max_size, elemShape=self._batch_dimensions[i][1:], dtype=env.observationType(i))
+            self._observations[i] = CircularBuffer(
+                max_size, elemShape=env.singleInputDimensions()[i],
+                dtype=env.observationType(i)
+                )
 
         if (random_state == None):
             self._random_state = np.random.RandomState()

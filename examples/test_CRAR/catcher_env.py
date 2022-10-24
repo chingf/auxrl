@@ -380,6 +380,11 @@ class MyEnv(Environment):
         else:
             return [(1,self._height,self._width)]
         
+    def singleInputDimensions(self):
+        if(self._higher_dim_obs==True):
+            return [((self._height+2)*3,(self._width+2)*3)]
+        else:
+            return [(self._height, self._width)]
 
     def observationType(self, subject):
         return np.float32
