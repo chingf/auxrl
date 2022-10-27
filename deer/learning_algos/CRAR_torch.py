@@ -180,8 +180,6 @@ class CRAR(LearningAlgo):
 
         Esp = self.crar.encoder(next_states_val)
         Es = self.crar.encoder(states_val)
-        print(Es.shape)
-        import pdb; pdb.set_trace()
         Es_and_actions = torch.cat([Es, onehot_actions], dim=1)
         TEs = self.crar.transition(Es_and_actions)
         R = self.crar.R(Es_and_actions)

@@ -14,40 +14,44 @@ class FixedFigure8Policy(Policy):
     epsilon : float
         Proportion of random steps
     """
-    def __init__(self, learning_algo, n_actions, random_state):
+    def __init__(self, learning_algo, n_actions, random_state, epsilon=0):
         Policy.__init__(self, learning_algo, n_actions, random_state)
+        self._epsilon = epsilon
         self.left_turn = True
 
     def action(self, state, mode=None, *args, **kwargs):
-        state = state[0].squeeze()
-        if len(state.shape) == 1:
-            state = state.reshape(
-                (FixedFigure8Policy.WIDTH, FixedFigure8Policy.HEIGHT)
-                )
-        agent_x, agent_y = np.argwhere(state==10)[0]
-
-        if (agent_y == 0) and (agent_x < 3):
-            action = 1
-        elif (agent_y == 0) and (agent_x > 3):
-            action = 0
-        elif (agent_y < 5) and (agent_x == 3):
-            action = 2
-        elif (agent_y > 0) and (agent_x == 0):
-            action = 3
-        elif (agent_y > 0) and (agent_x == 6):
-            action = 3
-        elif (agent_y == 5) and (agent_x < 3):
-            action = 0
-        elif (agent_y == 5) and (agent_x > 3):
-            action = 1
+        if self.random_state.rand() < self._epsilon:
+            action, V = self.randomAction()
         else:
-            if self.left_turn:
-                action = 0
-                self.left_turn = False
-            else:
+            state = state[0].squeeze()
+            if len(state.shape) == 1:
+                state = state.reshape(
+                    (FixedFigure8Policy.WIDTH, FixedFigure8Policy.HEIGHT)
+                    )
+            agent_x, agent_y = np.argwhere(state==10)[0]
+    
+            if (agent_y == 0) and (agent_x < 3):
                 action = 1
-                self.left_turn = True
-        V = 0.
+            elif (agent_y == 0) and (agent_x > 3):
+                action = 0
+            elif (agent_y < 5) and (agent_x == 3):
+                action = 2
+            elif (agent_y > 0) and (agent_x == 0):
+                action = 3
+            elif (agent_y > 0) and (agent_x == 6):
+                action = 3
+            elif (agent_y == 5) and (agent_x < 3):
+                action = 0
+            elif (agent_y == 5) and (agent_x > 3):
+                action = 1
+            else:
+                if self.left_turn:
+                    action = 0
+                    self.left_turn = False
+                else:
+                    action = 1
+                    self.left_turn = True
+            V = 0.
         return action, V
 
     def setEpsilon(self, e):

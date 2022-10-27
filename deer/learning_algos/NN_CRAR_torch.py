@@ -120,6 +120,8 @@ class NN():
                 if self.convs is not None:
                     x = self.convs(x)
                     x = x.view(x.size(0), -1)
+                else:
+                    x = x.squeeze()
                 x = self.fc(x.float())
                 return x
 
@@ -135,7 +137,7 @@ class NN():
             feature_size = compute_feature_size(input_shape, convs)
         else:
             convs = None
-            feature_size = input_shape[0]
+            feature_size = input_shape[1]
         fc = make_fc(feature_size, abstract_dim, encoder_config["fc"])
         encoder = Encoder(input_shape, fc, convs)
         return encoder
