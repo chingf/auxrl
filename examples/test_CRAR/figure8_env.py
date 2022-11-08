@@ -170,183 +170,181 @@ class MyEnv(Environment):
         """ Plot of the low-dimensional representation of the environment built by the model
         """
 
-        with torch.no_grad():
-            all_possib_inp = [] # Will store all possible observations
-            color_labels = []
-            marker_labels = []
+#        with torch.no_grad():
+#            all_possib_inp = [] # Will store all possible observations
+#            color_labels = []
+#            marker_labels = []
+#
+#            # Only seen states
+#            observations = np.unique(test_data_set.observations()[0], axis=0)
+#
+#            # All possible states
+#            for _x in range(self._width):
+#                for _y in range(self._height):
+#                    if not self.in_bounds(_x, _y): continue
+#                    for idx, r_loc in enumerate([MyEnv.LEFT, MyEnv.RIGHT, MyEnv.RESET]):
+#                        state = self.get_observation(_x, _y, r_loc)
+#
+#                        observed = False
+#                        for obs in observations:
+#                            if np.all(state == obs):
+#                                observed = True
+#
+#                        if observed:
+#                            all_possib_inp.append(state)
+#                            color_labels.append(
+#                                self._space_label[0, np.argwhere(state==10)[0,0]]
+#                                )
+#                            marker_labels.append(idx)
+#
+#            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+#            all_possib_inp = np.expand_dims(
+#                np.array(all_possib_inp,dtype='float'), axis=1
+#                )
+#            all_possib_abs_states = learning_algo.crar.encoder(
+#                torch.tensor(all_possib_inp).float().to(device)
+#                ).cpu().numpy()
+#
+#            n = observations.shape[0]
+#            historics = observations
+#            abs_states = learning_algo.crar.encoder(
+#                torch.tensor(historics).float().to(device)
+#                )
+#        
+#            actions = test_data_set.actions()[0:n]
+#            if self.inTerminalState() == False:
+#                self._mode_episode_count += 1
+#            print("== Mean score per episode is {} over {} episodes ==".format(self._mode_score / (self._mode_episode_count+0.0001), self._mode_episode_count))
+#                    
+#            m = cm.ScalarMappable(cmap=cm.jet)
+#           
+#            abs_states_np = abs_states.cpu().numpy()
+#            if len(abs_states_np.shape) == 1:
+#                abs_states_np = abs_states_np.reshape((1, -1))
+#            x = np.array(abs_states_np)[:,0]
+#            y = np.array(abs_states_np)[:,1]
+#            if(self._intern_dim>2):
+#                z = np.array(abs_states_np)[:,2]
+#                        
+#            fig = plt.figure()
+#            if(self._intern_dim==2):
+#                ax = fig.add_subplot(111)
+#                ax.set_xlabel(r'$X_1$')
+#                ax.set_ylabel(r'$X_2$')
+#            else:
+#                ax = fig.add_subplot(111,projection='3d')
+#                ax.set_xlabel(r'$X_1$')
+#                ax.set_ylabel(r'$X_2$')
+#                ax.set_zlabel(r'$X_3$')
+#                        
+#            # Plot the estimated transitions
+#            for i in range(n-1):
+#                predicted1 = learning_algo.crar.transition(torch.cat([
+#                        abs_states[i:i+1],
+#                        torch.as_tensor([[1,0,0,0]], device=device).float()
+#                        ], dim=1)).cpu().numpy()
+#                predicted2 = learning_algo.crar.transition(torch.cat([
+#                        abs_states[i:i+1],
+#                        torch.as_tensor([[0,1,0,0]], device=device).float()
+#                        ], dim=1)).cpu().numpy()
+#                predicted3 = learning_algo.crar.transition(torch.cat([
+#                        abs_states[i:i+1],
+#                        torch.as_tensor([[0,0,1,0]], device=device).float()
+#                        ], dim=1)).cpu().numpy()
+#                predicted4 = learning_algo.crar.transition(torch.cat([
+#                        abs_states[i:i+1],
+#                        torch.as_tensor([[0,0,0,1]], device=device).float()
+#                        ], dim=1)).cpu().numpy()
+#                if(self._intern_dim==2):
+#                    ax.plot(np.concatenate([x[i:i+1],predicted1[0,:1]]), np.concatenate([y[i:i+1],predicted1[0,1:2]]), color="0.9", alpha=0.75)
+#                    ax.plot(np.concatenate([x[i:i+1],predicted2[0,:1]]), np.concatenate([y[i:i+1],predicted2[0,1:2]]), color="0.65", alpha=0.75)
+#                    ax.plot(np.concatenate([x[i:i+1],predicted3[0,:1]]), np.concatenate([y[i:i+1],predicted3[0,1:2]]), color="0.4", alpha=0.75)
+#                    ax.plot(np.concatenate([x[i:i+1],predicted4[0,:1]]), np.concatenate([y[i:i+1],predicted4[0,1:2]]), color="0.15", alpha=0.75)
+#                else:
+#                    ax.plot(np.concatenate([x[i:i+1],predicted1[0,:1]]), np.concatenate([y[i:i+1],predicted1[0,1:2]]), np.concatenate([z[i:i+1],predicted1[0,2:3]]), color="0.9", alpha=0.75)
+#                    ax.plot(np.concatenate([x[i:i+1],predicted2[0,:1]]), np.concatenate([y[i:i+1],predicted2[0,1:2]]), np.concatenate([z[i:i+1],predicted2[0,2:3]]), color="0.65", alpha=0.75)
+#                    ax.plot(np.concatenate([x[i:i+1],predicted3[0,:1]]), np.concatenate([y[i:i+1],predicted3[0,1:2]]), np.concatenate([z[i:i+1],predicted3[0,2:3]]), color="0.4", alpha=0.75)
+#                    ax.plot(np.concatenate([x[i:i+1],predicted4[0,:1]]), np.concatenate([y[i:i+1],predicted4[0,1:2]]), np.concatenate([z[i:i+1],predicted4[0,2:3]]), color="0.15", alpha=0.75)            
+#            
+#            # Plot the dots at each time step depending on the action taken
+#            colors = ['orange','blue', 'red', 'purple']
+#            markers = ['x', 'o', '*']
+#            color_labels = np.array(color_labels)
+#            marker_label = np.array(marker_labels)
+#
+#            if(self._intern_dim==2):
+#                for m_idx in np.unique(marker_labels):
+#                    _states = all_possib_abs_states[marker_labels==m_idx]
+#                    _colors = color_labels[marker_labels==m_idx]
+#                    line3 = ax.scatter(
+#                        _states[:,0], _states[:,1],
+#                        c=[colors[i] for i in _colors],
+#                        marker=markers[m_idx],
+#                        edgecolors='k', alpha=0.5, s=100
+#                        )
+#            else:
+#                for m_idx in np.unique(marker_labels):
+#                    _states = all_possib_abs_states[marker_labels==m_idx]
+#                    _colors = color_labels[marker_labels==m_idx]
+#                    line3 = ax.scatter(
+#                        _states[:,0], _states[:,1], _states[:,2],
+#                        c=[colors[i] for i in _colors],
+#                        depthshade=True, edgecolors='k',
+#                        alpha=0.5, s=50, marker=markers[m_idx],
+#                        )
+#    
+#            if(self._intern_dim==2):
+#                axes_lims=[ax.get_xlim(),ax.get_ylim()]
+#            else:
+#                axes_lims=[ax.get_xlim(),ax.get_ylim(),ax.get_zlim()]
+#            
+#            # Plot the legend for transition estimates
+#            box1b = TextArea(" Estimated transitions (action 0, 1, 2 and 3): ", textprops=dict(color="k"))
+#            box2b = DrawingArea(90, 20, 0, 0)
+#            el1b = Rectangle((5, 10), 15,2, fc="0.9", alpha=0.75)
+#            el2b = Rectangle((25, 10), 15,2, fc="0.65", alpha=0.75) 
+#            el3b = Rectangle((45, 10), 15,2, fc="0.4", alpha=0.75)
+#            el4b = Rectangle((65, 10), 15,2, fc="0.15", alpha=0.75) 
+#            box2b.add_artist(el1b)
+#            box2b.add_artist(el2b)
+#            box2b.add_artist(el3b)
+#            box2b.add_artist(el4b)
+#            
+#            boxb = HPacker(children=[box1b, box2b],
+#                align="center",
+#                pad=0, sep=5)
+#            
+#            anchored_box = AnchoredOffsetbox(loc=3,
+#                child=boxb, pad=0.,
+#                frameon=True,
+#                bbox_to_anchor=(0., 0.98),
+#                bbox_transform=ax.transAxes,
+#                borderpad=0.,
+#                )        
+#            ax.add_artist(anchored_box)
+#            plt.show()
+#            plt.savefig('fig_base'+str(learning_algo.update_counter)+'.pdf')
 
-            # Only seen states
-            observations = np.unique(test_data_set.observations()[0], axis=0)
+        plt.figure()
+        plt.plot(np.log(learning_algo.tracked_losses))
+        plt.savefig('tracked_losses.pdf')
 
-            # All possible states
-            for _x in range(self._width):
-                for _y in range(self._height):
-                    if not self.in_bounds(_x, _y): continue
-                    for idx, r_loc in enumerate([MyEnv.LEFT, MyEnv.RIGHT, MyEnv.RESET]):
-                        state = self.get_observation(_x, _y, r_loc)
+        plt.figure()
+        plt.plot(np.log(learning_algo.tracked_disamb1))
+        plt.savefig('tracked_disamb1.pdf')
 
-                        observed = False
-                        for obs in observations:
-                            if np.all(state == obs):
-                                observed = True
+        plt.figure()
+        plt.plot(np.log(learning_algo.tracked_disamb2))
+        plt.savefig('tracked_disamb2.pdf')
 
-                        if observed:
-                            all_possib_inp.append(state)
-                            color_labels.append(
-                                self._space_label[0, np.argwhere(state==10)[0,0]]
-                                )
-                            marker_labels.append(idx)
+        plt.figure()
+        plt.plot(np.log(learning_algo.tracked_disentang))
+        plt.savefig('tracked_disentang.pdf')   
 
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-            all_possib_inp = np.expand_dims(
-                np.array(all_possib_inp,dtype='float'), axis=1
-                )
-            all_possib_abs_states = learning_algo.crar.encoder(
-                torch.tensor(all_possib_inp).float().to(device)
-                ).cpu().numpy()
-
-            n = observations.shape[0]
-            historics = observations
-            abs_states = learning_algo.crar.encoder(
-                torch.tensor(historics).float().to(device)
-                )
-        
-            actions = test_data_set.actions()[0:n]
-            if self.inTerminalState() == False:
-                self._mode_episode_count += 1
-            print("== Mean score per episode is {} over {} episodes ==".format(self._mode_score / (self._mode_episode_count+0.0001), self._mode_episode_count))
-                    
-            m = cm.ScalarMappable(cmap=cm.jet)
-           
-            abs_states_np = abs_states.cpu().numpy()
-            if len(abs_states_np.shape) == 1:
-                abs_states_np = abs_states_np.reshape((1, -1))
-            x = np.array(abs_states_np)[:,0]
-            y = np.array(abs_states_np)[:,1]
-            if(self._intern_dim>2):
-                z = np.array(abs_states_np)[:,2]
-                        
-            fig = plt.figure()
-            if(self._intern_dim==2):
-                ax = fig.add_subplot(111)
-                ax.set_xlabel(r'$X_1$')
-                ax.set_ylabel(r'$X_2$')
-            else:
-                ax = fig.add_subplot(111,projection='3d')
-                ax.set_xlabel(r'$X_1$')
-                ax.set_ylabel(r'$X_2$')
-                ax.set_zlabel(r'$X_3$')
-                        
-            # Plot the estimated transitions
-            for i in range(n-1):
-                predicted1 = learning_algo.crar.transition(torch.cat([
-                        abs_states[i:i+1],
-                        torch.as_tensor([[1,0,0,0]], device=device).float()
-                        ], dim=1)).cpu().numpy()
-                predicted2 = learning_algo.crar.transition(torch.cat([
-                        abs_states[i:i+1],
-                        torch.as_tensor([[0,1,0,0]], device=device).float()
-                        ], dim=1)).cpu().numpy()
-                predicted3 = learning_algo.crar.transition(torch.cat([
-                        abs_states[i:i+1],
-                        torch.as_tensor([[0,0,1,0]], device=device).float()
-                        ], dim=1)).cpu().numpy()
-                predicted4 = learning_algo.crar.transition(torch.cat([
-                        abs_states[i:i+1],
-                        torch.as_tensor([[0,0,0,1]], device=device).float()
-                        ], dim=1)).cpu().numpy()
-                if(self._intern_dim==2):
-                    ax.plot(np.concatenate([x[i:i+1],predicted1[0,:1]]), np.concatenate([y[i:i+1],predicted1[0,1:2]]), color="0.9", alpha=0.75)
-                    ax.plot(np.concatenate([x[i:i+1],predicted2[0,:1]]), np.concatenate([y[i:i+1],predicted2[0,1:2]]), color="0.65", alpha=0.75)
-                    ax.plot(np.concatenate([x[i:i+1],predicted3[0,:1]]), np.concatenate([y[i:i+1],predicted3[0,1:2]]), color="0.4", alpha=0.75)
-                    ax.plot(np.concatenate([x[i:i+1],predicted4[0,:1]]), np.concatenate([y[i:i+1],predicted4[0,1:2]]), color="0.15", alpha=0.75)
-                else:
-                    ax.plot(np.concatenate([x[i:i+1],predicted1[0,:1]]), np.concatenate([y[i:i+1],predicted1[0,1:2]]), np.concatenate([z[i:i+1],predicted1[0,2:3]]), color="0.9", alpha=0.75)
-                    ax.plot(np.concatenate([x[i:i+1],predicted2[0,:1]]), np.concatenate([y[i:i+1],predicted2[0,1:2]]), np.concatenate([z[i:i+1],predicted2[0,2:3]]), color="0.65", alpha=0.75)
-                    ax.plot(np.concatenate([x[i:i+1],predicted3[0,:1]]), np.concatenate([y[i:i+1],predicted3[0,1:2]]), np.concatenate([z[i:i+1],predicted3[0,2:3]]), color="0.4", alpha=0.75)
-                    ax.plot(np.concatenate([x[i:i+1],predicted4[0,:1]]), np.concatenate([y[i:i+1],predicted4[0,1:2]]), np.concatenate([z[i:i+1],predicted4[0,2:3]]), color="0.15", alpha=0.75)            
-            
-            # Plot the dots at each time step depending on the action taken
-            colors = ['orange','blue', 'red', 'purple']
-            markers = ['x', 'o', '*']
-            color_labels = np.array(color_labels)
-            marker_label = np.array(marker_labels)
-
-            if(self._intern_dim==2):
-                for m_idx in np.unique(marker_labels):
-                    _states = all_possib_abs_states[marker_labels==m_idx]
-                    _colors = color_labels[marker_labels==m_idx]
-                    line3 = ax.scatter(
-                        _states[:,0], _states[:,1],
-                        c=[colors[i] for i in _colors],
-                        marker=markers[m_idx],
-                        edgecolors='k', alpha=0.5, s=100
-                        )
-            else:
-                for m_idx in np.unique(marker_labels):
-                    _states = all_possib_abs_states[marker_labels==m_idx]
-                    _colors = color_labels[marker_labels==m_idx]
-                    line3 = ax.scatter(
-                        _states[:,0], _states[:,1], _states[:,2],
-                        c=[colors[i] for i in _colors],
-                        depthshade=True, edgecolors='k',
-                        alpha=0.5, s=50, marker=markers[m_idx],
-                        )
-    
-            if(self._intern_dim==2):
-                axes_lims=[ax.get_xlim(),ax.get_ylim()]
-            else:
-                axes_lims=[ax.get_xlim(),ax.get_ylim(),ax.get_zlim()]
-            
-            # Plot the legend for transition estimates
-            box1b = TextArea(" Estimated transitions (action 0, 1, 2 and 3): ", textprops=dict(color="k"))
-            box2b = DrawingArea(90, 20, 0, 0)
-            el1b = Rectangle((5, 10), 15,2, fc="0.9", alpha=0.75)
-            el2b = Rectangle((25, 10), 15,2, fc="0.65", alpha=0.75) 
-            el3b = Rectangle((45, 10), 15,2, fc="0.4", alpha=0.75)
-            el4b = Rectangle((65, 10), 15,2, fc="0.15", alpha=0.75) 
-            box2b.add_artist(el1b)
-            box2b.add_artist(el2b)
-            box2b.add_artist(el3b)
-            box2b.add_artist(el4b)
-            
-            boxb = HPacker(children=[box1b, box2b],
-                align="center",
-                pad=0, sep=5)
-            
-            anchored_box = AnchoredOffsetbox(loc=3,
-                child=boxb, pad=0.,
-                frameon=True,
-                bbox_to_anchor=(0., 0.98),
-                bbox_transform=ax.transAxes,
-                borderpad=0.,
-                )        
-            ax.add_artist(anchored_box)
-            
-            
-            #plt.show()
-            plt.savefig('fig_base'+str(learning_algo.update_counter)+'.pdf')
-
-            plt.figure()
-            plt.plot(np.log(learning_algo.tracked_losses))
-            plt.savefig('tracked_losses.pdf')
-
-            plt.figure()
-            plt.plot(np.log(learning_algo.tracked_disamb1))
-            plt.savefig('tracked_disamb1.pdf')
-
-            plt.figure()
-            plt.plot(np.log(learning_algo.tracked_disamb2))
-            plt.savefig('tracked_disamb2.pdf')
-    
-            plt.figure()
-            plt.plot(np.log(learning_algo.tracked_disentang))
-            plt.savefig('tracked_disentang.pdf')   
-
-            plt.figure()
-            plt.plot(np.log(learning_algo.tracked_T_err))
-            plt.savefig('tracked_T_err.pdf')   
-            matplotlib.pyplot.close("all") # avoids memory leaks
+        plt.figure()
+        plt.plot(np.log(learning_algo.tracked_T_err))
+        plt.savefig('tracked_T_err.pdf')   
+        matplotlib.pyplot.close("all") # avoids memory leaks
 
     def inputDimensions(self):
         if (self._higher_dim_obs==True):
@@ -355,12 +353,12 @@ class MyEnv(Environment):
         else:
             return [(1, self._height*self._width)]
 
-    def singleInputDimensions(self):
-        if (self._higher_dim_obs==True):
-            return [(self._width, self._height)]
-            return [((self._width+2)*3, (self._height+2)*3)]
-        else:
-            return [(1, self._height*self._width)]
+#    def singleInputDimensions(self):
+#        if (self._higher_dim_obs==True):
+#            return [(self._width, self._height)]
+#            return [((self._width+2)*3, (self._height+2)*3)]
+#        else:
+#            return [(1, self._height*self._width)]
 
     def observationType(self, subject):
         return np.float32

@@ -86,7 +86,6 @@ class NeuralAgent(object):
         else:
             self._test_policy = test_policy
         self.gathering_data=True    # Whether the agent is gathering data or not
-        self.sticky_action=1        # Number of times the agent is forced to take the same action as part of one actual time step
 
     def setControllersActive(self, toDisable, active):
         """ Activate controller
@@ -186,9 +185,15 @@ class NeuralAgent(object):
             return
 
         try:
-            if hasattr(self._learning_algo, 'nstep'):
-                observations, actions, rewards, terminals, rndValidIndices = self._dataset.randomBatch_nstep(self._batch_size, self._learning_algo.nstep, self._exp_priority)
-                loss, loss_ind = self._learning_algo.train(observations, actions, rewards, terminals)
+            if self._learning_algo._nstep > 1:
+                observations, actions, rewards, terminals, rndValidIndices =\
+                    self._dataset.randomBatch_nstep(
+                        self._batch_size, self._learning_algo._nstep,
+                        self._exp_priority
+                        )
+                states = [obs[:,:-1,:] for obs in observations]
+                next_states = [obs[:,1:,:] for obs in observations]
+                loss, loss_ind = self._learning_algo.train(states, actions, rewards, next_states, terminals)
             else:
                 states, actions, rewards, next_states, terminals, rndValidIndices = self._dataset.randomBatch(self._batch_size, self._exp_priority)
                 loss, loss_ind = self._learning_algo.train(states, actions, rewards, next_states, terminals)
@@ -396,10 +401,7 @@ class NeuralAgent(object):
         """
 
         action, V = self._chooseAction()
-        reward = 0
-        for i in range(self.sticky_action):
-            reward += self._environment.act(action)
-
+        reward = self._environment.act(action)
         return V, action, reward
 
     def _addSample(self, ponctualObs, action, reward, is_terminal):
@@ -480,7 +482,7 @@ class DataSet(object):
         # Initialize the observations container if necessary
         for i in range(len(self._batch_dimensions)):
             self._observations[i] = CircularBuffer(
-                max_size, elemShape=env.singleInputDimensions()[i],
+                max_size, elemShape=env.inputDimensions()[i],
                 dtype=env.observationType(i)
                 )
 
@@ -490,7 +492,6 @@ class DataSet(object):
             self._random_state = random_state
 
         self.n_elems  = 0
-        self.sticky_action=1        # Number of times the agent is forced to take the same action as part of one actual time step
 
     def actions(self):
         """Get all actions currently in the replay memory, ordered by time where they were taken."""
@@ -563,7 +564,7 @@ class DataSet(object):
                 trajectories are too short).
         """
 
-        if (self._max_history_size + self.sticky_action - 1 >= self.n_elems):
+        if self._max_history_size >= self.n_elems:
             raise SliceError(
                 "Not enough elements in the dataset to create a "
                 "complete state. {} elements in dataset; requires {}"
@@ -577,11 +578,15 @@ class DataSet(object):
         else:
             rndValidIndices = np.zeros(batch_size, dtype='int32')
             if (self._only_full_history):
-                for i in range(batch_size): # TODO: multithread this loop?
-                    rndValidIndices[i] = self._randomValidStateIndex(self._max_history_size+self.sticky_action-1)
+                for i in range(batch_size):
+                    rndValidIndices[i] = self._randomValidStateIndex(
+                        self._max_history_size
+                        )
             else:
-                for i in range(batch_size): # TODO: multithread this loop?
-                    rndValidIndices[i] = self._randomValidStateIndex(minimum_without_terminal=self.sticky_action)
+                for i in range(batch_size):
+                    rndValidIndices[i] = self._randomValidStateIndex(
+                        minimum_without_terminal=1
+                        )
                 
 
         actions   = self._actions.getSliceBySeq(rndValidIndices)
@@ -591,11 +596,11 @@ class DataSet(object):
         states = np.zeros(len(self._batch_dimensions), dtype='object')
         next_states = np.zeros_like(states)
         # We calculate the first terminal index backward in time and set it 
-        # at maximum to the value self._max_history_size+self.sticky_action-1
+        # at maximum to the value self._max_history_size
         first_terminals=[]
         for rndValidIndex in rndValidIndices:
             first_terminal=1
-            while first_terminal<self._max_history_size+self.sticky_action-1:
+            while first_terminal < self._max_history_size:
                 if (self._terminals[rndValidIndex-first_terminal]==True or first_terminal>rndValidIndex):
                     break 
                 first_terminal+=1
@@ -605,7 +610,7 @@ class DataSet(object):
             states[input] = np.zeros((batch_size,) + self._batch_dimensions[input], dtype=self._observations[input].dtype)
             next_states[input] = np.zeros_like(states[input])
             for i in range(batch_size):
-                slice=self._observations[input].getSlice(rndValidIndices[i]-self.sticky_action+2-min(self._batch_dimensions[input][0],first_terminals[i]+self.sticky_action-1), rndValidIndices[i]+1)
+                slice=self._observations[input].getSlice(rndValidIndices[i]+1-min(self._batch_dimensions[input][0],first_terminals[i]), rndValidIndices[i]+1)
                 if (len(slice)==len(states[input][i])):
                     states[input][i] = slice
                 else:
@@ -666,7 +671,7 @@ class DataSet(object):
                 trajectories are too short).
         """
 
-        if (self._max_history_size + self.sticky_action - 1 >= self.n_elems):
+        if self._max_history_size >= self.n_elems:
             raise SliceError(
                 "Not enough elements in the dataset to create a "
                 "complete state. {} elements in dataset; requires {}"
@@ -681,46 +686,56 @@ class DataSet(object):
             rndValidIndices = np.zeros(batch_size, dtype='int32')
             if (self._only_full_history):
                 for i in range(batch_size): # TODO: multithread this loop?
-                    rndValidIndices[i] = self._randomValidStateIndex(self._max_history_size+self.sticky_action*nstep-1)
+                    rndValidIndices[i] = self._randomValidStateIndex(self._max_history_size+nstep-1)
             else:
                 for i in range(batch_size): # TODO: multithread this loop?
-                    rndValidIndices[i] = self._randomValidStateIndex(minimum_without_terminal=self.sticky_action*nstep)
+                    rndValidIndices[i] = self._randomValidStateIndex(minimum_without_terminal=nstep)
                 
 
-        actions=np.zeros((batch_size,(nstep)*self.sticky_action), dtype=int)
-        rewards=np.zeros((batch_size,(nstep)*self.sticky_action))
-        terminals=np.zeros((batch_size,(nstep)*self.sticky_action))
+        actions=np.zeros((batch_size,(nstep)), dtype=int)
+        rewards=np.zeros((batch_size,(nstep)))
+        terminals=np.zeros((batch_size,(nstep)))
         for i in range(batch_size):
-            actions[i] = self._actions.getSlice(rndValidIndices[i]-self.sticky_action*nstep+1,rndValidIndices[i]+self.sticky_action)
-            rewards[i] = self._rewards.getSlice(rndValidIndices[i]-self.sticky_action*nstep+1,rndValidIndices[i]+self.sticky_action)
-            terminals[i] = self._terminals.getSlice(rndValidIndices[i]-self.sticky_action*nstep+1,rndValidIndices[i]+self.sticky_action)
+            actions[i] = self._actions.getSlice(rndValidIndices[i]-nstep+1,rndValidIndices[i]+1)
+            rewards[i] = self._rewards.getSlice(rndValidIndices[i]-nstep+1,rndValidIndices[i]+1)
+            terminals[i] = self._terminals.getSlice(rndValidIndices[i]-nstep+1,rndValidIndices[i]+1)
         
         observations = np.zeros(len(self._batch_dimensions), dtype='object')
         # We calculate the first terminal index backward in time and set it 
-        # at maximum to the value self._max_history_size+self.sticky_action-1
-        first_terminals=[]
+        # at maximum to the value self._max_history_size
+        first_terminals = []
         for rndValidIndex in rndValidIndices:
-            first_terminal=1
-            while first_terminal<self._max_history_size+self.sticky_action*nstep-1:
+            first_terminal = 1
+            while first_terminal < (self._max_history_size + nstep - 1):
                 if (self._terminals[rndValidIndex-first_terminal]==True or first_terminal>rndValidIndex):
                     break 
                 first_terminal+=1
             first_terminals.append(first_terminal)
             
-        batch_dimensions=copy.deepcopy(self._batch_dimensions)
-        for input in range(len(self._batch_dimensions)):
-            batch_dimensions[input]=tuple( x + y for x, y in zip(self._batch_dimensions[input],(self.sticky_action*(nstep+1)-1,0,0)) )
-            observations[input] = np.zeros((batch_size,) + batch_dimensions[input], dtype=self._observations[input].dtype)
-            for i in range(batch_size):
-                slice=self._observations[input].getSlice(rndValidIndices[i]-self.sticky_action*nstep+2-min(self._batch_dimensions[input][0],first_terminals[i]-self.sticky_action*nstep+1), rndValidIndices[i]+self.sticky_action+1)
-                if (len(slice)==len(observations[input][i])):
-                    observations[input][i] = slice
+        #batch_dimensions = copy.deepcopy(self._batch_dimensions)
+        for obs_i, obs_size in enumerate(self._batch_dimensions):
+            new_obs_size = list(obs_size)
+            new_obs_size[0] += nstep
+            observations[obs_i] = np.zeros(
+                [batch_size,] + new_obs_size,
+                dtype=self._observations[obs_i].dtype
+                )
+            for batch_i in range(batch_size):
+                self._observations[obs_i].triggered = True
+                _slice = self._observations[obs_i].getSlice(
+                    rndValidIndices[batch_i]-nstep+2-min(self._batch_dimensions[obs_i][0],first_terminals[batch_i]-nstep+1),
+                    rndValidIndices[batch_i]+2
+                    )
+                _slice = _slice.squeeze()
+
+                if (len(_slice)==len(observations[obs_i][batch_i])):
+                    observations[obs_i][batch_i] = _slice
                 else:
-                    for j in range(len(slice)):
-                        observations[input][i][-j-1]=slice[-j-1]
-                 # If transition leads to terminal, we don't care about next state
-                if terminals[i][-1]:#rndValidIndices[i] >= self.n_elems - 1 or terminals[i]:
-                    observations[input][rndValidIndices[i]:rndValidIndices[i]+self.sticky_action+1] = 0
+                    for j in range(len(_slice)):
+                        observations[obs_i][batch_i][-j-1] = _slice[-j-1]
+                # If transition leads to terminal, we don't care about next state
+                if terminals[i][-1]: #rndValidIndices[i] >= self.n_elems - 1 or terminals[i]:
+                    observations[obs_i][rndValidIndices[batch_i]:rndValidIndices[batch_i]+2] = 0
         
         if (self._use_priority):
             return observations, actions, rewards, terminals, [rndValidIndices, rndValidIndices_tree]

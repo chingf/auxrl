@@ -73,6 +73,7 @@ class NN():
         self.device = device
         self.ddqn_only = kwargs.get('ddqn_only', False)
         self._yaml = yaml
+        self._nstep = kwargs.get('nstep', 1)
         if self._high_int_dim:
             self.n_channels_internal_dim = kwargs["internal_dim"] #dim[-3]
             raise ValueError("Not implemented")
@@ -118,9 +119,9 @@ class NN():
                 self.abstract_dim = abstract_dim
 
                 # TODO
-                self.mem = nn.Sequential(
-                    nn.LSTM(100, 50), nn.Linear(50, abstract_dim), nn.ReLU()
-                    )
+                #self.mem = nn.Sequential(
+                #    nn.LSTM(100, 50), nn.Linear(50, abstract_dim), nn.ReLU()
+                #    )
 
             def forward(self, x):
                 if self.convs is not None:
@@ -131,11 +132,14 @@ class NN():
                 x = self.fc(x.float())
 
                 # TODO
-                x = self.mem(x)
+                #x = self.mem(x)
 
                 return x
 
         input_shape = self._input_dimensions[0]
+        #if self._nstep > 1:
+        #    input_shape = list(input_shape)
+        #    input_shape[-1] *= self._nstep
         abstract_dim = self.internal_dim
 
         with open(HERE / self._yaml) as f:

@@ -64,6 +64,7 @@ class CRAR(LearningAlgo):
         self._high_int_dim = kwargs.get('high_int_dim', False)
         self._internal_dim = kwargs.get('internal_dim', 2)
         self._entropy_temp = kwargs.get('entropy_temp', 5.)
+        self._nstep = kwargs.get('nstep', 1)
         self.loss_interpret=0
         self.loss_T=0
         self.loss_R=0
@@ -88,7 +89,7 @@ class CRAR(LearningAlgo):
             self._batch_size, self._input_dimensions, self._n_actions,
             self._random_state, high_int_dim=self._high_int_dim,
             internal_dim=self._internal_dim, device=self.device,
-            yaml=nn_yaml
+            yaml=nn_yaml, nstep=self._nstep
             )
         self.optimizer = torch.optim.Adam(self.crar.params, lr=lr)
         self.scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=0.9)
@@ -97,7 +98,7 @@ class CRAR(LearningAlgo):
             self._batch_size, self._input_dimensions, self._n_actions,
             self._random_state, high_int_dim=self._high_int_dim,
             internal_dim=self._internal_dim, device=self.device,
-            yaml=nn_yaml
+            yaml=nn_yaml, nstep=self._nstep
             )
         self.optimizer_target = torch.optim.Adam(
             self.crar_target.Q.parameters(), lr=lr
@@ -164,12 +165,22 @@ class CRAR(LearningAlgo):
         Individual (square) losses for the Q-values for each tuple
         """
 
-        import pdb; pdb.set_trace()
         self.optimizer.zero_grad()
-
-        onehot_actions = np.zeros((self._batch_size, self._n_actions))
-        onehot_actions[np.arange(self._batch_size), actions_val] = 1
-        onehot_actions = torch.as_tensor(onehot_actions, device=self.device).float()
+        
+        if self._nstep > 1:
+            actions_val = actions_val[:, -1]
+            rewards_val = rewards_val[:,-1]
+            terminals_val = terminals_val[:,-1]
+            onehot_actions = np.zeros((self._batch_size, self._n_actions))
+            onehot_actions[np.arange(self._batch_size), actions_val] = 1
+            onehot_actions = torch.as_tensor(onehot_actions, device=self.device).float()
+            states_val = self.make_state_with_history(states_val, 0.98)
+            next_states_val = self.make_state_with_history(next_states_val, 0.98)
+            import pdb; pdb.set_trace()
+        else:
+            onehot_actions = np.zeros((self._batch_size, self._n_actions))
+            onehot_actions[np.arange(self._batch_size), actions_val] = 1
+            onehot_actions = torch.as_tensor(onehot_actions, device=self.device).float()
 
         if (len(states_val) > 1) or (len(next_states_val) > 1):
             raise ValueError('Dimension mismatch')
@@ -336,6 +347,19 @@ class CRAR(LearningAlgo):
 
         return loss_Q.item(), loss_Q_unreduced
 
+    def make_state_with_history(self, states_val, tau):
+        new_states_val = []
+        for batch_obs in states_val:
+            new_batch_obs = []
+            for obs in batch_obs:
+                new_obs = np.sum([
+                    tau**(self._nstep-t) * obs_t \
+                    for t, obs_t in enumerate(obs)], axis=0)
+                new_batch_obs.append(new_obs)
+            new_batch_obs = np.array(new_batch_obs)
+            new_states_val.append(new_batch_obs)
+        return new_states_val
+
     def step_scheduler(self):
         self.scheduler.step()
         self.scheduler_target.step()
@@ -402,7 +426,6 @@ class CRAR(LearningAlgo):
 
         with torch.no_grad():
             state = torch.as_tensor(state, device=self.device).float()
-            import pdb; pdb.set_trace()
             Es = self.crar.encoder(state)
             Es = [torch.clone(Es) for _ in range(self._n_actions)]
             Es = torch.stack(Es)
