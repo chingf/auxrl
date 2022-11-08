@@ -1,0 +1,77 @@
+act: &act Tanh
+none: !!python/none &none None
+
+my-convs: &my-convs
+  - [Conv2d, auto, 32, { kernel_size: 2 }]
+  - *act
+  - [Conv2d, 32, 64, { kernel_size: 2 }]
+  - *act
+  - [Conv2d, 64, 64, { kernel_size: 3 }]
+  - *act
+
+crar-convs: &crar-convs
+  - [Conv2d, auto, 8, { kernel_size: 2 }]
+  - *act
+  - [Conv2d, 8, 16, { kernel_size: 2 }]
+  - *act
+  - [MaxPool2d, { kernel_size: 2 }]
+  - [Conv2d, 16, 32, { kernel_size: 3 }]
+  - *act
+  - [MaxPool2d, { kernel_size: 3 }]
+
+crar-fc: &crar-fc
+  - [Linear, auto, 200]
+  - *act
+  - [Linear, 200, 100]
+  - *act
+
+simple-q-fc: &simple-q-fc
+  - [Linear, auto, 128]
+  - *act
+  - [Linear, 128, auto]
+
+crar-q-fc: &crar-q-fc
+  - [Linear, auto, 50]
+  - *act
+  - [Linear, 50, 20]
+  - *act
+  - [Linear, 20, auto]
+
+crar-trans-pred-fc: &crar-trans-pred-fc
+  - [Linear, auto, 10]
+  - *act
+  - [Linear, 10, 30]
+  - *act
+  - [Linear, 30, 30]
+  - *act
+  - [Linear, 30, 10]
+  - *act
+  - [Linear, 10, auto]
+
+crar-float-fc: &crar-float-fc
+  - [Linear, auto, 10]
+  - *act
+  - [Linear, 10, 50]
+  - *act
+  - [Linear, 50, 20]
+  - *act
+  - [Linear, 20, 1]
+
+linear-pass-through: &linear-pass-through
+  - *act
+  - [Linear, auto, auto]
+
+encoder:
+  convs: *none
+  fc: *crar-fc
+
+qnet:
+  convs: *none
+  fc: *crar-q-fc
+
+trans-pred:
+  fc: *crar-trans-pred-fc
+
+float-pred:
+  fc: *crar-float-fc
+

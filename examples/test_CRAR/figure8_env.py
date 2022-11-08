@@ -19,8 +19,8 @@ class MyEnv(Environment):
     RIGHT = 1
     LEFT = 0
     RESET = 2
-    HEIGHT = 6
-    WIDTH = 7 # Must be odd!
+    HEIGHT = 6 #3 #6
+    WIDTH = 5 #7 # Must be odd!
 
     def __init__(self, give_rewards=False, intern_dim=2, **kwargs):
         self._give_rewards = give_rewards
@@ -40,17 +40,18 @@ class MyEnv(Environment):
 
     def make_space_labels(self):
         space_labels = np.zeros((MyEnv.WIDTH, MyEnv.HEIGHT), dtype=int)
+        midpoint = MyEnv.WIDTH//2
         for x in range(MyEnv.WIDTH):
             for y in range(MyEnv.HEIGHT):
                 if not self.in_bounds(x, y):
                     space_labels[x,y] = -1
-                elif x == 3 and y == 5:
+                elif x == midpoint and y == MyEnv.HEIGHT-1:
                     space_labels[x,y] = 0
-                elif x < 3:
+                elif x < midpoint:
                     space_labels[x,y] = 1
-                elif x > 3:
+                elif x > midpoint:
                     space_labels[x,y] = 2
-                elif x == 3:
+                elif x == midpoint:
                     space_labels[x,y] = 3
                 else:
                     raise ValueError('Unconsidered case')
@@ -69,8 +70,14 @@ class MyEnv(Environment):
         elif self._mode != -1:
             self._mode = -1
 
-        self.x = 3
-        self.y = 0
+        possible_resets = [
+            (MyEnv.WIDTH//2, 0),
+            (MyEnv.WIDTH//2, MyEnv.HEIGHT-1),
+            (0, MyEnv.HEIGHT//2),
+            (MyEnv.WIDTH-1, MyEnv.HEIGHT//2),
+            ]
+        self.x, self.y = (MyEnv.WIDTH//2, 0) #possible_resets[np.random.choice(4)]
+        self._reward_location = MyEnv.LEFT
         self._last_rewarded = MyEnv.RIGHT
         
         return [1 * [self._height * [self._width * [0]]]]
@@ -110,19 +117,40 @@ class MyEnv(Environment):
         else:
             raise ValueError('Not a valid action.')
 
+
+        left_reward = (0, MyEnv.HEIGHT-1)
+        right_reward = (MyEnv.WIDTH-1, MyEnv.HEIGHT-1)
+        reset_reward = (MyEnv.WIDTH//2, 0)
+
         if self.in_bounds(new_x, new_y):
-            self.x = new_x; self.y = new_y
+            if self._reward_location == MyEnv.RESET:
+                if self._last_reward_location == MyEnv.LEFT:
+                    if ((self.x, self.y) == left_reward) and (action==1):
+                        pass
+                    elif ((self.x, self.y) == reset_reward) and (action==1):
+                        pass
+                    else:
+                        self.x = new_x; self.y = new_y
+                else:
+                    if ((self.x, self.y) == right_reward) and (action==0):
+                        pass
+                    elif ((self.x, self.y) == reset_reward) and (action==0):
+                        pass
+                    else:
+                        self.x = new_x; self.y = new_y
+            else:
+                self.x = new_x; self.y = new_y
 
         # Move reward location as needed
-        if ((self.x, self.y) == (0, 5)) and self._reward_location == MyEnv.LEFT:
+        if ((self.x, self.y) == left_reward) and self._reward_location == MyEnv.LEFT:
             self.reward = 1
             self._reward_location = MyEnv.RESET
             self._last_reward_location = MyEnv.LEFT
-        elif ((self.x, self.y) == (6, 5)) and self._reward_location == MyEnv.RIGHT:
+        elif ((self.x, self.y) == right_reward) and self._reward_location == MyEnv.RIGHT:
             self.reward = 1
             self._reward_location = MyEnv.RESET
             self._last_reward_location = MyEnv.RIGHT
-        elif ((self.x, self.y) == (3, 0)) and self._reward_location == MyEnv.RESET:
+        elif ((self.x, self.y) == reset_reward) and self._reward_location == MyEnv.RESET:
             self.reward = 1
             if self._last_reward_location == MyEnv.RIGHT:
                 self._reward_location = MyEnv.LEFT
@@ -146,17 +174,29 @@ class MyEnv(Environment):
             all_possib_inp = [] # Will store all possible observations
             color_labels = []
             marker_labels = []
+
+            # Only seen states
+            observations = np.unique(test_data_set.observations()[0], axis=0)
+
+            # All possible states
             for _x in range(self._width):
                 for _y in range(self._height):
                     if not self.in_bounds(_x, _y): continue
                     for idx, r_loc in enumerate([MyEnv.LEFT, MyEnv.RIGHT, MyEnv.RESET]):
                         state = self.get_observation(_x, _y, r_loc)
-                        all_possib_inp.append(state)
-                        color_labels.append(
-                            self._space_label[0, np.argwhere(state==10)[0,0]]
-                            )
-                        marker_labels.append(idx)
-                        #if not self._give_rewards: break
+
+                        observed = False
+                        for obs in observations:
+                            if np.all(state == obs):
+                                observed = True
+
+                        if observed:
+                            all_possib_inp.append(state)
+                            color_labels.append(
+                                self._space_label[0, np.argwhere(state==10)[0,0]]
+                                )
+                            marker_labels.append(idx)
+
             device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
             all_possib_inp = np.expand_dims(
                 np.array(all_possib_inp,dtype='float'), axis=1
@@ -165,12 +205,8 @@ class MyEnv(Environment):
                 torch.tensor(all_possib_inp).float().to(device)
                 ).cpu().numpy()
 
-            n = 1000
-            historics = []
-            for i,observ in enumerate(test_data_set.observations()[0][0:n]):
-                historics.append(np.expand_dims(observ,axis=0))
-
-            historics = np.array(historics)
+            n = observations.shape[0]
+            historics = observations
             abs_states = learning_algo.crar.encoder(
                 torch.tensor(historics).float().to(device)
                 )
@@ -183,10 +219,12 @@ class MyEnv(Environment):
             m = cm.ScalarMappable(cmap=cm.jet)
            
             abs_states_np = abs_states.cpu().numpy()
+            if len(abs_states_np.shape) == 1:
+                abs_states_np = abs_states_np.reshape((1, -1))
             x = np.array(abs_states_np)[:,0]
             y = np.array(abs_states_np)[:,1]
             if(self._intern_dim>2):
-                z = np.array(abs_states)[:,2]
+                z = np.array(abs_states_np)[:,2]
                         
             fig = plt.figure()
             if(self._intern_dim==2):
@@ -273,16 +311,16 @@ class MyEnv(Environment):
             box2b.add_artist(el4b)
             
             boxb = HPacker(children=[box1b, box2b],
-                          align="center",
-                          pad=0, sep=5)
+                align="center",
+                pad=0, sep=5)
             
             anchored_box = AnchoredOffsetbox(loc=3,
-                                             child=boxb, pad=0.,
-                                             frameon=True,
-                                             bbox_to_anchor=(0., 0.98),
-                                             bbox_transform=ax.transAxes,
-                                             borderpad=0.,
-                                             )        
+                child=boxb, pad=0.,
+                frameon=True,
+                bbox_to_anchor=(0., 0.98),
+                bbox_transform=ax.transAxes,
+                borderpad=0.,
+                )        
             ax.add_artist(anchored_box)
             
             
@@ -343,16 +381,21 @@ class MyEnv(Environment):
 
 #        if not self._give_rewards:
 #            pass
+        left_reward = (0, MyEnv.HEIGHT-1)
+        right_reward = (MyEnv.WIDTH-1, MyEnv.HEIGHT-1)
+        reset_reward = (MyEnv.WIDTH//2, 0)
         if reward_location == MyEnv.LEFT:
-            obs[0, 5] = 1
+            obs[left_reward[0], left_reward[1]] = 1
         elif reward_location == MyEnv.RIGHT:
-            obs[6, 5] = 1
+            obs[right_reward[0], right_reward[1]] = 1
         else:
-            obs[3, 0] = 1
+            obs[reset_reward[0], reset_reward[1]] = 1
 
+        #obs = obs + np.random.normal(0, 0.2, size=obs.shape)
         obs[x, y] = 10
 
         if not self._higher_dim_obs: obs = obs.flatten()
+
         return obs
 
     def inTerminalState(self):

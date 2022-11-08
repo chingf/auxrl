@@ -109,13 +109,19 @@ class NN():
 
         class Encoder(nn.Module):
             def __init__(
-                self, input_shape, fc, convs=None, act=nn.Tanh, abstract_state_dim=2
-            ):
+                self, input_shape, fc, convs=None, act=nn.Tanh, abstract_dim=2
+                ):
                 super().__init__()
                 self.input_shape = input_shape
                 self.convs = convs
                 self.fc = fc
-        
+                self.abstract_dim = abstract_dim
+
+                # TODO
+                self.mem = nn.Sequential(
+                    nn.LSTM(100, 50), nn.Linear(50, abstract_dim), nn.ReLU()
+                    )
+
             def forward(self, x):
                 if self.convs is not None:
                     x = self.convs(x)
@@ -123,6 +129,10 @@ class NN():
                 else:
                     x = x.squeeze()
                 x = self.fc(x.float())
+
+                # TODO
+                x = self.mem(x)
+
                 return x
 
         input_shape = self._input_dimensions[0]
@@ -139,7 +149,7 @@ class NN():
             convs = None
             feature_size = input_shape[1]
         fc = make_fc(feature_size, abstract_dim, encoder_config["fc"])
-        encoder = Encoder(input_shape, fc, convs)
+        encoder = Encoder(input_shape, fc, convs, abstract_dim=abstract_dim)
         return encoder
 
     def transition_model(self): # MODULE

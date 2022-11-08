@@ -44,6 +44,7 @@ class CRAR(LearningAlgo):
             clip_norm=0, freeze_interval=1000, batch_size=32,
             update_rule="rmsprop", random_state=np.random.RandomState(),
             double_Q=False, neural_network=NN, lr=1E-4, nn_yaml='network.yaml',
+            loss_weights=[1, 0.2, 1, 1, 1, 1, 1],
             **kwargs
             ):
         """ Initialize the environment. """
@@ -58,6 +59,7 @@ class CRAR(LearningAlgo):
         self._freeze_interval = freeze_interval
         self._double_Q = double_Q
         self._random_state = random_state
+        self._loss_weights = loss_weights
         self.update_counter = 0    
         self._high_int_dim = kwargs.get('high_int_dim', False)
         self._internal_dim = kwargs.get('internal_dim', 2)
@@ -162,14 +164,12 @@ class CRAR(LearningAlgo):
         Individual (square) losses for the Q-values for each tuple
         """
 
+        import pdb; pdb.set_trace()
         self.optimizer.zero_grad()
 
         onehot_actions = np.zeros((self._batch_size, self._n_actions))
         onehot_actions[np.arange(self._batch_size), actions_val] = 1
-        onehot_actions_rand = np.zeros((self._batch_size, self._n_actions))
-        onehot_actions_rand[np.arange(self._batch_size), np.random.randint(0,2,(32))] = 1
         onehot_actions = torch.as_tensor(onehot_actions, device=self.device).float()
-        onehot_actions_rand = torch.as_tensor(onehot_actions_rand, device=self.device).float()
 
         if (len(states_val) > 1) or (len(next_states_val) > 1):
             raise ValueError('Dimension mismatch')
@@ -296,13 +296,13 @@ class CRAR(LearningAlgo):
         self.loss_Q += loss_Q.item()
 
         # Aggregate all losses and update parameters
-        all_losses = loss_T \
-            + 0.2*loss_disentangle_t \
-            + loss_disambiguate2 \
-            + loss_disambiguate1 \
-            + loss_gamma \
-            + loss_R \
-            + loss_Q
+        all_losses = self._loss_weights[0] * loss_T \
+            + self._loss_weights[1] * loss_disentangle_t \
+            + self._loss_weights[2] * loss_disambiguate2 \
+            + self._loss_weights[3] * loss_disambiguate1 \
+            + self._loss_weights[4] * loss_gamma \
+            + self._loss_weights[5] * loss_R \
+            + self._loss_weights[6] * loss_Q
         self.tracked_losses.append(all_losses.item())
         self.tracked_T_err.append(loss_T.item())
         self.tracked_disamb1.append(loss_disambiguate1.item())
@@ -394,6 +394,24 @@ class CRAR(LearningAlgo):
             xs = self.crar.encoder(state)
         q_vals = self.qValues(xs, d=depths[mode])
         return torch.argmax(q_vals), torch.max(q_vals)
+
+    def getPossibleTransitions(self, state):
+        """
+        From a single state, return the possible transition states.
+        """
+
+        with torch.no_grad():
+            state = torch.as_tensor(state, device=self.device).float()
+            import pdb; pdb.set_trace()
+            Es = self.crar.encoder(state)
+            Es = [torch.clone(Es) for _ in range(self._n_actions)]
+            Es = torch.stack(Es)
+            onehot_actions = np.zeros((self._n_actions, self._n_actions))
+            onehot_actions[np.arange(self._n_actions), np.arange(self._n_actions)] = 1
+            onehot_actions = torch.as_tensor(onehot_actions, device=self.device).float()
+            Es_and_actions = torch.cat([Es, onehot_actions], dim=1)
+            TEs = self.crar.transition(Es_and_actions)
+        return Es, TEs
 
     def _resetQHat(self):
         """ Set the target Q-network weights equal to the main Q-network weights

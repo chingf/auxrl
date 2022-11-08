@@ -12,3 +12,4 @@ scores/
 *.swp
 *.nfs*
 nnets/
+figs*/

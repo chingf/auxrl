@@ -3,8 +3,6 @@ from ..base_classes import Policy
 
 
 class FixedFigure8Policy(Policy):
-    HEIGHT = 6
-    WIDTH = 7
 
     """The policy acts greedily with probability :math:`1-\epsilon` and acts randomly otherwise.
     It is now used as a default policy for the neural agent.
@@ -14,10 +12,15 @@ class FixedFigure8Policy(Policy):
     epsilon : float
         Proportion of random steps
     """
-    def __init__(self, learning_algo, n_actions, random_state, epsilon=0):
+    def __init__(
+            self, learning_algo, n_actions, random_state, epsilon=0,
+            height=6, width=7
+            ):
         Policy.__init__(self, learning_algo, n_actions, random_state)
         self._epsilon = epsilon
         self.left_turn = True
+        self.height = height
+        self.width = width
 
     def action(self, state, mode=None, *args, **kwargs):
         if self.random_state.rand() < self._epsilon:
@@ -25,24 +28,25 @@ class FixedFigure8Policy(Policy):
         else:
             state = state[0].squeeze()
             if len(state.shape) == 1:
-                state = state.reshape(
-                    (FixedFigure8Policy.WIDTH, FixedFigure8Policy.HEIGHT)
-                    )
+                state = state.reshape((self.width, self.height))
             agent_x, agent_y = np.argwhere(state==10)[0]
+            midpoint = self.width//2
+            h_extent = self.height - 1
+            w_extent = self.width - 1
     
-            if (agent_y == 0) and (agent_x < 3):
+            if (agent_y == 0) and (agent_x < midpoint):
                 action = 1
-            elif (agent_y == 0) and (agent_x > 3):
+            elif (agent_y == 0) and (agent_x > midpoint):
                 action = 0
-            elif (agent_y < 5) and (agent_x == 3):
+            elif (agent_y < h_extent) and (agent_x == midpoint):
                 action = 2
             elif (agent_y > 0) and (agent_x == 0):
                 action = 3
-            elif (agent_y > 0) and (agent_x == 6):
+            elif (agent_y > 0) and (agent_x == w_extent):
                 action = 3
-            elif (agent_y == 5) and (agent_x < 3):
+            elif (agent_y == h_extent) and (agent_x < midpoint):
                 action = 0
-            elif (agent_y == 5) and (agent_x > 3):
+            elif (agent_y == h_extent) and (agent_x > midpoint):
                 action = 1
             else:
                 if self.left_turn:
