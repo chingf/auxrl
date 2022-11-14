@@ -19,7 +19,7 @@ class MyEnv(Environment):
     RIGHT = 1
     LEFT = 0
     RESET = 2
-    HEIGHT = 6 #3 #6
+    HEIGHT = 3 #3 #6
     WIDTH = 5 #7 # Must be odd!
 
     def __init__(self, give_rewards=False, intern_dim=2, **kwargs):
@@ -31,6 +31,7 @@ class MyEnv(Environment):
         self._height = MyEnv.HEIGHT
         self._width = MyEnv.WIDTH # Must be odd!
         self._higher_dim_obs = kwargs['higher_dim_obs']
+        self._show_rewards = kwargs.get('show_rewards', True)
         self.x = 3
         self.y = 0
         self._reward_location = MyEnv.LEFT
@@ -382,12 +383,14 @@ class MyEnv(Environment):
         left_reward = (0, MyEnv.HEIGHT-1)
         right_reward = (MyEnv.WIDTH-1, MyEnv.HEIGHT-1)
         reset_reward = (MyEnv.WIDTH//2, 0)
-        if reward_location == MyEnv.LEFT:
-            obs[left_reward[0], left_reward[1]] = 1
-        elif reward_location == MyEnv.RIGHT:
-            obs[right_reward[0], right_reward[1]] = 1
-        else:
-            obs[reset_reward[0], reset_reward[1]] = 1
+
+        if self._show_rewards:
+            if reward_location == MyEnv.LEFT:
+                obs[left_reward[0], left_reward[1]] = 1
+            elif reward_location == MyEnv.RIGHT:
+                obs[right_reward[0], right_reward[1]] = 1
+            else:
+                obs[reset_reward[0], reset_reward[1]] = 1
 
         #obs = obs + np.random.normal(0, 0.2, size=obs.shape)
         obs[x, y] = 10

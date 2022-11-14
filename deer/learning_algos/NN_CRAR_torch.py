@@ -42,6 +42,8 @@ def make_fc(input_dim, out_dim, fc_config):
                 fc.append(NN_MAP[layer[0]](layer[1], out_dim))
             else:
                 fc.append(NN_MAP[layer[0]](layer[1], layer[2]))
+        elif layer[0] == "LSTM":
+            return NN_MAP[layer[0]](layer[1], layer[2], batch_first=True)
         else:
             fc.append(NN_MAP[layer]())
 
@@ -118,11 +120,6 @@ class NN():
                 self.fc = fc
                 self.abstract_dim = abstract_dim
 
-                # TODO
-                #self.mem = nn.Sequential(
-                #    nn.LSTM(100, 50), nn.Linear(50, abstract_dim), nn.ReLU()
-                #    )
-
             def forward(self, x):
                 if self.convs is not None:
                     x = self.convs(x)
@@ -130,16 +127,56 @@ class NN():
                 else:
                     x = x.squeeze()
                 x = self.fc(x.float())
-
-                # TODO
-                #x = self.mem(x)
-
                 return x
 
+        class EncoderRNN(nn.Module):
+            def __init__(
+                self, input_shape, fc, mem, convs=None, act=nn.Tanh, abstract_dim=2
+                ):
+                super().__init__()
+                self.input_shape = input_shape
+                self.convs = convs
+                self.fc = fc
+                self.mem = mem
+                self.abstract_dim = abstract_dim
+                self.hidden = None
+
+            def forward(self, x, hidden=None, update_hidden=True):
+                timesteps = x.shape[1]
+                for t in range(timesteps):
+                    out, new_hidden = self._forward_step(x[:,t,:], hidden)
+                    hidden = new_hidden
+                if update_hidden:
+                    self.hidden = new_hidden
+                return out
+
+            def _forward_step(self, x, hidden):
+                if self.convs is not None:
+                    x = self.convs(x)
+                    x = x.view(x.size(0), -1)
+                else:
+                    x = x.squeeze()
+                x = self.fc(x.float())
+                if len(x.shape) == 2:
+                    x = x.view(x.shape[0], 1, x.shape[1])
+                elif len(x.shape) == 1:
+                    x = x.view(1, 1, x.shape[0])
+                else:
+                    raise ValueError('incorrect')
+                if (type(hidden) == list) and (hidden[0] == None): # hacky TODO
+                    hidden = None
+                x, new_hidden = self.mem(x, hidden)
+                x = x.squeeze()
+                return x, new_hidden
+            
+
+            def get_hidden(self):
+                return self.hidden
+
+            def reset_hidden(self, vec=None):
+                self.hidden = vec
+
         input_shape = self._input_dimensions[0]
-        #if self._nstep > 1:
-        #    input_shape = list(input_shape)
-        #    input_shape[-1] *= self._nstep
         abstract_dim = self.internal_dim
 
         with open(HERE / self._yaml) as f:
@@ -152,8 +189,14 @@ class NN():
         else:
             convs = None
             feature_size = input_shape[1]
-        fc = make_fc(feature_size, abstract_dim, encoder_config["fc"])
-        encoder = Encoder(input_shape, fc, convs, abstract_dim=abstract_dim)
+        if 'rnn' in self._yaml:
+            fc = make_fc(feature_size, abstract_dim, encoder_config["fc"])
+            mem = make_fc(feature_size, abstract_dim, encoder_config["mem"])
+            encoder = EncoderRNN(
+                input_shape, fc, mem, convs, abstract_dim=abstract_dim)
+        else:
+            fc = make_fc(feature_size, abstract_dim, encoder_config["fc"])
+            encoder = Encoder(input_shape, fc, convs, abstract_dim=abstract_dim)
         return encoder
 
     def transition_model(self): # MODULE

@@ -6,6 +6,7 @@
 /General_Deep_Q_RL/plot.png
 *.pdf
 *.png
+*.gif
 *.egg-info
 .ipynb_checkpoints/
 scores/

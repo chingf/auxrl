@@ -65,7 +65,6 @@ class CRAR(LearningAlgo):
         self._internal_dim = kwargs.get('internal_dim', 2)
         self._entropy_temp = kwargs.get('entropy_temp', 5.)
         self._nstep = kwargs.get('nstep', 1)
-        self.loss_interpret=0
         self.loss_T=0
         self.loss_R=0
         self.loss_Q=0
@@ -166,21 +165,9 @@ class CRAR(LearningAlgo):
         """
 
         self.optimizer.zero_grad()
-        
-        if self._nstep > 1:
-            actions_val = actions_val[:, -1]
-            rewards_val = rewards_val[:,-1]
-            terminals_val = terminals_val[:,-1]
-            onehot_actions = np.zeros((self._batch_size, self._n_actions))
-            onehot_actions[np.arange(self._batch_size), actions_val] = 1
-            onehot_actions = torch.as_tensor(onehot_actions, device=self.device).float()
-            states_val = self.make_state_with_history(states_val, 0.98)
-            next_states_val = self.make_state_with_history(next_states_val, 0.98)
-            import pdb; pdb.set_trace()
-        else:
-            onehot_actions = np.zeros((self._batch_size, self._n_actions))
-            onehot_actions[np.arange(self._batch_size), actions_val] = 1
-            onehot_actions = torch.as_tensor(onehot_actions, device=self.device).float()
+        onehot_actions = np.zeros((self._batch_size, self._n_actions))
+        onehot_actions[np.arange(self._batch_size), actions_val] = 1
+        onehot_actions = torch.as_tensor(onehot_actions, device=self.device).float()
 
         if (len(states_val) > 1) or (len(next_states_val) > 1):
             raise ValueError('Dimension mismatch')
@@ -257,32 +244,6 @@ class CRAR(LearningAlgo):
         loss_disentangle_t = torch.mean(loss_disentangle_t)
         self.loss_disentangle_t += loss_disentangle_t.item()
 
-#        # Interpretable AI # not implemented
-#        target_modif_features=np.zeros((self._n_actions,self._internal_dim))
-#        ## Catcher
-#        #target_modif_features[0,0]=1    # dir
-#        #target_modif_features[1,0]=-1   # opposite dir
-#        #target_modif_features[0:2,1]=1    # temps
-#        ## Laby
-#        target_modif_features[0,0]=1
-#        target_modif_features[1,0]=0
-#        #target_modif_features[2,1]=0
-#        #target_modif_features[3,1]=0
-#        target_modif_features = np.repeat(target_modif_features,self._batch_size,axis=0)
-#        states_val_tiled = []
-#        for obs in states_val:
-#            states_val_tiled.append(np.tile(obs,(self._n_actions,1,1,1)))
-#        onehot_actions_tiled = np.diag(np.ones(self._n_actions))
-#        onehot_actions_tiled = np.repeat(onehot_actions_tiled,self._batch_size,axis=0)
-#        loss_interpret = torch.nn.functional.mse_loss(
-#            self.force_features(states_val_tiled+[onehot_actions_tiled]),
-#            target_modif_features
-#            ) 
-#        self.loss_interpret += loss_interpret.item()
-
-#        all_losses = loss_T + loss_R + loss_gamma + loss_disambiguate1 + \
-#            loss_disambiguate2 + loss_disentangle_t #+ loss_interpret
-
         # Q network stuff
         if self.update_counter % self._freeze_interval == 0:
             self._resetQHat()
@@ -328,19 +289,177 @@ class CRAR(LearningAlgo):
 
         # Occasional logging
         if(self.update_counter%500==0):
-            print('self.loss_T, self.loss_R, self.loss_gamma, self.loss_Q, self.loss_disentangle_t, self.loss_disambiguate1, self.loss_disambiguate2')
-            print(self.loss_T/500., self.loss_R/500.,self.loss_gamma/500., self.loss_Q/500., self.loss_disentangle_t/500., self.loss_disambiguate1/500., self.loss_disambiguate2/500.)
-
-            if(self._high_int_dim==False):
-                print ("self.loss_interpret/500.")
-                print (self.loss_interpret/500.)
+            print('self.loss_T, self.loss_R, self.loss_gamma, self.loss_Q, \
+                self.loss_disentangle_t, self.loss_disambiguate1,\
+                self.loss_disambiguate2')
+            print(self.loss_T/500., self.loss_R/500.,self.loss_gamma/500., \
+                self.loss_Q/500., self.loss_disentangle_t/500., \
+                self.loss_disambiguate1/500., self.loss_disambiguate2/500.)
 
             self.loss_R=0
             self.loss_gamma=0
             self.loss_Q=0
             self.loss_T=0
-            self.loss_interpret=0
+            self.loss_disentangle_t=0
+            self.loss_disambiguate1=0
+            self.loss_disambiguate2=0
 
+        return loss_Q.item(), loss_Q_unreduced
+
+    def recurrent_train(
+        self, observations, actions_val, rewards_val,
+        terminals_val, hidden_states):
+        """
+        Train CRAR from one batch of data. Like the train method, but each
+        value in a batch is now a history of observations.
+        """
+
+        self.optimizer.zero_grad()
+        states_val = [obs[:,:-1,:] for obs in observations]
+        next_states_val = [obs[:,1:,:] for obs in observations]
+        actions_val = actions_val[:, -1]
+        rewards_val = rewards_val[:,-1]
+        terminals_val = terminals_val[:,-1]
+        onehot_actions = np.zeros((self._batch_size, self._n_actions))
+        onehot_actions[np.arange(self._batch_size), actions_val] = 1
+        onehot_actions = torch.as_tensor(onehot_actions, device=self.device).float()
+
+        if (len(states_val) > 1) or (len(next_states_val) > 1):
+            raise ValueError('Dimension mismatch')
+
+        states_val = states_val[0]
+        next_states_val = next_states_val[0]
+        states_val = torch.as_tensor(states_val, device=self.device).float()
+        next_states_val = torch.as_tensor(next_states_val, device=self.device).float()
+
+        Esp = self.crar.encoder(
+            next_states_val, [h[1] for h in hidden_states], update_hidden=True
+            )
+        Es = self.crar.encoder(
+            states_val, [h[0] for h in hidden_states], update_hidden=True
+            )
+        Es_and_actions = torch.cat([Es, onehot_actions], dim=1)
+        TEs = self.crar.transition(Es_and_actions)
+        R = self.crar.R(Es_and_actions)
+
+        if(self.update_counter%500==0):
+            print("Printing a few elements useful for debugging:")
+            print("actions_val[0], rewards_val[0], terminals_val[0]")
+            print(actions_val[0], rewards_val[0], terminals_val[0])
+            print("Es[0], TEs[0], Esp_[0]")
+            if(Es.ndim==4):
+                print(
+                    np.transpose(Es, (0, 3, 1, 2))[0],
+                    np.transpose(TEs, (0, 3, 1, 2))[0],
+                    np.transpose(Esp, (0, 3, 1, 2))[0]
+                    ) # data_format='channels_last' --> 'channels_first'
+            else:
+                print(Es[0].data, TEs[0].data, Esp[0].data)
+            print("R[0]")
+            print(R[0])
+
+        # Transition loss
+        loss_T = torch.nn.functional.mse_loss(TEs, Esp, reduction='none')
+        terminals_mask = torch.tensor(1-terminals_val).float().to(self.device)
+        loss_T = loss_T * terminals_mask[:, None]
+        loss_T = torch.mean(loss_T)
+        self.loss_T += loss_T.item()
+
+        # Rewards loss
+        rewards_val = torch.tensor(rewards_val).view(-1,1).to(self.device).float()
+        loss_R = torch.nn.functional.mse_loss(
+            self.crar.R(Es_and_actions), rewards_val
+            )
+        self.loss_R += loss_R.item()
+
+        # Fit gammas
+        gamma_val = terminals_mask * self._df
+        gamma_val = gamma_val.view(-1,1).float().to(self.device)
+        loss_gamma = torch.nn.functional.mse_loss(
+            self.crar.gamma(Es_and_actions), gamma_val
+            )
+        self.loss_gamma += loss_gamma.item()
+
+        # Enforce limited volume in abstract state space
+        loss_disambiguate1 = torch.pow(
+            torch.norm(Es, p=float('inf'), dim=1),
+            2) - 1
+        loss_disambiguate1 = torch.clip(loss_disambiguate1, min=0)
+        loss_disambiguate1 = torch.mean(loss_disambiguate1)
+        self.loss_disambiguate1 += loss_disambiguate1.item()
+
+        # Increase entropy of randomly sampled states
+        # This works only when states_val is made up of only one observation
+        rolled = torch.roll(Es, 1, dims=0)
+        loss_disambiguate2 = torch.exp(
+            -self._entropy_temp * torch.norm(Es - rolled, dim=1)
+            )
+        loss_disambiguate2 = torch.mean(loss_disambiguate2)
+        self.loss_disambiguate2 += loss_disambiguate2.item()
+
+        # Increase entropy of neighboring states
+        loss_disentangle_t = torch.exp(
+            -self._entropy_temp * torch.norm(Es - Esp, dim=1)
+            )
+        loss_disentangle_t = torch.mean(loss_disentangle_t)
+        self.loss_disentangle_t += loss_disentangle_t.item()
+
+        # Q network stuff
+        if self.update_counter % self._freeze_interval == 0:
+            self._resetQHat()
+        next_q_target = self.crar_target.Q(self.crar_target.encoder(
+            next_states_val, [h[1] for h in hidden_states], update_hidden=False
+            ))
+
+        if self._double_Q: # Action selection by Q
+            next_q = self.crar.Q(Esp)
+            argmax_next_q = torch.argmax(next_q, axis=1)
+            max_next_q = next_q_target[
+                np.arange(self._batch_size), argmax_next_q
+                ].reshape((-1, 1))
+        else: # Action selection by Q'
+            max_next_q = np.max(next_q_target, axis=1, keepdims=True)
+        target = rewards_val.squeeze() + terminals_mask*self._df*max_next_q.squeeze()
+        q_vals = self.crar.Q(Es)
+        q_vals = q_vals[np.arange(self._batch_size), actions_val]
+        loss_Q = torch.nn.functional.mse_loss(q_vals, target, reduction='none')
+        loss_Q_unreduced = loss_Q
+        loss_Q = torch.mean(loss_Q)
+        self.loss_Q += loss_Q.item()
+
+        # Aggregate all losses and update parameters
+        all_losses = self._loss_weights[0] * loss_T \
+            + self._loss_weights[1] * loss_disentangle_t \
+            + self._loss_weights[2] * loss_disambiguate2 \
+            + self._loss_weights[3] * loss_disambiguate1 \
+            + self._loss_weights[4] * loss_gamma \
+            + self._loss_weights[5] * loss_R \
+            + self._loss_weights[6] * loss_Q
+        self.tracked_losses.append(all_losses.item())
+        self.tracked_T_err.append(loss_T.item())
+        self.tracked_disamb1.append(loss_disambiguate1.item())
+        self.tracked_disamb2.append(loss_disambiguate2.item())
+        self.tracked_disentang.append(loss_disentangle_t.item())
+        self.tracked_gamma_err.append(loss_gamma.item())
+        self.tracked_R_err.append(loss_R.item())
+        self.tracked_Q_err.append(loss_Q.item())
+        all_losses.backward()
+        self.optimizer.step()
+        self.update_counter += 1
+
+        # Occasional logging
+        if(self.update_counter%500==0):
+            print('self.loss_T, self.loss_R, self.loss_gamma, self.loss_Q, \
+                self.loss_disentangle_t, self.loss_disambiguate1,\
+                self.loss_disambiguate2')
+            print(self.loss_T/500., self.loss_R/500.,self.loss_gamma/500., \
+                self.loss_Q/500., self.loss_disentangle_t/500., \
+                self.loss_disambiguate1/500., self.loss_disambiguate2/500.)
+
+            self.loss_R=0
+            self.loss_gamma=0
+            self.loss_Q=0
+            self.loss_T=0
             self.loss_disentangle_t=0
             self.loss_disambiguate1=0
             self.loss_disambiguate2=0
@@ -415,7 +534,7 @@ class CRAR(LearningAlgo):
         depths = [0,1,3,6] # Mode defines the planning depth di
         with torch.no_grad():
             state = torch.as_tensor(state, device=self.device).float()
-            xs = self.crar.encoder(state)
+            xs = self.crar.encoder(state, self.crar.encoder.hidden)
         q_vals = self.qValues(xs, d=depths[mode])
         return torch.argmax(q_vals), torch.max(q_vals)
 
@@ -423,7 +542,6 @@ class CRAR(LearningAlgo):
         """
         From a single state, return the possible transition states.
         """
-
         with torch.no_grad():
             state = torch.as_tensor(state, device=self.device).float()
             Es = self.crar.encoder(state)
@@ -446,3 +564,9 @@ class CRAR(LearningAlgo):
     def transfer(self, original, transfer, epochs=1):
         raise ValueError("Not implemented.")
 
+    def reset_rnn(self, vec=None):
+        self.crar.encoder.reset_hidden(vec)
+
+    def get_rnn_hidden(self):
+        hidden = self.crar.encoder.get_hidden()
+        return hidden

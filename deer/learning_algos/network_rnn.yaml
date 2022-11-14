@@ -24,6 +24,14 @@ crar-fc: &crar-fc
   - *act
   - [Linear, 200, 100]
   - *act
+  - [Linear, 100, 50]
+  - *act
+  - [Linear, 50, 10]
+  - *act
+  - [Linear, 10, auto]
+
+mem: &mem
+  - [LSTM, 3, 3]
 
 simple-q-fc: &simple-q-fc
   - [Linear, auto, 128]
@@ -64,6 +72,7 @@ linear-pass-through: &linear-pass-through
 encoder:
   convs: *none
   fc: *crar-fc
+  mem: *mem
 
 qnet:
   convs: *none
