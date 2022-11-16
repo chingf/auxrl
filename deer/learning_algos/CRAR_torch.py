@@ -65,6 +65,7 @@ class CRAR(LearningAlgo):
         self._internal_dim = kwargs.get('internal_dim', 2)
         self._entropy_temp = kwargs.get('entropy_temp', 5.)
         self._nstep = kwargs.get('nstep', 1)
+        self._recurrent = kwargs.get('recurrent', False)
         self.loss_T=0
         self.loss_R=0
         self.loss_Q=0
@@ -165,6 +166,7 @@ class CRAR(LearningAlgo):
         """
 
         self.optimizer.zero_grad()
+
         onehot_actions = np.zeros((self._batch_size, self._n_actions))
         onehot_actions[np.arange(self._batch_size), actions_val] = 1
         onehot_actions = torch.as_tensor(onehot_actions, device=self.device).float()
@@ -173,6 +175,11 @@ class CRAR(LearningAlgo):
             raise ValueError('Dimension mismatch')
         states_val = states_val[0]
         next_states_val = next_states_val[0]
+
+        if self._nstep > 1:
+            states_val = self.make_state_with_history(states_val)
+            next_states_val = self.make_state_with_history(next_states_val)
+
         states_val = torch.as_tensor(states_val, device=self.device).float()
         next_states_val = torch.as_tensor(next_states_val, device=self.device).float()
 
@@ -466,17 +473,18 @@ class CRAR(LearningAlgo):
 
         return loss_Q.item(), loss_Q_unreduced
 
-    def make_state_with_history(self, states_val, tau):
+    def make_state_with_history(self, states_val, tau=0.95):
         new_states_val = []
-        for batch_obs in states_val:
-            new_batch_obs = []
-            for obs in batch_obs:
-                new_obs = np.sum([
-                    tau**(self._nstep-t) * obs_t \
-                    for t, obs_t in enumerate(obs)], axis=0)
-                new_batch_obs.append(new_obs)
-            new_batch_obs = np.array(new_batch_obs)
-            new_states_val.append(new_batch_obs)
+        for batch in range(states_val.shape[0]):
+            walls = np.argwhere(states_val[batch,-1] == -1) # hacky
+            new_obs = []
+            for t in range(self._nstep):
+                discount = tau**(self._nstep-t)
+                new_obs.append(discount * states_val[batch,t])
+            new_obs = np.sum(new_obs, axis=0)
+            new_obs[walls] = -1
+            new_states_val.append(new_obs)
+        new_states_val = np.array(new_states_val)
         return new_states_val
 
     def step_scheduler(self):
@@ -533,8 +541,13 @@ class CRAR(LearningAlgo):
             mode=0
         depths = [0,1,3,6] # Mode defines the planning depth di
         with torch.no_grad():
-            state = torch.as_tensor(state, device=self.device).float()
-            xs = self.crar.encoder(state, self.crar.encoder.hidden)
+            if self._recurrent:
+                state = torch.as_tensor(state, device=self.device).float()
+                xs = self.crar.encoder(state, self.crar.encoder.hidden)
+            else:
+                _state = self.make_state_with_history(state)
+                state = torch.as_tensor(_state, device=self.device).float()
+                xs = self.crar.encoder(state)
         q_vals = self.qValues(xs, d=depths[mode])
         return torch.argmax(q_vals), torch.max(q_vals)
 

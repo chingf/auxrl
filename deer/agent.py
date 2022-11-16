@@ -60,6 +60,7 @@ class NeuralAgent(object):
         self._environment = environment
         self._learning_algo = learning_algo
         self._nstep = learning_algo._nstep
+        self._recurrent = learning_algo._recurrent
         self._replay_memory_size = replay_memory_size
         self._replay_start_size = replay_start_size
         self._batch_size = batch_size
@@ -69,7 +70,7 @@ class NeuralAgent(object):
         self._dataset = DataSet(
             environment, max_size=replay_memory_size, random_state=random_state,
             use_priority=self._exp_priority, only_full_history=self._only_full_history,
-            nstep=self._nstep
+            nstep=self._nstep, recurrent=self._recurrent
             )
         self._tmp_dataset = None # Will be created by startTesting() when necessary
         self._mode = -1
@@ -79,9 +80,10 @@ class NeuralAgent(object):
         self._Vs_on_last_episode = []
         self._in_episode = False
         self._selected_action = -1
-        self._state = []
-        for i in range(len(inputDims)):
-            self._state.append(np.zeros(inputDims[i], dtype=float))
+        #for i in range(len(inputDims)):
+        #    self._state.append(np.zeros(inputDims[i], dtype=float))
+        curr_state_dims = (1,) + (inputDims[0][0]*self._nstep,) + inputDims[0][1:]
+        self._state = np.zeros(curr_state_dims)
         if (train_policy==None):
             self._train_policy = EpsilonGreedyPolicy(learning_algo, environment.nActions(), random_state, 0.1)
         else:
@@ -195,9 +197,19 @@ class NeuralAgent(object):
                     self._dataset.randomBatch_nstep(
                         self._batch_size, self._exp_priority
                         )
-                loss, loss_ind = self._learning_algo.recurrent_train( #TODO
-                    observations, actions, rewards, terminals, hidden_states
-                    )
+                if self._recurrent:
+                    loss, loss_ind = self._learning_algo.recurrent_train( #TODO
+                        observations, actions, rewards, terminals, hidden_states
+                        )
+                else:
+                    states = [obs[:,:-1,:] for obs in observations]
+                    next_states = [obs[:,1:,:] for obs in observations]
+                    actions = actions[:, -1]
+                    rewards = rewards[:, -1]
+                    terminals = terminals[:, -1]
+                    loss, loss_ind = self._learning_algo.train(
+                        states, actions, rewards, next_states, terminals
+                        )
             else:
                 states, actions, rewards, next_states, terminals, rndValidIndices =\
                     self._dataset.randomBatch(
@@ -350,11 +362,13 @@ class NeuralAgent(object):
         self._in_episode = True
         initState = self._environment.reset(self._mode)
         inputDims = self._environment.inputDimensions()
-        if self._nstep > 1:
+        if self._recurrent:
             self._learning_algo.reset_rnn() #TODO
-        for i in range(len(inputDims)):
-            if (inputDims[i][0] > 1) and (len(inputDims[i]) > 1):
-                self._state[i][1:] = initState[i][1:]
+        #for i in range(len(inputDims)):
+        #    if (inputDims[i][0] > 1) and (len(inputDims[i]) > 1):
+        #        self._state[i][1:] = initState[i][1:]
+        #self._state[:,-1,:] = np.copy(initState)
+        self._state = np.zeros(self._state.shape)
         
         self._Vs_on_last_episode = []
         is_terminal=False
@@ -372,13 +386,16 @@ class NeuralAgent(object):
                     obs_history += obs[0].copy()
                     history_n += 1
                 
-                if len(inputDims[i]) > 1:
+                if len(inputDims[-1]) > 1:
                     for i in range(len(obs)):
                         self._state[i][0:-1] = self._state[i][1:]
                         self._state[i][-1] = obs[i]
                 else:
-                    for i in range(len(obs)):
-                        self._state[i] = obs[i]
+                    if self._nstep > 1:
+                        self._state[0, 0:self._nstep-1] = self._state[0, 1:]
+                        self._state[0,-1] = obs[0]
+                    else:
+                        self._state[0] = obs[0]
                 
                 V, action, reward, hidden = self._step()
                 
@@ -417,7 +434,7 @@ class NeuralAgent(object):
         """
 
         action, V = self._chooseAction()
-        if self._nstep > 1:
+        if self._recurrent:
             hidden = self._learning_algo.get_rnn_hidden() #TODO
         else:
             hidden = None
@@ -442,7 +459,7 @@ class NeuralAgent(object):
         else:
             if self._dataset.n_elems > self._replay_start_size:
                 # follow the train policy
-                action, V = self._train_policy.action(self._state, mode=None, dataset=self._dataset)     #is self._state the only way to store/pass the state?
+                action, V = self._train_policy.action(self._state, mode=None, dataset=self._dataset)
             else:
                 # Still gathering initial data: choose dummy action
                 action, V = self._train_policy.randomAction()
@@ -474,7 +491,7 @@ class DataSet(object):
 
     def __init__(
         self, env, random_state=None, max_size=1000000, use_priority=False,
-        only_full_history=True, nstep=1
+        only_full_history=True, nstep=1, recurrent=False
         ):
         """Initializer.
         Parameters
@@ -495,6 +512,7 @@ class DataSet(object):
         self._use_priority = use_priority
         self._only_full_history = only_full_history
         self._nstep = nstep
+        self._recurrent = recurrent
         if ( isinstance(env.nActions(),int) ):
             self._actions = CircularBuffer(max_size, dtype="int8")
         else:
@@ -842,9 +860,7 @@ class DataSet(object):
         # Store observations
         for i in range(len(self._batch_dimensions)):
             self._observations[i].append(obs[i])
-            if self._nstep > 1:
-                if hidden is not None:
-                    import pdb; pdb.set_trace()
+            if self._recurrent:
                 print(hidden)
                 self._hiddens.append(hidden)
 

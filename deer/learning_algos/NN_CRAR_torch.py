@@ -76,6 +76,7 @@ class NN():
         self.ddqn_only = kwargs.get('ddqn_only', False)
         self._yaml = yaml
         self._nstep = kwargs.get('nstep', 1)
+        self._recurrent = kwargs.get('recurrent', False)
         if self._high_int_dim:
             self.n_channels_internal_dim = kwargs["internal_dim"] #dim[-3]
             raise ValueError("Not implemented")
@@ -189,7 +190,7 @@ class NN():
         else:
             convs = None
             feature_size = input_shape[1]
-        if 'rnn' in self._yaml:
+        if self._recurrent:
             fc = make_fc(feature_size, abstract_dim, encoder_config["fc"])
             mem = make_fc(feature_size, abstract_dim, encoder_config["mem"])
             encoder = EncoderRNN(
