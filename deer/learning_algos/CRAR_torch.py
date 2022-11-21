@@ -473,7 +473,7 @@ class CRAR(LearningAlgo):
 
         return loss_Q.item(), loss_Q_unreduced
 
-    def make_state_with_history(self, states_val, tau=0.95):
+    def make_state_with_history(self, states_val, tau=0.8):
         new_states_val = []
         for batch in range(states_val.shape[0]):
             walls = np.argwhere(states_val[batch,-1] == -1) # hacky

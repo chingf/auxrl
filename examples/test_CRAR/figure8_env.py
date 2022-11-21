@@ -19,8 +19,8 @@ class MyEnv(Environment):
     RIGHT = 1
     LEFT = 0
     RESET = 2
-    HEIGHT = 4 #3 #6
-    WIDTH = 5 #7 # Must be odd!
+    HEIGHT = 5 #4 #3 #6
+    WIDTH = 7 #5 #7 # Must be odd!
 
     def __init__(self, give_rewards=False, intern_dim=2, **kwargs):
         self._give_rewards = give_rewards
@@ -129,19 +129,18 @@ class MyEnv(Environment):
                 if self._last_reward_location == MyEnv.LEFT:
                     if ((self.x, self.y) == left_reward) and (action==1):
                         pass
-                    elif ((self.x, self.y) == reset_reward) and (action==1):
-                        pass
                     else:
                         self.x = new_x; self.y = new_y
                 else:
                     if ((self.x, self.y) == right_reward) and (action==0):
                         pass
-                    elif ((self.x, self.y) == reset_reward) and (action==0):
-                        pass
                     else:
                         self.x = new_x; self.y = new_y
             else:
-                self.x = new_x; self.y = new_y
+                if ((self.x, self.y) == reset_reward) and (action!=2):
+                    pass
+                else:
+                    self.x = new_x; self.y = new_y
 
         # Move reward location as needed
         if ((self.x, self.y) == left_reward) and self._reward_location == MyEnv.LEFT:
@@ -168,7 +167,7 @@ class MyEnv(Environment):
         self._mode_score += self.reward
         return self.reward
 
-    def make_state_with_history(self, states_val, tau=0.95):
+    def make_state_with_history(self, states_val, tau=0.8):
         new_states_val = []
         for batch in range(states_val.shape[0]):
             walls = np.argwhere(states_val[batch,-1] == -1) # hacky
