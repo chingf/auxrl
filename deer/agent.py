@@ -403,12 +403,14 @@ class NeuralAgent(object):
                 if self._mode != -1:
                     self._total_mode_reward += reward
                 
-                is_terminal = self._environment.inTerminalState()   # If the transition ends up in a terminal state, mark transition as terminal
-                                                                    # Note that the new obs will not be stored, as it is unnecessary.
-                if(maxSteps>0):
-                    self._addSample(obs, action, reward, is_terminal, hidden) 
+                is_terminal = self._environment.inTerminalState()
+                reward_loc = self._environment._reward_location
+                if maxSteps > 0:
+                    self._addSample(
+                        obs, action, reward, is_terminal, reward_loc, hidden
+                        )
                 else:
-                    self._addSample(obs, action, reward, True, hidden) # If the episode ends because max number of steps is reached, mark the transition as terminal
+                    self._addSample(obs, action, reward, True, reward_loc, hidden)
             
             for c in self._controllers: c.onActionTaken(self)
             if is_terminal:
@@ -441,14 +443,16 @@ class NeuralAgent(object):
         reward = self._environment.act(action)
         return V, action, reward, hidden
 
-    def _addSample(self, ponctualObs, action, reward, is_terminal, hidden):
+    def _addSample(self, ponctualObs, action, reward, is_terminal, reward_loc, hidden):
         if self._mode != -1:
             self._tmp_dataset.addSample(
-                ponctualObs, action, reward, is_terminal, priority=1, hidden=hidden
+                ponctualObs, action, reward, is_terminal, priority=1,
+                reward_loc=reward_loc, hidden=hidden
                 )
         else:
             self._dataset.addSample(
-                ponctualObs, action, reward, is_terminal, priority=1, hidden=hidden
+                ponctualObs, action, reward, is_terminal, priority=1,
+                reward_loc=reward_loc, hidden=hidden
                 )
 
 
@@ -518,6 +522,7 @@ class DataSet(object):
         else:
             self._actions = CircularBuffer(max_size, dtype='object')
         self._rewards = CircularBuffer(max_size)
+        self._reward_locs = CircularBuffer(max_size)
         self._terminals = CircularBuffer(max_size, dtype="bool")
         if (self._use_priority):
             self._prioritiy_tree = tree.SumTree(max_size) 
@@ -550,6 +555,11 @@ class DataSet(object):
 
         return self._rewards.getSlice(0)
 
+    def reward_locs(self):
+        """Get all rewards currently in the replay memory, ordered by time where they were received."""
+
+        return self._reward_locs.getSlice(0)
+
     def terminals(self):
         """Get all terminals currently in the replay memory, ordered by time where they were observed.
         
@@ -566,7 +576,6 @@ class DataSet(object):
         ret = np.zeros_like(self._observations)
         for input in range(len(self._observations)):
             ret[input] = self._observations[input].getSlice(0)
-
         return ret
 
     def updatePriorities(self, priorities, rndValidIndices):
@@ -841,7 +850,9 @@ class DataSet(object):
         
         return indices_replay_mem, indices_tree
 
-    def addSample(self, obs, action, reward, is_terminal, priority, hidden):
+    def addSample(
+        self, obs, action, reward, is_terminal, priority, reward_loc, hidden
+        ):
         """Store the punctual observations, action, reward, is_terminal and priority in the dataset. 
         Parameters
         -----------
@@ -888,6 +899,7 @@ class DataSet(object):
         # Store rest of sample
         self._actions.append(action)
         self._rewards.append(reward)
+        self._reward_locs.append(reward_loc)
         self._terminals.append(is_terminal)
 
         if (self.n_elems < self._size):

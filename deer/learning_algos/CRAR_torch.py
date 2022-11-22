@@ -65,6 +65,7 @@ class CRAR(LearningAlgo):
         self._internal_dim = kwargs.get('internal_dim', 2)
         self._entropy_temp = kwargs.get('entropy_temp', 5.)
         self._nstep = kwargs.get('nstep', 1)
+        self._nstep_decay = kwargs.get('nstep_decay', 1)
         self._recurrent = kwargs.get('recurrent', False)
         self.loss_T=0
         self.loss_R=0
@@ -473,7 +474,8 @@ class CRAR(LearningAlgo):
 
         return loss_Q.item(), loss_Q_unreduced
 
-    def make_state_with_history(self, states_val, tau=0.8):
+    def make_state_with_history(self, states_val):
+        tau = self._nstep_decay
         new_states_val = []
         for batch in range(states_val.shape[0]):
             walls = np.argwhere(states_val[batch,-1] == -1) # hacky

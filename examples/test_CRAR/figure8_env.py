@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 from deer.base_classes import Environment
-
+from sklearn.decomposition import PCA
 import matplotlib
 # matplotlib.use('qt5agg')
 from mpl_toolkits.axes_grid1 import host_subplot
@@ -33,6 +33,7 @@ class MyEnv(Environment):
         self._higher_dim_obs = kwargs['higher_dim_obs']
         self._show_rewards = kwargs.get('show_rewards', True)
         self._nstep = kwargs.get('nstep', 1)
+        self._nstep_decay = kwargs.get('nstep_decay', 1.)
         self.x = 3
         self.y = 0
         self._reward_location = MyEnv.LEFT
@@ -167,7 +168,8 @@ class MyEnv(Environment):
         self._mode_score += self.reward
         return self.reward
 
-    def make_state_with_history(self, states_val, tau=0.8):
+    def make_state_with_history(self, states_val):
+        tau = self._nstep_decay
         new_states_val = []
         for batch in range(states_val.shape[0]):
             walls = np.argwhere(states_val[batch,-1] == -1) # hacky
@@ -192,6 +194,7 @@ class MyEnv(Environment):
 
             # Only seen states
             observations = test_data_set.observations()[0]
+            reward_locs = test_data_set.reward_locs()
             observations_tcm = []
             color_labels = []
             for t in np.arange(self._nstep, observations.shape[0]):
@@ -206,26 +209,7 @@ class MyEnv(Environment):
             unique_observations_tcm, unique_idxs = np.unique(
                 observations_tcm, axis=0, return_index=True)
             color_labels = color_labels[unique_idxs]
-            marker_labels = np.zeros(color_labels.shape, dtype=int)
-
-#            # All possible states
-#            for _x in range(self._width):
-#                for _y in range(self._height):
-#                    if not self.in_bounds(_x, _y): continue
-#                    for idx, r_loc in enumerate([MyEnv.LEFT, MyEnv.RIGHT, MyEnv.RESET]):
-#                        state = self.get_observation(_x, _y, r_loc)
-#
-#                        observed = False
-#                        for obs in observations:
-#                            if np.all(state == obs):
-#                                observed = True
-#
-#                        if observed:
-#                            all_possib_inp.append(state)
-#                            color_labels.append(
-#                                self._space_label[0, np.argwhere(state==10)[0,0]]
-#                                )
-#                            marker_labels.append(idx)
+            marker_labels = reward_locs[unique_idxs].astype(int)
 
             device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
             all_possib_abs_states = learning_algo.crar.encoder(
@@ -248,10 +232,27 @@ class MyEnv(Environment):
             abs_states_np = abs_states.cpu().numpy()
             if len(abs_states_np.shape) == 1:
                 abs_states_np = abs_states_np.reshape((1, -1))
-            x = np.array(abs_states_np)[:,0]
-            y = np.array(abs_states_np)[:,1]
-            if(self._intern_dim>2):
+
+            if self._intern_dim == 2:
+                x = np.array(abs_states_np)[:,0]
+                y = np.array(abs_states_np)[:,1]
+            elif self._intern_dim == 3:
+                x = np.array(abs_states_np)[:,0]
+                y = np.array(abs_states_np)[:,1]
                 z = np.array(abs_states_np)[:,2]
+            else:
+                if abs_states_np.shape[0] > 2:
+                    pca = PCA(n_components = 3)
+                    reduced_states = pca.fit_transform(abs_states_np)
+                    x = np.array(reduced_states)[:,0]
+                    y = np.array(reduced_states)[:,1]
+                    z = np.array(reduced_states)[:,2]
+                    explained_variance = np.sum(pca.explained_variance_ratio_)
+                else:
+                    x = np.array(abs_states_np)[:,0]
+                    y = np.array(abs_states_np)[:,1]
+                    z = np.array(abs_states_np)[:,2]
+                    explained_variance = 'Not applicable'
                         
             fig = plt.figure()
             if(self._intern_dim==2):
@@ -263,6 +264,8 @@ class MyEnv(Environment):
                 ax.set_xlabel(r'$X_1$')
                 ax.set_ylabel(r'$X_2$')
                 ax.set_zlabel(r'$X_3$')
+                if self._intern_dim > 3:
+                    ax.set_title(f'Explained Variance: {explained_variance}')
                         
             # Plot the estimated transitions
             for i in range(n-1):
@@ -295,29 +298,49 @@ class MyEnv(Environment):
             
             # Plot the dots at each time step depending on the action taken
             colors = ['orange','blue', 'red', 'purple']
-            markers = ['x', 'o', '*']
+            markers = ['x', '*', 'o']
+            central_stem = np.array(color_labels==3)
+            not_central_stem = np.logical_not(central_stem)
 
             if(self._intern_dim==2):
                 _states = all_possib_abs_states
-                _colors = color_labels
                 if n == 1:
                     _states = _states.reshape((1, -1))
-                line3 = ax.scatter(
-                    _states[:,0], _states[:,1],
-                    c=[colors[i] for i in _colors],
+                ax.scatter(
+                    _states[not_central_stem, 0],
+                    _states[not_central_stem, 1],
+                    c=[colors[i] for i in color_labels[not_central_stem]],
                     edgecolors='k', alpha=0.5, s=100
                     )
+                for m in np.unique(marker_labels):
+                    condition = np.logical_and(central_stem, marker_labels==m)
+                    ax.scatter(
+                        _states[condition, 0], _states[condition, 1],
+                        c=[colors[i] for i in color_labels[condition]],
+                        marker=markers[m],
+                        edgecolors='k', alpha=0.5, s=100
+                        )
             else:
                 _states = all_possib_abs_states
-                _colors = color_labels
                 if n == 1:
                     _states = _states.reshape((1, -1))
-                line3 = ax.scatter(
-                    _states[:,0], _states[:,1], _states[:,2],
-                    c=[colors[i] for i in _colors],
-                    depthshade=True, edgecolors='k',
-                    alpha=0.5, s=50
+                ax.scatter(
+                    _states[not_central_stem, 0],
+                    _states[not_central_stem, 1],
+                    _states[not_central_stem, 2],
+                    c=[colors[i] for i in color_labels[not_central_stem]],
+                    edgecolors='k', alpha=0.5, s=50, depthshade=True
                     )
+                for m in np.unique(marker_labels):
+                    condition = np.logical_and(central_stem, marker_labels==m)
+                    ax.scatter(
+                        _states[condition, 0],
+                        _states[condition, 1],
+                        _states[condition, 2],
+                        c=[colors[i] for i in color_labels[condition]],
+                        marker=markers[m],
+                        edgecolors='k', alpha=0.5, s=50, depthshade=True
+                        )
     
             if(self._intern_dim==2):
                 axes_lims=[ax.get_xlim(),ax.get_ylim()]
