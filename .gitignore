@@ -13,4 +13,5 @@ scores/
 *.swp
 *.nfs*
 nnets/
+params/
 figs*/

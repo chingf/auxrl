@@ -305,10 +305,10 @@ class InterleavedTestEpochController(Controller):
         occur just after the first test epoch.
     """
 
-    def __init__(self, id=0, epoch_length=500, periodicity=1, show_score=True, summarize_every=10):
-        """Initializer.
-        """
-
+    def __init__(
+        self, id=0, epoch_length=500, periodicity=1, show_score=True,
+        summarize_every=10, unique_fname=None
+        ):
         super(self.__class__, self).__init__()
         self._epoch_count = 0
         self._id = id
@@ -317,6 +317,7 @@ class InterleavedTestEpochController(Controller):
         self._periodicity = periodicity
         self._summary_counter = 0
         self._summary_periodicity = summarize_every
+        self._unique_fname = unique_fname
         self.scores=[]
 
     def onStart(self, agent):
@@ -341,7 +342,7 @@ class InterleavedTestEpochController(Controller):
                 print("Testing score per episode (id: {}) is {} (average over {} episode(s))".format(self._id, score, nbr_episodes))
                 self.scores.append(score)
             if self._summary_periodicity > 0 and self._summary_counter % self._summary_periodicity == 0:
-                agent.summarizeTestPerformance()
+                agent.summarizeTestPerformance(self._unique_fname)
             agent.resumeTrainingMode()
 
 class TrainerController(Controller):
@@ -515,7 +516,7 @@ class FindBestController(Controller):
     """
 
     def __init__(
-        self, validationID=0, testID=None, unique_fname="nnet", save_dir=None
+        self, validationID=0, testID=None, unique_fname="nnet"
         ):
         super(self.__class__, self).__init__()
 
@@ -526,7 +527,9 @@ class FindBestController(Controller):
         self._testID = testID
         self._validationID = validationID
         self._filename = unique_fname
-        self._save_dir = save_dir
+        self._fig_dir = f'figs/{self._filename}/'
+        if not os.path.isdir(self._fig_dir):
+            os.makedirs(self._fig_dir)
         self._bestValidationScoreSoFar = -9999999
 
     def onEpochEnd(self, agent):
@@ -553,7 +556,7 @@ class FindBestController(Controller):
             plt.legend()
             plt.xlabel("Number of epochs")
             plt.ylabel("Score")
-            plt.savefig("validation_scores.pdf")
+            plt.savefig(f"{self._fig_dir}validation_scores.pdf")
             plt.close()
             # plt.show()
         elif mode == self._testID:
@@ -561,7 +564,7 @@ class FindBestController(Controller):
             plt.legend()
             plt.xlabel("Number of epochs")
             plt.ylabel("Score")
-            plt.savefig("test_scores.pdf")
+            plt.savefig(f"{self._fig_dir}test_scores.pdf")
             plt.close()
             # plt.show()
         

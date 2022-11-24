@@ -48,9 +48,14 @@ class NeuralAgent(object):
         observations before the beginning of the episode
     """
 
-    def __init__(self, environment, learning_algo, replay_memory_size=1000000, replay_start_size=None, batch_size=32, random_state=np.random.RandomState(), exp_priority=0, train_policy=None, test_policy=None, only_full_history=True):
+    def __init__(
+        self, environment, learning_algo,
+        replay_memory_size=1000000, replay_start_size=None, batch_size=32,
+        random_state=np.random.RandomState(), exp_priority=0,
+        train_policy=None, test_policy=None, only_full_history=True
+        ):
+
         inputDims = environment.inputDimensions()
-        
         if replay_start_size == None:
             replay_start_size = max(inputDims[i][0] for i in range(len(inputDims)))
         #elif replay_start_size < max(inputDims[i][0] for i in range(len(inputDims))) : #TODO
@@ -174,11 +179,11 @@ class NeuralAgent(object):
     def resumeTrainingMode(self):
         self._mode = -1
 
-    def summarizeTestPerformance(self):
+    def summarizeTestPerformance(self, fname):
         if self._mode == -1:
             raise AgentError("Cannot summarize test performance outside test environment.")
-
-        self._environment.summarizePerformance(self._tmp_dataset, self._learning_algo, train_data_set=self._dataset)
+        self._environment.summarizePerformance(
+            self._tmp_dataset, self._learning_algo, fname)
 
     def train(self):
         """
@@ -454,7 +459,6 @@ class NeuralAgent(object):
                 ponctualObs, action, reward, is_terminal, priority=1,
                 reward_loc=reward_loc, hidden=hidden
                 )
-
 
     def _chooseAction(self):
         if self._mode != -1:

@@ -16,20 +16,10 @@ class CRAR(LearningAlgo):
     -----------
     environment : object from class Environment
         The environment in which the agent evolves.
-    rho : float
-        Parameter for rmsprop. Default : 0.9
-    rms_epsilon : float
-        Parameter for rmsprop. Default : 0.0001
-    momentum : float
-        Momentum for SGD. Default : 0
-    clip_norm : float
-        The gradient tensor will be clipped to a maximum L2 norm given by this value.
     freeze_interval : int
         Period during which the target network is freezed and after which the target network is updated. Default : 1000
     batch_size : int
         Number of tuples taken into account for each iteration of gradient descent. Default : 32
-    update_rule: str
-        {sgd,rmsprop}. Default : rmsprop
     random_state : numpy random number generator
         Set the random seed.
     double_Q : bool, optional
@@ -40,9 +30,9 @@ class CRAR(LearningAlgo):
     """
 
     def __init__(
-            self, environment, rho=0.9, rms_epsilon=0.0001, momentum=0,
-            clip_norm=0, freeze_interval=1000, batch_size=32,
-            update_rule="rmsprop", random_state=np.random.RandomState(),
+            self, environment, 
+            freeze_interval=1000, batch_size=32,
+            random_state=np.random.RandomState(),
             double_Q=False, neural_network=NN, lr=1E-4, nn_yaml='network.yaml',
             loss_weights=[1, 0.2, 1, 1, 1, 1, 1],
             **kwargs
@@ -51,11 +41,6 @@ class CRAR(LearningAlgo):
 
         LearningAlgo.__init__(self,environment, batch_size)
 
-        self._rho = rho
-        self._rms_epsilon = rms_epsilon
-        self._momentum = momentum
-        self._clip_norm = clip_norm
-        self._update_rule = update_rule
         self._freeze_interval = freeze_interval
         self._double_Q = double_Q
         self._random_state = random_state
@@ -67,25 +52,17 @@ class CRAR(LearningAlgo):
         self._nstep = kwargs.get('nstep', 1)
         self._nstep_decay = kwargs.get('nstep_decay', 1)
         self._encoder_type = kwargs.get('encoder_type', None)
-        self.loss_T=0
-        self.loss_R=0
-        self.loss_Q=0
-        self.loss_VAE = 0
-        self.loss_disentangle_t=0
-        self.loss_disambiguate1=0
-        self.loss_disambiguate2=0
-        self.loss_gamma=0
-        self.tracked_losses = []
-        self.tracked_T_err = []
-        self.tracked_disamb1 = []
-        self.tracked_disamb2 = []
-        self.tracked_disentang = []
-        self.tracked_gamma_err = []
-        self.tracked_R_err = []
-        self.tracked_Q_err = []
+        self.loss_T = [0]
+        self.loss_R = [0]
+        self.loss_Q = [0]
+        self.loss_VAE = [0]
+        self.loss_entropy_neighbor = [0]
+        self.loss_entropy_random = [0]
+        self.loss_volume = [0]
+        self.loss_gamma = [0]
+        self.loss_total = [0]
         self.device = torch.device(
-            "cuda:0" if torch.cuda.is_available() else "cpu"
-            )
+            "cuda:0" if torch.cuda.is_available() else "cpu")
 
         self.crar = neural_network(
             self._batch_size, self._input_dimensions, self._n_actions,
@@ -108,7 +85,7 @@ class CRAR(LearningAlgo):
         self.scheduler_target = torch.optim.lr_scheduler.ExponentialLR(
             self.optimizer_target, gamma=0.9
             )
-        self._resetQHat()
+        self.resetQHat()
 
     def getAllParams(self):
         """ Provides all parameters used by the learning algorithm
@@ -215,14 +192,14 @@ class CRAR(LearningAlgo):
         terminals_mask = torch.tensor(1-terminals_val).float().to(self.device)
         loss_T = loss_T * terminals_mask[:, None]
         loss_T = torch.mean(loss_T)
-        self.loss_T += loss_T.item()
+        self.loss_T[-1] += loss_T.item()
 
         # Rewards loss
         rewards_val = torch.tensor(rewards_val).view(-1,1).to(self.device).float()
         loss_R = torch.nn.functional.mse_loss(
             self.crar.R(Es_and_actions), rewards_val
             )
-        self.loss_R += loss_R.item()
+        self.loss_R[-1] += loss_R.item()
 
         # Fit gammas
         gamma_val = terminals_mask * self._df
@@ -230,39 +207,38 @@ class CRAR(LearningAlgo):
         loss_gamma = torch.nn.functional.mse_loss(
             self.crar.gamma(Es_and_actions), gamma_val
             )
-        self.loss_gamma += loss_gamma.item()
+        self.loss_gamma[-1] += loss_gamma.item()
 
         # Enforce limited volume in abstract state space
-        loss_disambiguate1 = torch.pow(
+        loss_volume = torch.pow(
             torch.norm(Es, p=float('inf'), dim=1),
             2) - 1
-        loss_disambiguate1 = torch.clip(loss_disambiguate1, min=0)
-        loss_disambiguate1 = torch.mean(loss_disambiguate1)
-        self.loss_disambiguate1 += loss_disambiguate1.item()
+        loss_volume = torch.clip(loss_volume, min=0)
+        loss_volume = torch.mean(loss_volume)
+        self.loss_volume[-1] += loss_volume.item()
 
         # Increase entropy of randomly sampled states
         # This works only when states_val is made up of only one observation
         rolled = torch.roll(Es, 1, dims=0)
-        loss_disambiguate2 = torch.exp(
+        loss_entropy_random = torch.exp(
             -self._entropy_temp * torch.norm(Es - rolled, dim=1)
             )
-        loss_disambiguate2 = torch.mean(loss_disambiguate2)
-        self.loss_disambiguate2 += loss_disambiguate2.item()
+        loss_entropy_random = torch.mean(loss_entropy_random)
+        self.loss_entropy_random[-1] += loss_entropy_random.item()
 
         # Increase entropy of neighboring states
-        loss_disentangle_t = torch.exp(
+        loss_entropy_neighbor = torch.exp(
             -self._entropy_temp * torch.norm(Es - Esp, dim=1)
             )
-        loss_disentangle_t = torch.mean(loss_disentangle_t)
-        self.loss_disentangle_t += loss_disentangle_t.item()
+        loss_entropy_neighbor = torch.mean(loss_entropy_neighbor)
+        self.loss_entropy_neighbor[-1] += loss_entropy_neighbor.item()
 
         # Q network stuff
         if self.update_counter % self._freeze_interval == 0:
-            self._resetQHat()
+            self.resetQHat()
         next_q_target = self.crar_target.Q(
             self.crar_target.encoder(next_states_val)
             )
-
         if self._double_Q: # Action selection by Q
             next_q = self.crar.Q(Esp)
             argmax_next_q = torch.argmax(next_q, axis=1)
@@ -277,49 +253,45 @@ class CRAR(LearningAlgo):
         loss_Q = torch.nn.functional.mse_loss(q_vals, target, reduction='none')
         loss_Q_unreduced = loss_Q
         loss_Q = torch.mean(loss_Q)
-        self.loss_Q += loss_Q.item()
+        self.loss_Q[-1] += loss_Q.item()
 
         # Aggregate all losses and update parameters
         all_losses = self._loss_weights[0] * loss_T \
-            + self._loss_weights[1] * loss_disentangle_t \
-            + self._loss_weights[2] * loss_disambiguate2 \
-            + self._loss_weights[3] * loss_disambiguate1 \
+            + self._loss_weights[1] * loss_entropy_neighbor \
+            + self._loss_weights[2] * loss_entropy_random \
+            + self._loss_weights[3] * loss_volume \
             + self._loss_weights[4] * loss_gamma \
             + self._loss_weights[5] * loss_R \
             + self._loss_weights[6] * loss_Q
         if self._encoder_type == 'variational':
             loss_VAE = torch.mean(self.crar.encoder.return_kls())
-            self.loss_VAE += loss_VAE.item()
+            self.loss_VAE[-1] += loss_VAE.item()
             all_losses = all_losses + self._loss_weights[7] * loss_VAE
-        self.tracked_losses.append(all_losses.item())
-        self.tracked_T_err.append(loss_T.item())
-        self.tracked_disamb1.append(loss_disambiguate1.item())
-        self.tracked_disamb2.append(loss_disambiguate2.item())
-        self.tracked_disentang.append(loss_disentangle_t.item())
-        self.tracked_gamma_err.append(loss_gamma.item())
-        self.tracked_R_err.append(loss_R.item())
-        self.tracked_Q_err.append(loss_Q.item())
+        self.loss_total[-1] += all_losses.item()
         all_losses.backward()
         self.optimizer.step()
         self.update_counter += 1
 
         # Occasional logging
         if(self.update_counter%500==0):
-            print('self.loss_T, self.loss_R, self.loss_gamma, self.loss_Q, \
-                self.loss_disentangle_t, self.loss_disambiguate1,\
-                self.loss_disambiguate2, self.loss_VAE')
-            print(self.loss_T/500., self.loss_R/500.,self.loss_gamma/500., \
-                self.loss_Q/500., self.loss_disentangle_t/500., \
-                self.loss_disambiguate1/500., self.loss_disambiguate2/500., \
-                self.loss_VAE/500.)
-            self.loss_R=0
-            self.loss_gamma=0
-            self.loss_Q=0
-            self.loss_T=0
-            self.loss_disentangle_t=0
-            self.loss_disambiguate1=0
-            self.loss_disambiguate2=0
-            self.loss_VAE=0
+            self.loss_R[-1] /= 500; self.loss_gamma[-1] /= 500
+            self.loss_Q[-1] /= 500; self.loss_T[-1] /= 500
+            self.loss_entropy_neighbor[-1] /= 500
+            self.loss_entropy_random[-1] /= 500
+            self.loss_volume[-1] /= 500; self.loss_VAE[-1] /= 500
+            self.loss_total[-1] /= 500
+            print('LOSSES')
+            print(f'T = {self.loss_T[-1]}; R = {self.loss_R[-1]}; \
+                Gamma = {self.loss_gamma[-1]}; Q = {self.loss_Q[-1]};')
+            print(f'Entropy Neighbor = {self.loss_entropy_neighbor[-1]}; \
+                Entropy Random = {self.loss_entropy_random[-1]}; \
+                Volume = {self.loss_volume[-1]}; VAE = {self.loss_VAE[-1]}')
+            self.loss_R.append(0); self.loss_gamma.append(0)
+            self.loss_Q.append(0); self.loss_T.append(0)
+            self.loss_entropy_neighbor.append(0)
+            self.loss_entropy_random.append(0)
+            self.loss_volume.append(0); self.loss_VAE.append(0)
+            self.loss_total.append(0)
 
         return loss_Q.item(), loss_Q_unreduced
 
@@ -330,6 +302,8 @@ class CRAR(LearningAlgo):
         Train CRAR from one batch of data. Like the train method, but each
         value in a batch is now a history of observations.
         """
+
+        raise ValueError('LSTM encoder is not fully implemented.')
 
         self.optimizer.zero_grad()
         states_val = [obs[:,:-1,:] for obs in observations]
@@ -398,32 +372,32 @@ class CRAR(LearningAlgo):
         self.loss_gamma += loss_gamma.item()
 
         # Enforce limited volume in abstract state space
-        loss_disambiguate1 = torch.pow(
+        loss_volume = torch.pow(
             torch.norm(Es, p=float('inf'), dim=1),
             2) - 1
-        loss_disambiguate1 = torch.clip(loss_disambiguate1, min=0)
-        loss_disambiguate1 = torch.mean(loss_disambiguate1)
-        self.loss_disambiguate1 += loss_disambiguate1.item()
+        loss_volume = torch.clip(loss_volume, min=0)
+        loss_volume = torch.mean(loss_volume)
+        self.loss_volume += loss_volume.item()
 
         # Increase entropy of randomly sampled states
         # This works only when states_val is made up of only one observation
         rolled = torch.roll(Es, 1, dims=0)
-        loss_disambiguate2 = torch.exp(
+        loss_entropy_random = torch.exp(
             -self._entropy_temp * torch.norm(Es - rolled, dim=1)
             )
-        loss_disambiguate2 = torch.mean(loss_disambiguate2)
-        self.loss_disambiguate2 += loss_disambiguate2.item()
+        loss_entropy_random = torch.mean(loss_entropy_random)
+        self.loss_entropy_random += loss_entropy_random.item()
 
         # Increase entropy of neighboring states
-        loss_disentangle_t = torch.exp(
+        loss_entropy_neighbor = torch.exp(
             -self._entropy_temp * torch.norm(Es - Esp, dim=1)
             )
-        loss_disentangle_t = torch.mean(loss_disentangle_t)
-        self.loss_disentangle_t += loss_disentangle_t.item()
+        loss_entropy_neighbor = torch.mean(loss_entropy_neighbor)
+        self.loss_entropy_neighbor += loss_entropy_neighbor.item()
 
         # Q network stuff
         if self.update_counter % self._freeze_interval == 0:
-            self._resetQHat()
+            self.resetQHat()
         next_q_target = self.crar_target.Q(self.crar_target.encoder(
             next_states_val, [h[1] for h in hidden_states], update_hidden=False
             ))
@@ -446,41 +420,41 @@ class CRAR(LearningAlgo):
 
         # Aggregate all losses and update parameters
         all_losses = self._loss_weights[0] * loss_T \
-            + self._loss_weights[1] * loss_disentangle_t \
-            + self._loss_weights[2] * loss_disambiguate2 \
-            + self._loss_weights[3] * loss_disambiguate1 \
+            + self._loss_weights[1] * loss_entropy_neighbor \
+            + self._loss_weights[2] * loss_entropy_random \
+            + self._loss_weights[3] * loss_volume \
             + self._loss_weights[4] * loss_gamma \
             + self._loss_weights[5] * loss_R \
             + self._loss_weights[6] * loss_Q
-        self.tracked_losses.append(all_losses.item())
-        self.tracked_T_err.append(loss_T.item())
-        self.tracked_disamb1.append(loss_disambiguate1.item())
-        self.tracked_disamb2.append(loss_disambiguate2.item())
-        self.tracked_disentang.append(loss_disentangle_t.item())
-        self.tracked_gamma_err.append(loss_gamma.item())
-        self.tracked_R_err.append(loss_R.item())
-        self.tracked_Q_err.append(loss_Q.item())
+        if self._encoder_type == 'variational':
+            loss_VAE = torch.mean(self.crar.encoder.return_kls())
+            self.loss_VAE[-1] += loss_VAE.item()
+            all_losses = all_losses + self._loss_weights[7] * loss_VAE
+        self.loss_total[-1] += all_losses.item()
         all_losses.backward()
         self.optimizer.step()
         self.update_counter += 1
 
         # Occasional logging
         if(self.update_counter%500==0):
-            print('self.loss_T, self.loss_R, self.loss_gamma, self.loss_Q, \
-                self.loss_disentangle_t, self.loss_disambiguate1,\
-                self.loss_disambiguate2')
-            print(self.loss_T/500., self.loss_R/500.,self.loss_gamma/500., \
-                self.loss_Q/500., self.loss_disentangle_t/500., \
-                self.loss_disambiguate1/500., self.loss_disambiguate2/500.)
-
-            self.loss_R=0
-            self.loss_gamma=0
-            self.loss_Q=0
-            self.loss_T=0
-            self.loss_disentangle_t=0
-            self.loss_disambiguate1=0
-            self.loss_disambiguate2=0
-
+            self.loss_R[-1] /= 500; self.loss_gamma[-1] /= 500
+            self.loss_Q[-1] /= 500; self.loss_T[-1] /= 500
+            self.loss_entropy_neighbor[-1] /= 500
+            self.loss_entropy_random[-1] /= 500
+            self.loss_volume[-1] /= 500; self.loss_VAE[-1] /= 500
+            self.loss_total[-1] /= 500
+            print('LOSSES')
+            print(f'T = {self.loss_T[-1]}; R = {self.loss_R[-1]}; \
+                Gamma = {self.loss_gamma[-1]}; Q = {self.loss_Q[-1]};')
+            print(f'Entropy Neighbor = {self.loss_entropy_neighbor[-1]}; \
+                Entropy Random = {self.loss_entropy_random[-1]}; \
+                Volume = {self.loss_volume[-1]}; VAE = {self.loss_VAE[-1]}')
+            self.loss_R.append(0); self.loss_gamma.append(0)
+            self.loss_Q.append(0); self.loss_T.append(0)
+            self.loss_entropy_neighbor.append(0)
+            self.loss_entropy_random.append(0)
+            self.loss_volume.append(0); self.loss_VAE.append(0)
+            self.loss_total.append(0)
         return loss_Q.item(), loss_Q_unreduced
 
     def make_state_with_history(self, states_val):
@@ -578,7 +552,7 @@ class CRAR(LearningAlgo):
             TEs = self.crar.transition(Es_and_actions)
         return Es, TEs
 
-    def _resetQHat(self):
+    def resetQHat(self):
         """ Set the target Q-network weights equal to the main Q-network weights
         """
 
@@ -594,3 +568,17 @@ class CRAR(LearningAlgo):
     def get_rnn_hidden(self):
         hidden = self.crar.encoder.get_hidden()
         return hidden
+
+    def get_losses(self):
+        losses = [
+            self.loss_T[:-1], self.loss_R[:-1], self.loss_gamma[:-1],
+            self.loss_Q[:-1],
+            self.loss_entropy_neighbor[:-1], self.loss_entropy_random[:-1],
+            self.loss_volume[:-1], self.loss_VAE[:-1], self.loss_total[:-1]
+            ]
+        loss_names = [
+            'Transition', 'Reward', 'Gamma', 'Q',
+            'Entropy (neighbor)', 'Entropy (random)', 'Volume', 'VAE', 'TOTAL'
+            ]
+        return losses, loss_names
+
