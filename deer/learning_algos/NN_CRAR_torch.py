@@ -76,7 +76,7 @@ class NN():
         self.ddqn_only = kwargs.get('ddqn_only', False)
         self._yaml = yaml
         self._nstep = kwargs.get('nstep', 1)
-        self._recurrent = kwargs.get('recurrent', False)
+        self._encoder_type = kwargs.get('encoder_type', None)
         if self._high_int_dim:
             self.n_channels_internal_dim = kwargs["internal_dim"] #dim[-3]
             raise ValueError("Not implemented")
@@ -113,7 +113,7 @@ class NN():
 
         class Encoder(nn.Module):
             def __init__(
-                self, input_shape, fc, convs=None, act=nn.Tanh, abstract_dim=2
+                self, input_shape, fc, convs=None, abstract_dim=2
                 ):
                 super().__init__()
                 self.input_shape = input_shape
@@ -130,9 +130,48 @@ class NN():
                 x = self.fc(x.float())
                 return x
 
+        class EncoderVariational(nn.Module):
+            def __init__(
+                self, input_shape, fc_mu, fc_var, abstract_dim=2
+                ):
+                super().__init__()
+                self.input_shape = input_shape
+                self.fc_mu = fc_mu
+                self.fc_var = fc_var
+                self.abstract_dim = abstract_dim
+                self.kls = None
+
+            def forward(self, x, save_kls=True):
+                x = x.squeeze().float()
+                mu = self.fc_mu(x)
+                log_var = self.fc_var(x)
+                std = torch.exp(log_var/2)
+                q = torch.distributions.Normal(mu, std)
+                z = q.rsample()
+                if save_kls:
+                    self.kls = self.calculate_kls(z, mu, std)
+                return z
+
+            def return_kls(self):
+                return self.kls
+
+            def calculate_kls(self, z, mu, std):
+                p_std = torch.ones_like(std)
+                if len(p_std.shape) == 2:
+                    p_std[:,4:] = 0.25
+                else:
+                    p_std[4:] = 0.25
+                p = torch.distributions.Normal(torch.zeros_like(mu), p_std)
+                q = torch.distributions.Normal(mu, std)
+                log_qzx = q.log_prob(z)
+                log_pz = p.log_prob(z)
+                kl = (log_qzx - log_pz)
+                kl = kl.sum(-1)
+                return kl
+
         class EncoderRNN(nn.Module):
             def __init__(
-                self, input_shape, fc, mem, convs=None, act=nn.Tanh, abstract_dim=2
+                self, input_shape, fc, mem, convs=None, abstract_dim=2
                 ):
                 super().__init__()
                 self.input_shape = input_shape
@@ -180,9 +219,11 @@ class NN():
         input_shape = self._input_dimensions[0]
         abstract_dim = self.internal_dim
 
+        # Load yaml file
         with open(HERE / self._yaml) as f:
             config = yaml.load(f, Loader=yaml.FullLoader)
 
+        # Add convolutional layers if needed
         encoder_config = config["encoder"]
         if encoder_config["convs"] is not None:
             convs = make_convs(input_shape, encoder_config["convs"])
@@ -190,11 +231,18 @@ class NN():
         else:
             convs = None
             feature_size = input_shape[1]
-        if self._recurrent:
+
+        # Recurrent, variational, or regular encoder
+        if self._encoder_type == 'recurrent':
             fc = make_fc(feature_size, abstract_dim, encoder_config["fc"])
             mem = make_fc(feature_size, abstract_dim, encoder_config["mem"])
             encoder = EncoderRNN(
                 input_shape, fc, mem, convs, abstract_dim=abstract_dim)
+        elif self._encoder_type == 'variational':
+            fc_mu = make_fc(feature_size, abstract_dim, encoder_config["fc"])
+            fc_var = make_fc(feature_size, abstract_dim, encoder_config["fc"])
+            encoder = EncoderVariational(
+                input_shape, fc_mu, fc_var, abstract_dim=abstract_dim)
         else:
             fc = make_fc(feature_size, abstract_dim, encoder_config["fc"])
             encoder = Encoder(input_shape, fc, convs, abstract_dim=abstract_dim)

@@ -66,10 +66,11 @@ class CRAR(LearningAlgo):
         self._entropy_temp = kwargs.get('entropy_temp', 5.)
         self._nstep = kwargs.get('nstep', 1)
         self._nstep_decay = kwargs.get('nstep_decay', 1)
-        self._recurrent = kwargs.get('recurrent', False)
+        self._encoder_type = kwargs.get('encoder_type', None)
         self.loss_T=0
         self.loss_R=0
         self.loss_Q=0
+        self.loss_VAE = 0
         self.loss_disentangle_t=0
         self.loss_disambiguate1=0
         self.loss_disambiguate2=0
@@ -90,7 +91,7 @@ class CRAR(LearningAlgo):
             self._batch_size, self._input_dimensions, self._n_actions,
             self._random_state, high_int_dim=self._high_int_dim,
             internal_dim=self._internal_dim, device=self.device,
-            yaml=nn_yaml, nstep=self._nstep
+            yaml=nn_yaml, nstep=self._nstep, encoder_type=self._encoder_type
             )
         self.optimizer = torch.optim.Adam(self.crar.params, lr=lr)
         self.scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=0.9)
@@ -99,7 +100,7 @@ class CRAR(LearningAlgo):
             self._batch_size, self._input_dimensions, self._n_actions,
             self._random_state, high_int_dim=self._high_int_dim,
             internal_dim=self._internal_dim, device=self.device,
-            yaml=nn_yaml, nstep=self._nstep
+            yaml=nn_yaml, nstep=self._nstep, encoder_type=self._encoder_type
             )
         self.optimizer_target = torch.optim.Adam(
             self.crar_target.Q.parameters(), lr=lr
@@ -185,7 +186,10 @@ class CRAR(LearningAlgo):
         next_states_val = torch.as_tensor(next_states_val, device=self.device).float()
 
         Esp = self.crar.encoder(next_states_val)
-        Es = self.crar.encoder(states_val)
+        if self._encoder_type == 'variational':
+            Es = self.crar.encoder(states_val, save_kls=True)
+        else:
+            Es = self.crar.encoder(states_val)
         Es_and_actions = torch.cat([Es, onehot_actions], dim=1)
         TEs = self.crar.transition(Es_and_actions)
         R = self.crar.R(Es_and_actions)
@@ -283,6 +287,10 @@ class CRAR(LearningAlgo):
             + self._loss_weights[4] * loss_gamma \
             + self._loss_weights[5] * loss_R \
             + self._loss_weights[6] * loss_Q
+        if self._encoder_type == 'variational':
+            loss_VAE = torch.mean(self.crar.encoder.return_kls())
+            self.loss_VAE += loss_VAE.item()
+            all_losses = all_losses + self._loss_weights[7] * loss_VAE
         self.tracked_losses.append(all_losses.item())
         self.tracked_T_err.append(loss_T.item())
         self.tracked_disamb1.append(loss_disambiguate1.item())
@@ -299,11 +307,11 @@ class CRAR(LearningAlgo):
         if(self.update_counter%500==0):
             print('self.loss_T, self.loss_R, self.loss_gamma, self.loss_Q, \
                 self.loss_disentangle_t, self.loss_disambiguate1,\
-                self.loss_disambiguate2')
+                self.loss_disambiguate2, self.loss_VAE')
             print(self.loss_T/500., self.loss_R/500.,self.loss_gamma/500., \
                 self.loss_Q/500., self.loss_disentangle_t/500., \
-                self.loss_disambiguate1/500., self.loss_disambiguate2/500.)
-
+                self.loss_disambiguate1/500., self.loss_disambiguate2/500., \
+                self.loss_VAE/500.)
             self.loss_R=0
             self.loss_gamma=0
             self.loss_Q=0
@@ -311,6 +319,7 @@ class CRAR(LearningAlgo):
             self.loss_disentangle_t=0
             self.loss_disambiguate1=0
             self.loss_disambiguate2=0
+            self.loss_VAE=0
 
         return loss_Q.item(), loss_Q_unreduced
 
@@ -543,7 +552,7 @@ class CRAR(LearningAlgo):
             mode=0
         depths = [0,1,3,6] # Mode defines the planning depth di
         with torch.no_grad():
-            if self._recurrent:
+            if self._encoder_type == 'recurrent':
                 state = torch.as_tensor(state, device=self.device).float()
                 xs = self.crar.encoder(state, self.crar.encoder.hidden)
             else:

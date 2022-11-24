@@ -196,30 +196,31 @@ class MyEnv(Environment):
             observations = test_data_set.observations()[0]
             reward_locs = test_data_set.reward_locs()
             observations_tcm = []
+            reward_locs_tcm = []
             color_labels = []
             for t in np.arange(self._nstep, observations.shape[0]):
                 tcm_obs = observations[t-self._nstep:t].reshape((1, self._nstep, -1))
                 tcm_obs = self.make_state_with_history(tcm_obs)
                 observations_tcm.append(tcm_obs)
+                reward_locs_tcm.append(reward_locs[t-1])
                 color_labels.append(
                     self._space_label[0, np.argwhere(observations[t-1]==10)[0,1]]
                     )
             observations_tcm = np.array(observations_tcm, dtype='float')
+            reward_locs_tcm = np.array(reward_locs_tcm, dtype='int')
+            observations_tcm = observations_tcm[-50:]
+            reward_locs_tcm = reward_locs_tcm[-50:]
+
             color_labels = np.array(color_labels, dtype=int)
             unique_observations_tcm, unique_idxs = np.unique(
                 observations_tcm, axis=0, return_index=True)
             color_labels = color_labels[unique_idxs]
-            marker_labels = reward_locs[unique_idxs].astype(int)
+            marker_labels = reward_locs_tcm[unique_idxs].astype(int)
 
             device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-            all_possib_abs_states = learning_algo.crar.encoder(
-                torch.tensor(unique_observations_tcm).float().to(device)
-                ).cpu().numpy()
-
             n = unique_observations_tcm.shape[0]
-            historics = unique_observations_tcm
             abs_states = learning_algo.crar.encoder(
-                torch.tensor(historics).float().to(device)
+                torch.tensor(unique_observations_tcm).float().to(device)
                 )
         
             actions = test_data_set.actions()[0:n]
@@ -269,32 +270,30 @@ class MyEnv(Environment):
                         
             # Plot the estimated transitions
             for i in range(n-1):
-                predicted1 = learning_algo.crar.transition(torch.cat([
-                        abs_states[i:i+1],
-                        torch.as_tensor([[1,0,0,0]], device=device).float()
-                        ], dim=1)).cpu().numpy()
-                predicted2 = learning_algo.crar.transition(torch.cat([
-                        abs_states[i:i+1],
-                        torch.as_tensor([[0,1,0,0]], device=device).float()
-                        ], dim=1)).cpu().numpy()
-                predicted3 = learning_algo.crar.transition(torch.cat([
-                        abs_states[i:i+1],
-                        torch.as_tensor([[0,0,1,0]], device=device).float()
-                        ], dim=1)).cpu().numpy()
-                predicted4 = learning_algo.crar.transition(torch.cat([
-                        abs_states[i:i+1],
-                        torch.as_tensor([[0,0,0,1]], device=device).float()
-                        ], dim=1)).cpu().numpy()
-                if(self._intern_dim==2):
-                    ax.plot(np.concatenate([x[i:i+1],predicted1[0,:1]]), np.concatenate([y[i:i+1],predicted1[0,1:2]]), color="0.9", alpha=0.75)
-                    ax.plot(np.concatenate([x[i:i+1],predicted2[0,:1]]), np.concatenate([y[i:i+1],predicted2[0,1:2]]), color="0.65", alpha=0.75)
-                    ax.plot(np.concatenate([x[i:i+1],predicted3[0,:1]]), np.concatenate([y[i:i+1],predicted3[0,1:2]]), color="0.4", alpha=0.75)
-                    ax.plot(np.concatenate([x[i:i+1],predicted4[0,:1]]), np.concatenate([y[i:i+1],predicted4[0,1:2]]), color="0.15", alpha=0.75)
-                else:
-                    ax.plot(np.concatenate([x[i:i+1],predicted1[0,:1]]), np.concatenate([y[i:i+1],predicted1[0,1:2]]), np.concatenate([z[i:i+1],predicted1[0,2:3]]), color="0.9", alpha=0.75)
-                    ax.plot(np.concatenate([x[i:i+1],predicted2[0,:1]]), np.concatenate([y[i:i+1],predicted2[0,1:2]]), np.concatenate([z[i:i+1],predicted2[0,2:3]]), color="0.65", alpha=0.75)
-                    ax.plot(np.concatenate([x[i:i+1],predicted3[0,:1]]), np.concatenate([y[i:i+1],predicted3[0,1:2]]), np.concatenate([z[i:i+1],predicted3[0,2:3]]), color="0.4", alpha=0.75)
-                    ax.plot(np.concatenate([x[i:i+1],predicted4[0,:1]]), np.concatenate([y[i:i+1],predicted4[0,1:2]]), np.concatenate([z[i:i+1],predicted4[0,2:3]]), color="0.15", alpha=0.75)            
+                n_actions = 4
+                action_colors = ["0.9", "0.65", "0.4", "0.15"]
+                for action in range(n_actions):
+                    action_encoding = np.zeros(n_actions)
+                    action_encoding[action] = 1
+                    pred = learning_algo.crar.transition(torch.cat([
+                        abs_states[i:i+1], torch.as_tensor([action_encoding])
+                        ], dim=1).float().to(device)).cpu().numpy()
+                    
+                    if(self._intern_dim==2):
+                        ax.plot(
+                            np.concatenate([x[i:i+1],pred[0,:1]]),
+                            np.concatenate([y[i:i+1],pred[0,1:2]]),
+                            color=action_colors[action], alpha=0.75
+                            )
+                    else:
+                        if abs_states_np.shape[0] > 2:
+                            pred = pca.transform(pred)
+                        ax.plot(
+                            np.concatenate([x[i:i+1],pred[0,:1]]),
+                            np.concatenate([y[i:i+1],pred[0,1:2]]),
+                            np.concatenate([z[i:i+1],pred[0,2:3]]),
+                            color=action_colors[action], alpha=0.75
+                            )
             
             # Plot the dots at each time step depending on the action taken
             colors = ['orange','blue', 'red', 'purple']
@@ -303,40 +302,29 @@ class MyEnv(Environment):
             not_central_stem = np.logical_not(central_stem)
 
             if(self._intern_dim==2):
-                _states = all_possib_abs_states
-                if n == 1:
-                    _states = _states.reshape((1, -1))
                 ax.scatter(
-                    _states[not_central_stem, 0],
-                    _states[not_central_stem, 1],
+                    x[not_central_stem], y[not_central_stem],
                     c=[colors[i] for i in color_labels[not_central_stem]],
                     edgecolors='k', alpha=0.5, s=100
                     )
                 for m in np.unique(marker_labels):
                     condition = np.logical_and(central_stem, marker_labels==m)
                     ax.scatter(
-                        _states[condition, 0], _states[condition, 1],
+                        x[condition], y[condition],
                         c=[colors[i] for i in color_labels[condition]],
                         marker=markers[m],
                         edgecolors='k', alpha=0.5, s=100
                         )
             else:
-                _states = all_possib_abs_states
-                if n == 1:
-                    _states = _states.reshape((1, -1))
                 ax.scatter(
-                    _states[not_central_stem, 0],
-                    _states[not_central_stem, 1],
-                    _states[not_central_stem, 2],
+                    x[not_central_stem], y[not_central_stem], z[not_central_stem],
                     c=[colors[i] for i in color_labels[not_central_stem]],
                     edgecolors='k', alpha=0.5, s=50, depthshade=True
                     )
                 for m in np.unique(marker_labels):
                     condition = np.logical_and(central_stem, marker_labels==m)
                     ax.scatter(
-                        _states[condition, 0],
-                        _states[condition, 1],
-                        _states[condition, 2],
+                        x[condition], y[condition], z[condition],
                         c=[colors[i] for i in color_labels[condition]],
                         marker=markers[m],
                         edgecolors='k', alpha=0.5, s=50, depthshade=True

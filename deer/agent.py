@@ -60,7 +60,7 @@ class NeuralAgent(object):
         self._environment = environment
         self._learning_algo = learning_algo
         self._nstep = learning_algo._nstep
-        self._recurrent = learning_algo._recurrent
+        self._encoder_type = learning_algo._encoder_type
         self._replay_memory_size = replay_memory_size
         self._replay_start_size = replay_start_size
         self._batch_size = batch_size
@@ -70,7 +70,7 @@ class NeuralAgent(object):
         self._dataset = DataSet(
             environment, max_size=replay_memory_size, random_state=random_state,
             use_priority=self._exp_priority, only_full_history=self._only_full_history,
-            nstep=self._nstep, recurrent=self._recurrent
+            nstep=self._nstep, encoder_type=self._encoder_type
             )
         self._tmp_dataset = None # Will be created by startTesting() when necessary
         self._mode = -1
@@ -197,7 +197,7 @@ class NeuralAgent(object):
                     self._dataset.randomBatch_nstep(
                         self._batch_size, self._exp_priority
                         )
-                if self._recurrent:
+                if self._encoder_type == 'recurrent':
                     loss, loss_ind = self._learning_algo.recurrent_train( #TODO
                         observations, actions, rewards, terminals, hidden_states
                         )
@@ -362,7 +362,7 @@ class NeuralAgent(object):
         self._in_episode = True
         initState = self._environment.reset(self._mode)
         inputDims = self._environment.inputDimensions()
-        if self._recurrent:
+        if self._encoder_type == 'recurrent':
             self._learning_algo.reset_rnn() #TODO
         #for i in range(len(inputDims)):
         #    if (inputDims[i][0] > 1) and (len(inputDims[i]) > 1):
@@ -436,7 +436,7 @@ class NeuralAgent(object):
         """
 
         action, V = self._chooseAction()
-        if self._recurrent:
+        if self._encoder_type == 'recurrent':
             hidden = self._learning_algo.get_rnn_hidden() #TODO
         else:
             hidden = None
@@ -495,7 +495,7 @@ class DataSet(object):
 
     def __init__(
         self, env, random_state=None, max_size=1000000, use_priority=False,
-        only_full_history=True, nstep=1, recurrent=False
+        only_full_history=True, nstep=1, encoder_type=None
         ):
         """Initializer.
         Parameters
@@ -516,7 +516,7 @@ class DataSet(object):
         self._use_priority = use_priority
         self._only_full_history = only_full_history
         self._nstep = nstep
-        self._recurrent = recurrent
+        self._encoder_type = encoder_type
         if ( isinstance(env.nActions(),int) ):
             self._actions = CircularBuffer(max_size, dtype="int8")
         else:
@@ -871,8 +871,7 @@ class DataSet(object):
         # Store observations
         for i in range(len(self._batch_dimensions)):
             self._observations[i].append(obs[i])
-            if self._recurrent:
-                print(hidden)
+            if self._encoder_type == 'recurrent':
                 self._hiddens.append(hidden)
 
         # Update tree and translation table
