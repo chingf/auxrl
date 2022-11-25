@@ -34,7 +34,7 @@ class CRAR(LearningAlgo):
             freeze_interval=1000, batch_size=32,
             random_state=np.random.RandomState(),
             double_Q=False, neural_network=NN, lr=1E-4, nn_yaml='network.yaml',
-            loss_weights=[1, 0.2, 1, 1, 1, 1, 1],
+            loss_weights=[1, 0.2, 1, 1, 1, 1, 1, 0],
             **kwargs
             ):
         """ Initialize the environment. """

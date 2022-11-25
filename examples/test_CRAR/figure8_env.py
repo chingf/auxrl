@@ -247,7 +247,7 @@ class MyEnv(Environment):
             z = np.array(abs_states_np)[:,2]
         else:
             if abs_states_np.shape[0] > 2:
-                pca = PCA(n_components = 3)
+                pca = PCA()
                 reduced_states = pca.fit_transform(abs_states_np)
                 x = np.array(reduced_states)[:,0]
                 y = np.array(reduced_states)[:,1]
@@ -332,10 +332,20 @@ class MyEnv(Environment):
         ax.add_artist(anchored_box)
         plt.show()
         plt.savefig(f'{fig_dir}latents_{learning_algo.update_counter}.pdf')
+
+        # Plot continuous measure of dimensionality
+        if (self._intern_dim > 3) and (abs_states_np.shape[0] > 2):
+            variance_curve = np.cumsum(pca.explained_variance_ratio_)
+            auc = np.trapz(variance_curve, dx=1/variance_curve.size)
+            plt.figure()
+            plt.plot(variance_curve)
+            plt.title(f'AUC: {auc}')
+            plt.savefig(f'{fig_dir}latent_dim_{learning_algo.update_counter}.pdf')
         
-        # Now plot losses over epochs
-        fig, axs = plt.subplots(4, 2, figsize=(7, 10))
+        # Plot losses over epochs
         losses, loss_names = learning_algo.get_losses()
+        loss_weights = learning_algo._loss_weights
+        _, axs = plt.subplots(4, 2, figsize=(7, 10))
         for i in range(8):
             loss = losses[i]; loss_name = loss_names[i]
             ax = axs[i%4][i//4]
@@ -343,6 +353,14 @@ class MyEnv(Environment):
             ax.set_ylabel(loss_name)
         plt.tight_layout()
         plt.savefig(f'{fig_dir}losses.pdf', dpi=300)
+        _, axs = plt.subplots(4, 2, figsize=(7, 10))
+        for i in range(8):
+            loss = losses[i]; loss_name = loss_names[i]
+            ax = axs[i%4][i//4]
+            ax.plot(np.array(loss)*loss_weights[i])
+            ax.set_ylabel(loss_name)
+        plt.tight_layout()
+        plt.savefig(f'{fig_dir}scaled_losses.pdf', dpi=300)
         plt.figure()
         plt.plot(losses[-1])
         plt.title('Total Loss')
