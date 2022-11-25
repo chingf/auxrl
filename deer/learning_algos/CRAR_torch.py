@@ -571,14 +571,15 @@ class CRAR(LearningAlgo):
 
     def get_losses(self):
         losses = [
-            self.loss_T[:-1], self.loss_R[:-1], self.loss_gamma[:-1],
-            self.loss_Q[:-1],
+            self.loss_T[:-1],
             self.loss_entropy_neighbor[:-1], self.loss_entropy_random[:-1],
-            self.loss_volume[:-1], self.loss_VAE[:-1], self.loss_total[:-1]
+            self.loss_volume[:-1], 
+            self.loss_gamma[:-1], self.loss_R[:-1], self.loss_Q[:-1],
+            self.loss_VAE[:-1], self.loss_total[:-1]
             ]
         loss_names = [
-            'Transition', 'Reward', 'Gamma', 'Q',
-            'Entropy (neighbor)', 'Entropy (random)', 'Volume', 'VAE', 'TOTAL'
+            'Transition', 'Entropy (neighbor)', 'Entropy (random)', 'Volume',
+            'Gamma', 'Reward', 'Q Value', 'VAE', 'TOTAL'
             ]
         return losses, loss_names
 
