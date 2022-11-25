@@ -157,10 +157,6 @@ class NN():
 
             def calculate_kls(self, z, mu, std):
                 p_std = torch.ones_like(std)
-                if len(p_std.shape) == 2:
-                    p_std[:,4:] = 0.25
-                else:
-                    p_std[4:] = 0.25
                 p = torch.distributions.Normal(torch.zeros_like(mu), p_std)
                 q = torch.distributions.Normal(mu, std)
                 log_qzx = q.log_prob(z)
