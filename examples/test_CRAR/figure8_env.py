@@ -49,13 +49,13 @@ class MyEnv(Environment):
             for y in range(MyEnv.HEIGHT):
                 if not self.in_bounds(x, y):
                     space_labels[x,y] = -1
-                elif x == midpoint and y == MyEnv.HEIGHT-1:
+                elif x == midpoint and y == MyEnv.HEIGHT-1: # Decision point
                     space_labels[x,y] = 0
-                elif x < midpoint:
+                elif x < midpoint: # Left
                     space_labels[x,y] = 1
-                elif x > midpoint:
+                elif x > midpoint: # Right
                     space_labels[x,y] = 2
-                elif x == midpoint:
+                elif x == midpoint: # Central stem
                     space_labels[x,y] = 3
                 else:
                     raise ValueError('Unconsidered case')
@@ -201,22 +201,26 @@ class MyEnv(Environment):
         observations_tcm = []
         reward_locs_tcm = []
         color_labels = []
+        y_locations = []
         for t in np.arange(self._nstep, observations.shape[0]):
             tcm_obs = observations[t-self._nstep:t].reshape((1, self._nstep, -1))
             tcm_obs = self.make_state_with_history(tcm_obs)
             observations_tcm.append(tcm_obs)
             reward_locs_tcm.append(reward_locs[t-1])
-            color_labels.append(
-                self._space_label[0, np.argwhere(observations[t-1]==10)[0,1]]
-                )
+            agent_location = np.argwhere(observations[t-1]==10)[0,1]
+            y_location = agent_location % MyEnv.WIDTH
+            y_locations.append(y_location)
+            color_label = self._space_label[0, agent_location]
+            color_labels.append(color_label)
         observations_tcm = np.array(observations_tcm, dtype='float')[-50:]
         reward_locs_tcm = np.array(reward_locs_tcm, dtype='int')[-50:]
-        color_labels = np.array(color_labels, dtype=int)
+        color_labels = np.array(color_labels, dtype=int)[-50:]
+        y_locations = np.array(y_locations)[-50:]
         unique_observations_tcm, unique_idxs = np.unique(
             observations_tcm, axis=0, return_index=True)
         color_labels = color_labels[unique_idxs]
         marker_labels = reward_locs_tcm[unique_idxs].astype(int)
-
+        xxplot = False
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         n = unique_observations_tcm.shape[0]
         with torch.no_grad():
@@ -287,21 +291,26 @@ class MyEnv(Environment):
                     color=action_colors[action], alpha=0.75)
         
         # Plot the dots at each time step depending on the action taken
-        colors = ['orange','blue', 'red', 'purple']
-        markers = ['x', '*', 'o']
+        colors = [
+            'orange', cm.get_cmap('Blues'), cm.get_cmap('Reds'),
+            cm.get_cmap('Purples')
+            ]
+        color_steps = np.linspace(0.25, 1., MyEnv.HEIGHT, endpoint=True)
+        markers = ['s', '^', 'o']
         central_stem = np.array(color_labels==3)
         not_central_stem = np.logical_not(central_stem)
-        ax.scatter(
-            x[not_central_stem], y[not_central_stem], z[not_central_stem],
-            c=[colors[i] for i in color_labels[not_central_stem]],
-            edgecolors='k', alpha=0.5, s=50, depthshade=True
-            )
-        for m in np.unique(marker_labels):
-            condition = np.logical_and(central_stem, marker_labels==m)
+        for i in range(x.size):
+            if central_stem[i]:
+                marker = markers[marker_labels[i]]
+            else:
+                marker = markers[-1]
+            if color_labels[i] == 0:
+                color = colors[0]
+            else:
+                color_step = color_steps[y_locations[i]]
+                color = colors[color_labels[i]](color_step)
             ax.scatter(
-                x[condition], y[condition], z[condition],
-                c=[colors[i] for i in color_labels[condition]],
-                marker=markers[m],
+                x[i], y[i], z[i], c=color, marker=marker,
                 edgecolors='k', alpha=0.5, s=50, depthshade=True
                 )
         axes_lims=[ax.get_xlim(), ax.get_ylim(), ax.get_zlim()]
@@ -373,13 +382,6 @@ class MyEnv(Environment):
             return [(1, (self._width+2)*3, (self._height+2)*3)]
         else:
             return [(1, self._height*self._width)]
-
-#    def singleInputDimensions(self):
-#        if (self._higher_dim_obs==True):
-#            return [(self._width, self._height)]
-#            return [((self._width+2)*3, (self._height+2)*3)]
-#        else:
-#            return [(1, self._height*self._width)]
 
     def observationType(self, subject):
         return np.float32
