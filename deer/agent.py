@@ -384,6 +384,7 @@ class NeuralAgent(object):
             maxSteps -= 1
             if(self.gathering_data==True or self._mode!=-1):
                 obs = self._environment.observe()
+                reward_loc = self._environment._reward_location
                 if obs_history is None:
                     obs_history = obs[0].copy()
                     history_n += 1
@@ -409,7 +410,6 @@ class NeuralAgent(object):
                     self._total_mode_reward += reward
                 
                 is_terminal = self._environment.inTerminalState()
-                reward_loc = self._environment._reward_location
                 if maxSteps > 0:
                     self._addSample(
                         obs, action, reward, is_terminal, reward_loc, hidden
