@@ -208,7 +208,7 @@ class MyEnv(Environment):
             observations_tcm.append(tcm_obs)
             reward_locs_tcm.append(reward_locs[t-1])
             agent_location = np.argwhere(observations[t-1]==10)[0,1]
-            y_location = agent_location % MyEnv.WIDTH
+            y_location = agent_location % MyEnv.HEIGHT
             y_locations.append(y_location)
             color_label = self._space_label[0, agent_location]
             color_labels.append(color_label)
@@ -310,8 +310,8 @@ class MyEnv(Environment):
                 color_step = color_steps[y_locations[i]]
                 color = colors[color_labels[i]](color_step)
             ax.scatter(
-                x[i], y[i], z[i], c=color, marker=marker,
-                edgecolors='k', alpha=0.5, s=50, depthshade=True
+                x[i], y[i], z[i], color=color, marker=marker,
+                edgecolors='k', alpha=0.75, s=50, depthshade=True
                 )
         axes_lims=[ax.get_xlim(), ax.get_ylim(), ax.get_zlim()]
         
