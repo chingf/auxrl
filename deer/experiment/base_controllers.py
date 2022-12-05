@@ -141,8 +141,9 @@ class LearningRateController(Controller):
     def onEpochEnd(self, agent):
         if (self._active == False) or (agent.mode() not in self._modes):
             return
-
         self._epoch_count += 1
+        #if self._epoch_count == 1:
+        #    return
         if self._periodicity <= 1 or self._epoch_count % self._periodicity == 0:
             agent._learning_algo.setLearningRate(self._lr)
             self._lr *= self._lr_decay
@@ -543,7 +544,7 @@ class FindBestController(Controller):
             self._epochNumbers.append(self._trainingEpochCount)
             if score > self._bestValidationScoreSoFar:
                 self._bestValidationScoreSoFar = score
-                agent.dumpNetwork(self._filename, self._trainingEpochCount)
+            agent.dumpNetwork(self._filename, self._trainingEpochCount)
         elif mode == self._testID:
             score, _ = agent.totalRewardOverLastTest()
             self._testScores.append(score)

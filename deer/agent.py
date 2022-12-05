@@ -242,15 +242,10 @@ class NeuralAgent(object):
             Epoch number (Optional)
         """
         try:
-            os.mkdir("nnets")
+            os.makedirs(f'nnets/{fname}', exist_ok=True)
         except Exception:
             pass
-        basename = "nnets/" + fname
-
-        for f in os.listdir("nnets/"):
-            if fname in f:
-                os.remove("nnets/" + f)
-
+        basename = f'nnets/{fname}/fname'
         all_params = self._learning_algo.getAllParams()
 
         if (nEpoch>=0):
