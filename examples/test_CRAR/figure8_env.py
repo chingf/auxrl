@@ -17,11 +17,10 @@ from matplotlib.offsetbox import AnchoredOffsetbox, TextArea, DrawingArea, HPack
 
 class MyEnv(Environment):
     VALIDATION_MODE = 0
-    RIGHT = 1
-    LEFT = 0
-    RESET = 2
+    RIGHT_REWARD = 1; LEFT_REWARD = 0; RESET_REWARD = 2
     HEIGHT = 5 #4 #3 #6
     WIDTH = 7 #5 #7 # Must be odd!
+    LEFT_STEM = 0; CENTRAL_STEM = WIDTH//2; RIGHT_STEM = WIDTH-1
 
     def __init__(self, give_rewards=False, intern_dim=2, **kwargs):
         self._give_rewards = give_rewards
@@ -37,10 +36,12 @@ class MyEnv(Environment):
         self._nstep_decay = kwargs.get('nstep_decay', 1.)
         self.x = 3
         self.y = 0
-        self._reward_location = MyEnv.LEFT
-        self._last_reward_location = MyEnv.RIGHT
+        self._reward_location = MyEnv.LEFT_REWARD
+        self._last_reward_location = MyEnv.RIGHT_REWARD
         self._intern_dim = intern_dim
         self._space_label = self.make_space_labels()
+        self._dimensionality_tracking = []
+        self._separability_tracking = [[] for _ in range(3)]
 
     def make_space_labels(self):
         space_labels = np.zeros((MyEnv.WIDTH, MyEnv.HEIGHT), dtype=int)
@@ -81,8 +82,8 @@ class MyEnv(Environment):
             (MyEnv.WIDTH-1, MyEnv.HEIGHT//2),
             ]
         self.x, self.y = (MyEnv.WIDTH//2, 0) #possible_resets[np.random.choice(4)]
-        self._reward_location = MyEnv.LEFT
-        self._last_rewarded = MyEnv.RIGHT
+        self._reward_location = MyEnv.LEFT_REWARD
+        self._last_rewarded = MyEnv.RIGHT_REWARD
         
         return [1 * [self._height * [self._width * [0]]]]
 
@@ -121,14 +122,13 @@ class MyEnv(Environment):
         else:
             raise ValueError('Not a valid action.')
 
-
         left_reward = (0, MyEnv.HEIGHT-1)
         right_reward = (MyEnv.WIDTH-1, MyEnv.HEIGHT-1)
         reset_reward = (MyEnv.WIDTH//2, 0)
 
         if self.in_bounds(new_x, new_y):
-            if self._reward_location == MyEnv.RESET:
-                if self._last_reward_location == MyEnv.LEFT:
+            if self._reward_location == MyEnv.RESET_REWARD:
+                if self._last_reward_location == MyEnv.LEFT_REWARD:
                     if ((self.x, self.y) == left_reward) and (action==1):
                         pass
                     else:
@@ -145,20 +145,20 @@ class MyEnv(Environment):
                     self.x = new_x; self.y = new_y
 
         # Move reward location as needed
-        if ((self.x, self.y) == left_reward) and self._reward_location == MyEnv.LEFT:
+        if ((self.x, self.y) == left_reward) and self._reward_location == MyEnv.LEFT_REWARD:
             self.reward = 1
-            self._reward_location = MyEnv.RESET
-            self._last_reward_location = MyEnv.LEFT
-        elif ((self.x, self.y) == right_reward) and self._reward_location == MyEnv.RIGHT:
+            self._reward_location = MyEnv.RESET_REWARD
+            self._last_reward_location = MyEnv.LEFT_REWARD
+        elif ((self.x, self.y) == right_reward) and self._reward_location == MyEnv.RIGHT_REWARD:
             self.reward = 1
-            self._reward_location = MyEnv.RESET
-            self._last_reward_location = MyEnv.RIGHT
-        elif ((self.x, self.y) == reset_reward) and self._reward_location == MyEnv.RESET:
+            self._reward_location = MyEnv.RESET_REWARD
+            self._last_reward_location = MyEnv.RIGHT_REWARD
+        elif ((self.x, self.y) == reset_reward) and self._reward_location == MyEnv.RESET_REWARD:
             self.reward = 1
-            if self._last_reward_location == MyEnv.RIGHT:
-                self._reward_location = MyEnv.LEFT
+            if self._last_reward_location == MyEnv.RIGHT_REWARD:
+                self._reward_location = MyEnv.LEFT_REWARD
             else:
-                self._reward_location = MyEnv.RIGHT
+                self._reward_location = MyEnv.RIGHT_REWARD
         else:
             self.reward = 0
 
@@ -202,25 +202,28 @@ class MyEnv(Environment):
         reward_locs_tcm = []
         color_labels = []
         y_locations = []
+        x_locations = []
         for t in np.arange(self._nstep, observations.shape[0]):
             tcm_obs = observations[t-self._nstep:t].reshape((1, self._nstep, -1))
             tcm_obs = self.make_state_with_history(tcm_obs)
             observations_tcm.append(tcm_obs)
             reward_locs_tcm.append(reward_locs[t-1])
             agent_location = np.argwhere(observations[t-1]==10)[0,1]
-            y_location = agent_location % MyEnv.HEIGHT
-            y_locations.append(y_location)
+            x_locations.append(agent_location // MyEnv.HEIGHT)
+            y_locations.append(agent_location % MyEnv.HEIGHT)
             color_label = self._space_label[0, agent_location]
             color_labels.append(color_label)
         observations_tcm = np.array(observations_tcm, dtype='float')[-50:]
-        reward_locs_tcm = np.array(reward_locs_tcm, dtype='int')[-50:]
+        reward_locs = np.array(reward_locs, dtype='int')[-50:]
         color_labels = np.array(color_labels, dtype=int)[-50:]
+        x_locations = np.array(x_locations)[-50:]
         y_locations = np.array(y_locations)[-50:]
         unique_observations_tcm, unique_idxs = np.unique(
             observations_tcm, axis=0, return_index=True)
+        reward_locs = reward_locs[unique_idxs].astype(int)
         color_labels = color_labels[unique_idxs]
-        marker_labels = reward_locs_tcm[unique_idxs].astype(int)
-        xxplot = False
+        x_locations = x_locations[unique_idxs]
+        y_locations = y_locations[unique_idxs]
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         n = unique_observations_tcm.shape[0]
         with torch.no_grad():
@@ -297,11 +300,9 @@ class MyEnv(Environment):
             ]
         color_steps = np.linspace(0.25, 1., MyEnv.HEIGHT, endpoint=True)
         markers = ['s', '^', 'o']
-        central_stem = np.array(color_labels==3)
-        not_central_stem = np.logical_not(central_stem)
         for i in range(x.size):
-            if central_stem[i]:
-                marker = markers[marker_labels[i]]
+            if x_locations[i] == MyEnv.CENTRAL_STEM:
+                marker = markers[reward_locs[i]]
             else:
                 marker = markers[-1]
             if color_labels[i] == 0:
@@ -326,11 +327,9 @@ class MyEnv(Environment):
         box2b.add_artist(el2b)
         box2b.add_artist(el3b)
         box2b.add_artist(el4b)
-        
         boxb = HPacker(children=[box1b, box2b],
             align="center",
             pad=0, sep=5)
-        
         anchored_box = AnchoredOffsetbox(loc=3,
             child=boxb, pad=0.,
             frameon=True,
@@ -346,10 +345,56 @@ class MyEnv(Environment):
         if (self._intern_dim > 3) and (abs_states_np.shape[0] > 2):
             variance_curve = np.cumsum(pca.explained_variance_ratio_)
             auc = np.trapz(variance_curve, dx=1/variance_curve.size)
+            self._dimensionality_tracking.append(auc)
             plt.figure()
-            plt.plot(variance_curve)
-            plt.title(f'AUC: {auc}')
-            plt.savefig(f'{fig_dir}latent_dim_{learning_algo.update_counter}.pdf')
+            plt.plot(self._dimensionality_tracking)
+            plt.ylabel('AUC of PCA Explained Variance Ratio')
+            plt.xlabel('Epochs')
+            plt.savefig(f'{fig_dir}dimensionality.pdf')
+
+        # Plot pairwise z-score distances
+        dist_matrix = np.ones((MyEnv.HEIGHT*3, MyEnv.HEIGHT*3))*np.nan
+        stems = [MyEnv.LEFT_STEM, MyEnv.CENTRAL_STEM, MyEnv.RIGHT_STEM]
+        for i in range(dist_matrix.shape[0]):
+            for j in range(i+1):
+                stem_i = i // MyEnv.HEIGHT; yloc_i = i % MyEnv.HEIGHT
+                stem_j = j // MyEnv.HEIGHT; yloc_j = j % MyEnv.HEIGHT
+                idxs_i = np.logical_and(
+                    x_locations == stems[stem_i], y_locations == yloc_i)
+                idxs_j = np.logical_and(
+                    x_locations == stems[stem_j], y_locations == yloc_j)
+                if (i == j) and (stem_i == 1): # central stem diagonal
+                    idxs_i = np.logical_and(idxs_i, reward_locs==MyEnv.LEFT_REWARD)
+                    idxs_j = np.logical_and(idxs_j, reward_locs==MyEnv.RIGHT_REWARD)
+                if (np.sum(idxs_i) == 0) or (np.sum(idxs_j) == 0):
+                    continue
+                states_i = np.mean(abs_states_np[idxs_i], axis=0)
+                states_j = np.mean(abs_states_np[idxs_j], axis=0)
+                dist = np.linalg.norm(states_i - states_j)
+                dist_matrix[i, j] = dist_matrix[j, i] = dist
+        #dist_matrix = dist_matrix/np.nanmedian(dist_matrix)
+        dist_matrix = dist_matrix/np.percentile(dist_matrix.flatten(), 99)
+        plt.figure(); plt.imshow(dist_matrix); plt.colorbar()
+        for boundary in [0, MyEnv.HEIGHT, MyEnv.HEIGHT*2]:
+            plt.axhline(boundary-0.5, linewidth=2, color='black')
+            plt.axvline(boundary-0.5, linewidth=2, color='black')
+        plt.savefig(f'{fig_dir}pairwise_dist_{learning_algo.update_counter}.pdf')
+
+        # Plot separability metric over epochs
+        self._separability_tracking[0].append(
+            dist_matrix[MyEnv.HEIGHT, MyEnv.HEIGHT])
+        self._separability_tracking[1].append(
+            dist_matrix[MyEnv.HEIGHT+MyEnv.HEIGHT//2, MyEnv.HEIGHT+MyEnv.HEIGHT//2])
+        self._separability_tracking[2].append(
+            dist_matrix[MyEnv.HEIGHT*2 - 1, MyEnv.HEIGHT*2 - 1])
+        fig, axs = plt.subplots(3, 1)
+        axs[2].plot(self._separability_tracking[0])
+        axs[2].set_title('Reset point')
+        axs[1].plot(self._separability_tracking[1])
+        axs[1].set_title('Middle of central stem')
+        axs[0].plot(self._separability_tracking[2])
+        axs[0].set_title('Decision point')
+        plt.savefig(f'{fig_dir}dist_summary.pdf')
         
         # Plot losses over epochs
         losses, loss_names = learning_algo.get_losses()
@@ -407,9 +452,9 @@ class MyEnv(Environment):
         reset_reward = (MyEnv.WIDTH//2, 0)
 
         if self._show_rewards:
-            if reward_location == MyEnv.LEFT:
+            if reward_location == MyEnv.LEFT_REWARD:
                 obs[left_reward[0], left_reward[1]] = 1
-            elif reward_location == MyEnv.RIGHT:
+            elif reward_location == MyEnv.RIGHT_REWARD:
                 obs[right_reward[0], right_reward[1]] = 1
             else:
                 obs[reset_reward[0], reset_reward[1]] = 1
