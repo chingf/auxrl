@@ -3,6 +3,7 @@ import numpy as np
 import torch
 from deer.base_classes import Environment
 from sklearn.decomposition import PCA
+from scipy.stats import linregress
 import matplotlib
 # matplotlib.use('qt5agg')
 from mpl_toolkits.axes_grid1 import host_subplot
@@ -18,8 +19,8 @@ from matplotlib.offsetbox import AnchoredOffsetbox, TextArea, DrawingArea, HPack
 class MyEnv(Environment):
     VALIDATION_MODE = 0
     RIGHT_REWARD = 1; LEFT_REWARD = 0; RESET_REWARD = 2
-    HEIGHT = 5 #4 #3 #6
-    WIDTH = 7 #5 #7 # Must be odd!
+    HEIGHT = 5
+    WIDTH = 7 #Must be odd
     LEFT_STEM = 0; CENTRAL_STEM = WIDTH//2; RIGHT_STEM = WIDTH-1
 
     def __init__(self, give_rewards=False, intern_dim=2, **kwargs):
@@ -42,6 +43,7 @@ class MyEnv(Environment):
         self._space_label = self.make_space_labels()
         self._dimensionality_tracking = []
         self._separability_tracking = [[] for _ in range(3)]
+        self._separability_slope = []
 
     def make_space_labels(self):
         space_labels = np.zeros((MyEnv.WIDTH, MyEnv.HEIGHT), dtype=int)
@@ -213,11 +215,12 @@ class MyEnv(Environment):
             y_locations.append(agent_location % MyEnv.HEIGHT)
             color_label = self._space_label[0, agent_location]
             color_labels.append(color_label)
-        observations_tcm = np.array(observations_tcm, dtype='float')[-50:]
-        reward_locs = np.array(reward_locs, dtype='int')[-50:]
-        color_labels = np.array(color_labels, dtype=int)[-50:]
-        x_locations = np.array(x_locations)[-50:]
-        y_locations = np.array(y_locations)[-50:]
+        hlen = 500
+        observations_tcm = np.array(observations_tcm, dtype='float')[-hlen:]
+        reward_locs = np.array(reward_locs, dtype='int')[-hlen:]
+        color_labels = np.array(color_labels, dtype=int)[-hlen:]
+        x_locations = np.array(x_locations)[-hlen:]
+        y_locations = np.array(y_locations)[-hlen:]
         unique_observations_tcm, unique_idxs = np.unique(
             observations_tcm, axis=0, return_index=True)
         reward_locs = reward_locs[unique_idxs].astype(int)
@@ -263,7 +266,6 @@ class MyEnv(Environment):
                 x = np.array(abs_states_np)[:,0]
                 y = np.array(abs_states_np)[:,1]
                 z = np.array(abs_states_np)[:,2]
-                    
         fig = plt.figure()
         ax = fig.add_subplot(111,projection='3d')
         ax.set_xlabel(r'$X_1$')
@@ -271,7 +273,8 @@ class MyEnv(Environment):
         ax.set_zlabel(r'$X_3$')
                     
         # Plot the estimated transitions
-        for i in range(n-1):
+        scatterplot_range = np.arange(n-1) if n < 50 else np.arange(n-50, n-1)
+        for i in scatterplot_range:
             n_actions = 4
             action_colors = ["0.9", "0.65", "0.4", "0.15"]
             for action in range(n_actions):
@@ -294,13 +297,11 @@ class MyEnv(Environment):
                     color=action_colors[action], alpha=0.75)
         
         # Plot the dots at each time step depending on the action taken
-        colors = [
-            'orange', cm.get_cmap('Blues'), cm.get_cmap('Reds'),
-            cm.get_cmap('Purples')
-            ]
+        colors = ['orange',
+            cm.get_cmap('Blues'), cm.get_cmap('Reds'), cm.get_cmap('Purples')]
         color_steps = np.linspace(0.25, 1., MyEnv.HEIGHT, endpoint=True)
         markers = ['s', '^', 'o']
-        for i in range(x.size):
+        for i in scatterplot_range:
             if x_locations[i] == MyEnv.CENTRAL_STEM:
                 marker = markers[reward_locs[i]]
             else:
@@ -317,7 +318,7 @@ class MyEnv(Environment):
         axes_lims=[ax.get_xlim(), ax.get_ylim(), ax.get_zlim()]
         
         # Plot the legend for transition estimates
-        box1b = TextArea(" Estimated transitions (action 0, 1, 2 and 3): ", textprops=dict(color="k"))
+        box1b = TextArea("Estimated transitions (action 0, 1, 2, 3): ", textprops=dict(color="k"))
         box2b = DrawingArea(90, 20, 0, 0)
         el1b = Rectangle((5, 10), 15,2, fc="0.9", alpha=0.75)
         el2b = Rectangle((25, 10), 15,2, fc="0.65", alpha=0.75) 
@@ -327,15 +328,10 @@ class MyEnv(Environment):
         box2b.add_artist(el2b)
         box2b.add_artist(el3b)
         box2b.add_artist(el4b)
-        boxb = HPacker(children=[box1b, box2b],
-            align="center",
-            pad=0, sep=5)
-        anchored_box = AnchoredOffsetbox(loc=3,
-            child=boxb, pad=0.,
-            frameon=True,
-            bbox_to_anchor=(0., 0.98),
-            bbox_transform=ax.transAxes,
-            borderpad=0.,
+        boxb = HPacker(children=[box1b, box2b], align="center", pad=0, sep=5)
+        anchored_box = AnchoredOffsetbox(
+            loc=3, child=boxb, pad=0., frameon=True,
+            bbox_to_anchor=(0., 0.98), bbox_transform=ax.transAxes, borderpad=0.
             )        
         ax.add_artist(anchored_box)
         plt.show()
@@ -353,8 +349,8 @@ class MyEnv(Environment):
             plt.savefig(f'{fig_dir}dimensionality.pdf')
 
         # Plot pairwise z-score distances
-        dist_matrix = np.ones((MyEnv.HEIGHT*3, MyEnv.HEIGHT*3))*np.nan
-        stems = [MyEnv.LEFT_STEM, MyEnv.CENTRAL_STEM, MyEnv.RIGHT_STEM]
+        dist_matrix = np.ones((MyEnv.HEIGHT*4, MyEnv.HEIGHT*4))*np.nan
+        stems = [MyEnv.LEFT_STEM, MyEnv.CENTRAL_STEM, MyEnv.CENTRAL_STEM, MyEnv.RIGHT_STEM]
         for i in range(dist_matrix.shape[0]):
             for j in range(i+1):
                 stem_i = i // MyEnv.HEIGHT; yloc_i = i % MyEnv.HEIGHT
@@ -363,38 +359,71 @@ class MyEnv(Environment):
                     x_locations == stems[stem_i], y_locations == yloc_i)
                 idxs_j = np.logical_and(
                     x_locations == stems[stem_j], y_locations == yloc_j)
-                if (i == j) and (stem_i == 1): # central stem diagonal
-                    idxs_i = np.logical_and(idxs_i, reward_locs==MyEnv.LEFT_REWARD)
-                    idxs_j = np.logical_and(idxs_j, reward_locs==MyEnv.RIGHT_REWARD)
+                if stems[stem_i] == MyEnv.CENTRAL_STEM:
+                    rloc = MyEnv.LEFT_REWARD if stem_i == 1 else MyEnv.RIGHT_REWARD
+                    idxs_i = np.logical_and(idxs_i, reward_locs==rloc)
+                if stems[stem_j] == MyEnv.CENTRAL_STEM:
+                    rloc = MyEnv.LEFT_REWARD if stem_j == 1 else MyEnv.RIGHT_REWARD
+                    idxs_j = np.logical_and(idxs_j, reward_locs==rloc)
                 if (np.sum(idxs_i) == 0) or (np.sum(idxs_j) == 0):
                     continue
-                states_i = np.mean(abs_states_np[idxs_i], axis=0)
-                states_j = np.mean(abs_states_np[idxs_j], axis=0)
-                dist = np.linalg.norm(states_i - states_j)
-                dist_matrix[i, j] = dist_matrix[j, i] = dist
-        #dist_matrix = dist_matrix/np.nanmedian(dist_matrix)
-        dist_matrix = dist_matrix/np.percentile(dist_matrix.flatten(), 99)
+                dist = []
+                states_i = abs_states_np[idxs_i]
+                states_j = abs_states_np[idxs_j]
+                if (i==j) and states_i.shape[0] == 1:
+                    dist_matrix[i,j] = 0
+                    continue
+                for state_i_idx, state_i in enumerate(states_i):
+                    state_j_idx = state_i_idx if i==j else states_j.shape[0]
+                    for state_j in states_j[:state_j_idx]:
+                        dist.append(np.linalg.norm(state_i-state_j))
+                dist_matrix[i, j] = dist_matrix[j, i] = np.nanmean(dist)
+        dist_matrix = dist_matrix/np.nanpercentile(dist_matrix.flatten(), 99)
         plt.figure(); plt.imshow(dist_matrix); plt.colorbar()
-        for boundary in [0, MyEnv.HEIGHT, MyEnv.HEIGHT*2]:
+        for boundary in [0, MyEnv.HEIGHT, MyEnv.HEIGHT*2, MyEnv.HEIGHT*3]:
             plt.axhline(boundary-0.5, linewidth=2, color='black')
             plt.axvline(boundary-0.5, linewidth=2, color='black')
+        plt.xticks(
+            np.linspace(0, dist_matrix.shape[0]-0.5, num=8, endpoint=True)[1::2],
+            ['Left', 'Central-L', 'Central-R', 'Right'])
+        plt.yticks(
+            np.linspace(0, dist_matrix.shape[0]-0.5, num=8, endpoint=True)[1::2],
+            ['Left', 'Central-L', 'Central-R', 'Right'])
+        plt.title('Pairwise distances of column states')
         plt.savefig(f'{fig_dir}pairwise_dist_{learning_algo.update_counter}.pdf')
 
         # Plot separability metric over epochs
         self._separability_tracking[0].append(
-            dist_matrix[MyEnv.HEIGHT, MyEnv.HEIGHT])
+            dist_matrix[MyEnv.HEIGHT, MyEnv.HEIGHT*2])
         self._separability_tracking[1].append(
-            dist_matrix[MyEnv.HEIGHT+MyEnv.HEIGHT//2, MyEnv.HEIGHT+MyEnv.HEIGHT//2])
+            dist_matrix[MyEnv.HEIGHT+MyEnv.HEIGHT//2, MyEnv.HEIGHT*2+MyEnv.HEIGHT//2])
         self._separability_tracking[2].append(
-            dist_matrix[MyEnv.HEIGHT*2 - 1, MyEnv.HEIGHT*2 - 1])
+            dist_matrix[MyEnv.HEIGHT*2 - 1, MyEnv.HEIGHT*3 - 1])
+        self._separability_slope.append(linregress(
+            np.arange(MyEnv.HEIGHT), np.diagonal(
+            dist_matrix[MyEnv.HEIGHT:MyEnv.HEIGHT*2, MyEnv.HEIGHT*2:MyEnv.HEIGHT*3]
+            )).slope)
         fig, axs = plt.subplots(3, 1)
         axs[2].plot(self._separability_tracking[0])
         axs[2].set_title('Reset point')
+        axs[2].set_xlabel('Epochs')
         axs[1].plot(self._separability_tracking[1])
         axs[1].set_title('Middle of central stem')
         axs[0].plot(self._separability_tracking[2])
         axs[0].set_title('Decision point')
+        for ax in axs:
+            ax.set_ylabel('L/R Dist')
+            ylim_max = np.nanmax(self._separability_tracking)*1.1
+            if not np.isnan(ylim_max): ax.set_ylim(0, ylim_max)
+        plt.tight_layout()
         plt.savefig(f'{fig_dir}dist_summary.pdf')
+        plt.figure()
+        plt.plot(self._separability_slope)
+        plt.xlabel('Epochs')
+        plt.ylabel('Slope of Central Stem Splitting')
+        plt.tight_layout()
+        plt.savefig(f'{fig_dir}dist_slope.pdf')
+
         
         # Plot losses over epochs
         losses, loss_names = learning_algo.get_losses()
@@ -444,9 +473,6 @@ class MyEnv(Environment):
             for _x in np.arange(self._width):
                 if not self.in_bounds(_x, _y):
                     obs[_x, _y] = -1
-
-#        if not self._give_rewards:
-#            pass
         left_reward = (0, MyEnv.HEIGHT-1)
         right_reward = (MyEnv.WIDTH-1, MyEnv.HEIGHT-1)
         reset_reward = (MyEnv.WIDTH//2, 0)
