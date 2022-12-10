@@ -517,7 +517,8 @@ class FindBestController(Controller):
     """
 
     def __init__(
-        self, validationID=0, testID=None, unique_fname="nnet"
+        self, validationID=0, testID=None, unique_fname="nnet", plotfig=True,
+        savefrequency=np.inf # 0: best valid score, n: save every n, np.inf: at end
         ):
         super(self.__class__, self).__init__()
 
@@ -528,6 +529,8 @@ class FindBestController(Controller):
         self._testID = testID
         self._validationID = validationID
         self._filename = unique_fname
+        self._plotfig = plotfig
+        self._savefrequency = savefrequency
         self._fig_dir = f'figs/{self._filename}/'
         if not os.path.isdir(self._fig_dir):
             os.makedirs(self._fig_dir)
@@ -544,7 +547,10 @@ class FindBestController(Controller):
             self._epochNumbers.append(self._trainingEpochCount)
             if score > self._bestValidationScoreSoFar:
                 self._bestValidationScoreSoFar = score
-            agent.dumpNetwork(self._filename, self._trainingEpochCount)
+                if self._savefrequency == 0:
+                    agent.dumpNetwork(self._filename, self._trainingEpochCount)
+            if (self._savefrequency > 0) and (self._trainingEpochCount%self._savefrequency == 0):
+                agent.dumpNetwork(self._filename, self._trainingEpochCount)
         elif mode == self._testID:
             score, _ = agent.totalRewardOverLastTest()
             self._testScores.append(score)
@@ -552,22 +558,26 @@ class FindBestController(Controller):
             self._trainingEpochCount += 1
 
         #live plotting of reward over time
-        if mode == self._validationID:
-            plt.plot(range(1, len(self._validationScores)+1), self._validationScores, label="VS", color='b')
-            plt.legend()
-            plt.xlabel("Number of epochs")
-            plt.ylabel("Score")
-            plt.savefig(f"{self._fig_dir}validation_scores.pdf")
-            plt.close()
-            # plt.show()
-        elif mode == self._testID:
-            plt.plot(range(1, len(self._testScores)+1), self._testScores, label="TS", color='b')
-            plt.legend()
-            plt.xlabel("Number of epochs")
-            plt.ylabel("Score")
-            plt.savefig(f"{self._fig_dir}test_scores.pdf")
-            plt.close()
-            # plt.show()
+        if self._plotfig:
+            if mode == self._validationID:
+                plt.plot(
+                    range(1, len(self._validationScores)+1),
+                    self._validationScores, label="VS", color='b')
+                plt.legend()
+                plt.xlabel("Number of epochs")
+                plt.ylabel("Score")
+                plt.savefig(f"{self._fig_dir}validation_scores.pdf")
+
+                plt.close()
+            elif mode == self._testID:
+                plt.plot(
+                    range(1, len(self._testScores)+1),
+                    self._testScores, label="TS", color='b')
+                plt.legend()
+                plt.xlabel("Number of epochs")
+                plt.ylabel("Score")
+                plt.savefig(f"{self._fig_dir}test_scores.pdf")
+                plt.close()
         
     def onEnd(self, agent):
         if (self._active == False):
@@ -577,7 +587,8 @@ class FindBestController(Controller):
             print("Best neural net obtained after {} epochs, with validation score {}".format(bestIndex+1, self._validationScores[bestIndex]))
             if self._testID != None:
                 print("Test score of this neural net: {}".format(self._testScores[bestIndex]))
-                
+            if np.isnan(self._savefrequency):
+                agent.dumpNetwork(self._filename, self._trainingEpochCount)
         try:
             os.mkdir("scores")
         except Exception:

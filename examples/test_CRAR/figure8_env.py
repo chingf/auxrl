@@ -23,7 +23,7 @@ class MyEnv(Environment):
     WIDTH = 7 #Must be odd
     LEFT_STEM = 0; CENTRAL_STEM = WIDTH//2; RIGHT_STEM = WIDTH-1
 
-    def __init__(self, give_rewards=False, intern_dim=2, **kwargs):
+    def __init__(self, give_rewards=False, intern_dim=2, plotfig=True, **kwargs):
         self._give_rewards = give_rewards
         self._mode = -1
         self._mode_score = 0.0
@@ -40,10 +40,12 @@ class MyEnv(Environment):
         self._reward_location = MyEnv.LEFT_REWARD
         self._last_reward_location = MyEnv.RIGHT_REWARD
         self._intern_dim = intern_dim
+        self._plotfig = plotfig
         self._space_label = self.make_space_labels()
         self._dimensionality_tracking = []
         self._separability_tracking = [[] for _ in range(3)]
         self._separability_slope = []
+        self._separability_matrix = None
 
     def make_space_labels(self):
         space_labels = np.zeros((MyEnv.WIDTH, MyEnv.HEIGHT), dtype=int)
@@ -335,7 +337,8 @@ class MyEnv(Environment):
             )        
         ax.add_artist(anchored_box)
         plt.show()
-        plt.savefig(f'{fig_dir}latents_{learning_algo.update_counter}.pdf')
+        if self._plotfig:
+            plt.savefig(f'{fig_dir}latents_{learning_algo.update_counter}.pdf')
 
         # Plot continuous measure of dimensionality
         if (self._intern_dim > 3) and (abs_states_np.shape[0] > 2):
@@ -346,7 +349,8 @@ class MyEnv(Environment):
             plt.plot(self._dimensionality_tracking)
             plt.ylabel('AUC of PCA Explained Variance Ratio')
             plt.xlabel('Epochs')
-            plt.savefig(f'{fig_dir}dimensionality.pdf')
+            if self._plotfig:
+                plt.savefig(f'{fig_dir}dimensionality.pdf')
 
         # Plot pairwise z-score distances
         dist_matrix = np.ones((MyEnv.HEIGHT*4, MyEnv.HEIGHT*4))*np.nan
@@ -379,6 +383,7 @@ class MyEnv(Environment):
                         dist.append(np.linalg.norm(state_i-state_j))
                 dist_matrix[i, j] = dist_matrix[j, i] = np.nanmean(dist)
         dist_matrix = dist_matrix/np.nanpercentile(dist_matrix.flatten(), 99)
+        self._separability_matrix = dist_matrix
         plt.figure(); plt.imshow(dist_matrix); plt.colorbar()
         for boundary in [0, MyEnv.HEIGHT, MyEnv.HEIGHT*2, MyEnv.HEIGHT*3]:
             plt.axhline(boundary-0.5, linewidth=2, color='black')
@@ -390,7 +395,8 @@ class MyEnv(Environment):
             np.linspace(0, dist_matrix.shape[0]-0.5, num=8, endpoint=True)[1::2],
             ['Left', 'Central-L', 'Central-R', 'Right'])
         plt.title('Pairwise distances of column states')
-        plt.savefig(f'{fig_dir}pairwise_dist_{learning_algo.update_counter}.pdf')
+        if self._plotfig:
+            plt.savefig(f'{fig_dir}pairwise_dist_{learning_algo.update_counter}.pdf')
 
         # Plot separability metric over epochs
         self._separability_tracking[0].append(
@@ -416,13 +422,15 @@ class MyEnv(Environment):
             ylim_max = np.nanmax(self._separability_tracking)*1.1
             if not np.isnan(ylim_max): ax.set_ylim(0, ylim_max)
         plt.tight_layout()
-        plt.savefig(f'{fig_dir}dist_summary.pdf')
+        if self._plotfig:
+            plt.savefig(f'{fig_dir}dist_summary.pdf')
         plt.figure()
         plt.plot(self._separability_slope)
         plt.xlabel('Epochs')
         plt.ylabel('Slope of Central Stem Splitting')
         plt.tight_layout()
-        plt.savefig(f'{fig_dir}dist_slope.pdf')
+        if self._plotfig:
+            plt.savefig(f'{fig_dir}dist_slope.pdf')
 
         
         # Plot losses over epochs
@@ -435,7 +443,8 @@ class MyEnv(Environment):
             ax.plot(loss)
             ax.set_ylabel(loss_name)
         plt.tight_layout()
-        plt.savefig(f'{fig_dir}losses.pdf', dpi=300)
+        if self._plotfig:
+            plt.savefig(f'{fig_dir}losses.pdf', dpi=300)
         _, axs = plt.subplots(4, 2, figsize=(7, 10))
         for i in range(8):
             loss = losses[i]; loss_name = loss_names[i]
@@ -443,11 +452,13 @@ class MyEnv(Environment):
             ax.plot(np.array(loss)*loss_weights[i])
             ax.set_ylabel(loss_name)
         plt.tight_layout()
-        plt.savefig(f'{fig_dir}scaled_losses.pdf', dpi=300)
+        if self._plotfig:
+            plt.savefig(f'{fig_dir}scaled_losses.pdf', dpi=300)
         plt.figure()
         plt.plot(losses[-1])
         plt.title('Total Loss')
-        plt.savefig(f'{fig_dir}total_losses.pdf', dpi=300)
+        if self._plotfig:
+            plt.savefig(f'{fig_dir}total_losses.pdf', dpi=300)
         matplotlib.pyplot.close("all") # avoid memory leaks
 
     def inputDimensions(self):
