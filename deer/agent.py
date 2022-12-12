@@ -174,7 +174,10 @@ class NeuralAgent(object):
             self._mode = mode
             self._total_mode_reward = 0.
             del self._tmp_dataset
-            self._tmp_dataset = DataSet(self._environment, self._random_state, max_size=self._replay_memory_size, only_full_history=self._only_full_history)
+            self._tmp_dataset = DataSet(
+                self._environment, self._random_state,
+                max_size=self._replay_memory_size,
+                only_full_history=self._only_full_history)
 
     def resumeTrainingMode(self):
         self._mode = -1

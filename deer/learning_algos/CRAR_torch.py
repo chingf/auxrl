@@ -493,17 +493,22 @@ class CRAR(LearningAlgo):
         crar_net = self.crar_target if from_target else self.crar
         with torch.no_grad():
             if d == 0:
-                return crar_net.Q(x)
+                return torch.zeros(1, self._n_actions) #TODO
+                #return crar_net.Q(x)
             else:
                 q_plan_values = []
+                x = x.view(1, -1)
                 for a in range(self._n_actions):
-                    actions = torch.tensor([a] * x.shape[0], device=self.device)
-                    state_and_actions = torch.cat([x, actions.float().view(-1, 1)], 1) 
+                    onehot_actions = np.zeros((1, self._n_actions))
+                    onehot_actions[:, a] = 1
+                    onehot_actions = torch.tensor(onehot_actions, device=self.device).float()
+                    state_and_actions = torch.cat([x, onehot_actions], 1) 
                     rewards = crar_net.R(state_and_actions)
                     discounts = torch.tensor([self._df]*rewards.shape[0], device=self.device)
                     next_x = crar_net.transition(state_and_actions)
+                    next_q_vals = self.qValues(next_x, d-1, from_target)
                     q_plan_values.append(
-                        rewards + discounts * torch.max(self.qValues(next_x, d-1, from_target), dim=1)[0]
+                        rewards + discounts * torch.max(next_q_vals, dim=1)[0]
                         )
                 return torch.cat(q_plan_values, dim=1)
 
@@ -524,7 +529,8 @@ class CRAR(LearningAlgo):
 
         if(mode==None):
             mode=0
-        depths = [0,1,3,6] # Mode defines the planning depth di
+        depths = [0,1,3,6,10] # Mode defines the planning depth di
+        depth = depths[mode] #10 #TODO
         with torch.no_grad():
             if self._encoder_type == 'recurrent':
                 state = torch.as_tensor(state, device=self.device).float()
@@ -533,7 +539,7 @@ class CRAR(LearningAlgo):
                 _state = self.make_state_with_history(state)
                 state = torch.as_tensor(_state, device=self.device).float()
                 xs = self.crar.encoder(state)
-        q_vals = self.qValues(xs, d=depths[mode])
+        q_vals = self.qValues(xs, d=depth)
         return torch.argmax(q_vals), torch.max(q_vals)
 
     def getPossibleTransitions(self, state):
