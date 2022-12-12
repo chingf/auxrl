@@ -16,3 +16,5 @@ nnets/
 params/
 pickles/
 figs*/
+*/.DS_Store*
+.DS_Store*

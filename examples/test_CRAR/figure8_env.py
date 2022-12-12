@@ -386,13 +386,13 @@ class MyEnv(Environment):
         self._separability_matrix = dist_matrix
         plt.figure(); plt.imshow(dist_matrix); plt.colorbar()
         for boundary in [0, MyEnv.HEIGHT, MyEnv.HEIGHT*2, MyEnv.HEIGHT*3]:
-            plt.axhline(boundary-0.5, linewidth=2, color='black')
-            plt.axvline(boundary-0.5, linewidth=2, color='black')
+            plt.axhline(boundary-0.5, linewidth=2, color='white')
+            plt.axvline(boundary-0.5, linewidth=2, color='white')
         plt.xticks(
-            np.linspace(0, dist_matrix.shape[0]-0.5, num=8, endpoint=True)[1::2],
-            ['Left', 'Central-L', 'Central-R', 'Right'])
+            np.linspace(0, dist_matrix.shape[0]-0.5, num=9, endpoint=True)[1::2],
+            ['Left', 'Central-L', 'Central-R', 'Right'], rotation=30)
         plt.yticks(
-            np.linspace(0, dist_matrix.shape[0]-0.5, num=8, endpoint=True)[1::2],
+            np.linspace(0, dist_matrix.shape[0]-0.5, num=9, endpoint=True)[1::2],
             ['Left', 'Central-L', 'Central-R', 'Right'])
         plt.title('Pairwise distances of column states')
         if self._plotfig:

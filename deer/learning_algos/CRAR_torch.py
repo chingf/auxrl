@@ -493,8 +493,7 @@ class CRAR(LearningAlgo):
         crar_net = self.crar_target if from_target else self.crar
         with torch.no_grad():
             if d == 0:
-                return torch.zeros(1, self._n_actions) #TODO
-                #return crar_net.Q(x)
+                return crar_net.Q(x)
             else:
                 q_plan_values = []
                 x = x.view(1, -1)
@@ -530,7 +529,7 @@ class CRAR(LearningAlgo):
         if(mode==None):
             mode=0
         depths = [0,1,3,6,10] # Mode defines the planning depth di
-        depth = depths[mode] #10 #TODO
+        depth = depths[mode]
         with torch.no_grad():
             if self._encoder_type == 'recurrent':
                 state = torch.as_tensor(state, device=self.device).float()
