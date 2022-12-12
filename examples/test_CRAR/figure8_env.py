@@ -233,7 +233,8 @@ class MyEnv(Environment):
         n = unique_observations_tcm.shape[0]
         with torch.no_grad():
             abs_states = learning_algo.crar.encoder(
-                torch.tensor(unique_observations_tcm).float().to(device)
+                torch.tensor(unique_observations_tcm).float().to(device),
+                mu_only=True
                 )
     
         actions = test_data_set.actions()[0:n]

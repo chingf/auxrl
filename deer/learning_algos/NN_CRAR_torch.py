@@ -141,13 +141,16 @@ class NN():
                 self.abstract_dim = abstract_dim
                 self.kls = None
 
-            def forward(self, x, save_kls=True):
+            def forward(self, x, save_kls=True, mu_only=False):
                 x = x.squeeze().float()
                 mu = self.fc_mu(x)
                 log_var = self.fc_var(x)
                 std = torch.exp(log_var/2)
-                q = torch.distributions.Normal(mu, std)
-                z = q.rsample()
+                if mu_only:
+                    z = mu
+                else:
+                    q = torch.distributions.Normal(mu, std)
+                    z = q.rsample()
                 if save_kls:
                     self.kls = self.calculate_kls(z, mu, std)
                 return z
