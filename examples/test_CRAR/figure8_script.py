@@ -16,21 +16,28 @@ import deer.experiment.base_controllers as bc
 
 from deer.policies import EpsilonGreedyPolicy, FixedFigure8Policy
 
+def gpu_parallel(arg_idx):
+    results_dir = 'pickles/figure8_results/'
+    os.makedirs(results_dir, exist_ok=True)
+    results = {}
+    results['separability_matrix'] = []
+    results['separability_slope'] = []
+    results['separability_tracking'] = []
+    results['dimensionality_tracking'] = []
+    results['valid_score'] = []
+    results['fname'] = []
+    results['loss_weights'] = []
+    
+    for i in range(5*arg_idx, 5*(arg_idx+1)): 
+        fname, loss_weights, result = run_env(args[i])
+        for key in result.keys():
+            results[key].append(result[key])
+        results['fname'].append(fname)
+        results['loss_weights'].append(loss_weights)
+        with open(f'{results_dir}results_{i}.p', 'wb') as f:
+            pickle.dump(results, f)
 
-def main():
-    fname_grid = [
-        'mf_only', 'mf_and_vae', 'mf_and_mb', 'mf_and_mb_and_vae']
-    loss_weights_grid = [
-        [0., 0., 0., 0., 0., 0., 1., 0.],
-        [0., 0., 0., 0., 0., 0., 1., 1E-4],
-        [5E-3, 1E-2, 1E-2, 0, 0, 1E-2, 1., 0],
-        [5E-3, 1E-2, 1E-2, 0, 0, 1E-2, 1., 1E-4]
-        ]
-    iters = np.arange(10)
-    args = []
-    for fname, loss_weights in zip(fname_grid, loss_weights_grid):
-        for i in iters:
-            args.append([fname, loss_weights, i])
+def cpu_parallel():
     results = {}
     results['separability_matrix'] = []
     results['separability_slope'] = []
@@ -46,7 +53,7 @@ def main():
             results[key].append(result[key])
         results['fname'].append(fname)
         results['loss_weights'].append(loss_weights)
-    with open('pickles/figure8_grid.p', 'wb') as f:
+    with open('pickles/figure8_collected_results.p', 'wb') as f:
         pickle.dump(results, f)
 
 def run_env(arg):
@@ -144,5 +151,27 @@ def run_env(arg):
         }
     return _fname, loss_weights, result
 
-if __name__ == "__main__":
-    main()
+
+# load user-defined parameters
+arg_idx = int(sys.argv[1])
+
+fname_grid = [
+    'mf_only', 'mf_and_vae', 'mf_and_mb', 'mf_and_mb_and_vae']
+loss_weights_grid = [
+    [0., 0., 0., 0., 0., 0., 1., 0.],
+    [0., 0., 0., 0., 0., 0., 1., 1E-4],
+    [5E-3, 1E-2, 1E-2, 0, 0, 1E-2, 1., 0],
+    [5E-3, 1E-2, 1E-2, 0, 0, 1E-2, 1., 1E-4]
+    ]
+iters = np.arange(10)
+args = []
+for fname, loss_weights in zip(fname_grid, loss_weights_grid):
+    for i in iters:
+        args.append([fname, loss_weights, i])
+
+# Run relevant parallelization script
+if arg_idx == -1:
+    cpu_parallel()
+else:
+    gpu_parallel(arg_idx)
+
