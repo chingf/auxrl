@@ -232,10 +232,11 @@ class MyEnv(Environment):
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         n = unique_observations_tcm.shape[0]
         with torch.no_grad():
-            abs_states = learning_algo.crar.encoder(
-                torch.tensor(unique_observations_tcm).float().to(device),
-                mu_only=True
-                )
+            o = torch.tensor(unique_observations_tcm).float().to(device)
+            try:
+                abs_states = learning_algo.crar.encoder(o, mu_only=True)
+            except:
+                abs_states = learning_algo.crar.encoder(o)
     
         actions = test_data_set.actions()[0:n]
         if self.inTerminalState() == False:
