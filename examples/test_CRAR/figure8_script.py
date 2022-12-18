@@ -17,7 +17,7 @@ import deer.experiment.base_controllers as bc
 from deer.policies import EpsilonGreedyPolicy, FixedFigure8Policy
 
 def gpu_parallel(arg_idx):
-    results_dir = 'pickles/figure8_results/'
+    results_dir = 'pickles/figure8_results_v2/'
     os.makedirs(results_dir, exist_ok=True)
     results = {}
     results['separability_matrix'] = []
@@ -59,6 +59,7 @@ def cpu_parallel():
 def run_env(arg):
     _fname, loss_weights, i = arg
     fname = f'{_fname}_{i}'
+    encoder_type = 'variational' if loss_weights[-1] > 0 else 'regular'
     parameters = {
         'figure8_give_rewards': True,
         'nn_yaml': 'network_noconv.yaml',
@@ -71,7 +72,7 @@ def run_env(arg):
         'period_btw_summary_perfs': 1,
         'nstep': 15,
         'nstep_decay': 0.8,
-        'encoder_type': 'variational',
+        'encoder_type': encoder_type,
         'frame_skip': 2,
         'show_rewards': False,
         'learning_rate': 1*1E-4,
