@@ -32,10 +32,10 @@ def gpu_parallel(arg_idx):
         fname, loss_weights, result = run_env(args[i])
         for key in result.keys():
             results[key].append(result[key])
-        results['fname'].append(fname)
-        results['loss_weights'].append(loss_weights)
-        with open(f'{results_dir}results_{i}.p', 'wb') as f:
-            pickle.dump(results, f)
+            results['fname'].append(fname)
+            results['loss_weights'].append(loss_weights)
+    with open(f'{results_dir}results_{arg_idx}.p', 'wb') as f:
+        pickle.dump(results, f)
 
 def cpu_parallel():
     results = {}
@@ -53,7 +53,7 @@ def cpu_parallel():
             results[key].append(result[key])
         results['fname'].append(fname)
         results['loss_weights'].append(loss_weights)
-    with open('pickles/figure8_collected_results.p', 'wb') as f:
+    with open('pickles/figure8_collected_results_v2.p', 'wb') as f:
         pickle.dump(results, f)
 
 def run_env(arg):
