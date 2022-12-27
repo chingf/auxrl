@@ -256,7 +256,7 @@ class NeuralAgent(object):
         else:
             joblib.dump(all_params, basename, compress=True)
 
-    def setNetwork(self, fname, nEpoch=-1):
+    def setNetwork(self, fname, nEpoch=-1, encoder_only=False):
         """ Set values into the network
         
         Parameters
@@ -274,7 +274,7 @@ class NeuralAgent(object):
         else:
             all_params = joblib.load(basename)
 
-        self._learning_algo.setAllParams(all_params)
+        self._learning_algo.setAllParams(all_params, encoder_only)
 
     def run(self, n_epochs, epoch_length):
         """

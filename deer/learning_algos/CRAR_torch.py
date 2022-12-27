@@ -104,7 +104,7 @@ class CRAR(LearningAlgo):
         params = {'crar': crar_state_dicts, 'crar_target': crar_target_state_dicts}
         return params
 
-    def setAllParams(self, params):
+    def setAllParams(self, params, encoder_only):
         """ Set all parameters used by the learning algorithm
 
         Arguments
@@ -115,8 +115,14 @@ class CRAR(LearningAlgo):
         crar_state_dicts = params['crar']
         crar_target_state_dicts = params['crar_target']
         for model, p_to_load in zip(self.crar.models, crar_state_dicts):
+            if encoder_only:
+                if type(model) == type(self.crar.Q):
+                    continue
             model.load_state_dict(p_to_load)
         for model, p_to_load in zip(self.crar_target.models, crar_target_state_dicts):
+            if encoder_only:
+                if type(model) == type(self.crar.Q):
+                    continue
             model.load_state_dict(p_to_load)
 
     def train(self, states_val, actions_val, rewards_val, next_states_val, terminals_val):
