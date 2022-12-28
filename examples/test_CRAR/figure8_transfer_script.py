@@ -11,6 +11,7 @@ import os
 from deer.default_parser import process_args
 from deer.agent import NeuralAgent
 from deer.learning_algos.CRAR_torch import CRAR
+#from figure8_alt1 import MyEnv as figure8_env
 from figure8_env import MyEnv as figure8_env
 import deer.experiment.base_controllers as bc
 
@@ -21,14 +22,14 @@ def cpu_parallel():
     results['valid_scores'] = []
     results['fname'] = []
     results['loss_weights'] = []
-    job_results = Parallel(n_jobs=8)(delayed(run_env)(arg) for arg in args)
+    job_results = Parallel(n_jobs=56)(delayed(run_env)(arg) for arg in args)
     for job_result in job_results:
         fname, loss_weights, result = job_result
         for key in result.keys():
             results[key].append(result[key])
         results['fname'].append(fname)
         results['loss_weights'].append(loss_weights)
-    with open('pickles/transfer_figure8_grid.p', 'wb') as f:
+    with open('pickles/transfer_figure8_grid_v5.p', 'wb') as f:
         pickle.dump(results, f)
 
 def run_env(arg):
@@ -37,7 +38,7 @@ def run_env(arg):
         set_network = None
     else:
         network_file_idx = np.random.choice(10)
-        set_network = [f'network_file_{network_file_idx}', 50, True]
+        set_network = [f'{network_file}_{network_file_idx}', 50, True]
     fname = f'{_fname}_{i}'
     encoder_type = 'regular'
     parameters = {
@@ -46,8 +47,8 @@ def run_env(arg):
         'higher_dim_obs': False,
         'internal_dim': 10,
         'fname': fname,
-        'steps_per_epoch': 5000,
-        'epochs': 30,
+        'steps_per_epoch': 2500, #5000,
+        'epochs': 40,
         'steps_per_test': 1000,
         'period_btw_summary_perfs': 1,
         'nstep': 15,
@@ -66,8 +67,9 @@ def run_env(arg):
         'batch_size': 64,
         'freeze_interval': 1000,
         'deterministic': False,
-        'loss_weights': loss_weights
-        'set_network': set_network
+        'loss_weights': loss_weights,
+        'set_network': set_network,
+        'freeze_encoder': freeze_encoder
         }
     with open(f'params/{_fname}.yaml', 'w') as outfile:
         yaml.dump(parameters, outfile, default_flow_style=False)
@@ -132,6 +134,11 @@ def run_env(arg):
             f'{set_network[0]}/fname', nEpoch=set_network[1],
             encoder_only=set_network[2]
             )
+    if freeze_encoder:
+        for p in agent._learning_algo.crar.encoder.parameters():
+            p.requires_grad = False
+        for p in agent._learning_algo.crar_target.encoder.parameters():
+            p.requires_grad = False
     agent.run(parameters['epochs'], parameters['steps_per_epoch'])
 
     result = {
@@ -146,7 +153,9 @@ def run_env(arg):
 fname_grid = [
     'transfer_mf_start', 'transfer_mb_start', 'transfer_clean_start']
 network_files = ['mf_only', 'mf_and_mb', None]
-iters = np.arange(15)
+loss_weights = [0, 0, 0, 0, 0, 0, 1., 0.]
+freeze_encoder = False #True
+iters = np.arange(20)
 args = []
 for fname, network_file in zip(fname_grid, network_files):
     for i in iters:
