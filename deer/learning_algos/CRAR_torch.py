@@ -50,7 +50,9 @@ class CRAR(LearningAlgo):
         self._internal_dim = kwargs.get('internal_dim', 2)
         self._entropy_temp = kwargs.get('entropy_temp', 5.)
         self._nstep = kwargs.get('nstep', 1)
-        self._nstep_decay = kwargs.get('nstep_decay', 1)
+        #self._nstep_decay = kwargs.get('nstep_decay', 1)
+        self._nstep_decay = nn.Parameter(torch.tensor(1.))
+        self._expand_tcm = kwargs.get('expand_tcm', False)
         self._encoder_type = kwargs.get('encoder_type', None)
         self.loss_T = [0]
         self.loss_R = [0]
@@ -63,6 +65,11 @@ class CRAR(LearningAlgo):
         self.loss_total = [0]
         self.device = torch.device(
             "cuda:0" if torch.cuda.is_available() else "cpu")
+        if self._expand_tcm:
+            for i in range(len(self._input_dimensions)):
+                dim_tuple = list(self._input_dimensions[i])
+                dim_tuple[-1] *= self._nstep
+                self._input_dimensions[i] = tuple(dim_tuple)
 
         self.crar = neural_network(
             self._batch_size, self._input_dimensions, self._n_actions,
@@ -101,7 +108,10 @@ class CRAR(LearningAlgo):
             crar_state_dicts.append(model.state_dict())
         for model in self.crar_target.models:
             crar_target_state_dicts.append(model.state_dict())
-        params = {'crar': crar_state_dicts, 'crar_target': crar_target_state_dicts}
+        params = {
+            'crar': crar_state_dicts, 'crar_target': crar_target_state_dicts,
+            #'tau': self._nstep_decay
+            }
         return params
 
     def setAllParams(self, params, encoder_only):
@@ -123,7 +133,7 @@ class CRAR(LearningAlgo):
             if encoder_only:
                 if type(model) == type(self.crar.Q):
                     continue
-            model.load_state_dict(p_to_load)
+            model.load_state_dict(p_to_load) # TODO: set for tau
 
     def train(self, states_val, actions_val, rewards_val, next_states_val, terminals_val):
         """
@@ -463,20 +473,25 @@ class CRAR(LearningAlgo):
             self.loss_total.append(0)
         return loss_Q.item(), loss_Q_unreduced
 
-    def make_state_with_history(self, states_val):
+    def make_state_with_history(self, states_buffer):
+        states_buffer = torch.tensor(states_buffer)
+        n_batches = states_buffer.shape[0]
         tau = self._nstep_decay
-        new_states_val = []
-        for batch in range(states_val.shape[0]):
-            walls = np.argwhere(states_val[batch,-1] == -1) # hacky
-            new_obs = []
+        new_states = []
+        for batch in range(n_batches):
+            walls = torch.argwhere(states_buffer[batch,-1] == -1).squeeze()
+            batch_obs = []
             for t in range(self._nstep):
-                discount = tau**(self._nstep-t)
-                new_obs.append(discount * states_val[batch,t])
-            new_obs = np.sum(new_obs, axis=0)
-            new_obs[walls] = -1
-            new_states_val.append(new_obs)
-        new_states_val = np.array(new_states_val)
-        return new_states_val
+                discount = torch.pow(tau, self._nstep-t)
+                batch_obs.append(states_buffer[batch, t]*discount)
+                #states_val[batch, t][walls] = -1.
+            new_states.append(torch.vstack(batch_obs))
+        new_states = torch.vstack(new_states)
+        if self._expand_tcm:
+            new_states = new_states.reshape((n_batches, -1))
+        else:
+            new_states = torch.sum(new_states, dim=2)
+        return new_states
 
     def step_scheduler(self):
         self.scheduler.step()

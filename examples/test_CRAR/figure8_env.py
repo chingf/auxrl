@@ -33,8 +33,6 @@ class MyEnv(Environment):
         self._width = MyEnv.WIDTH # Must be odd!
         self._higher_dim_obs = kwargs['higher_dim_obs']
         self._show_rewards = kwargs.get('show_rewards', True)
-        self._nstep = kwargs.get('nstep', 1)
-        self._nstep_decay = kwargs.get('nstep_decay', 1.)
         self.x = 3
         self.y = 0
         self._reward_location = MyEnv.LEFT_REWARD
@@ -173,21 +171,6 @@ class MyEnv(Environment):
         self._mode_score += self.reward
         return self.reward
 
-    def make_state_with_history(self, states_val):
-        tau = self._nstep_decay
-        new_states_val = []
-        for batch in range(states_val.shape[0]):
-            walls = np.argwhere(states_val[batch,-1] == -1) # hacky
-            new_obs = []
-            for t in range(self._nstep):
-                discount = tau**(self._nstep-t)
-                new_obs.append(discount * states_val[batch,t])
-            new_obs = np.sum(new_obs, axis=0)
-            new_obs[walls] = -1
-            new_states_val.append(new_obs)
-        new_states_val = np.array(new_states_val)
-        return new_states_val
-
     def summarizePerformance(self, test_data_set, learning_algo, fname):
         """ Plot of the low-dimensional representation of the environment built by the model
         """
@@ -207,10 +190,11 @@ class MyEnv(Environment):
         color_labels = []
         y_locations = []
         x_locations = []
-        for t in np.arange(self._nstep, observations.shape[0]):
-            tcm_obs = observations[t-self._nstep:t].reshape((1, self._nstep, -1))
-            tcm_obs = self.make_state_with_history(tcm_obs)
-            observations_tcm.append(tcm_obs)
+        nstep = learning_algo._nstep
+        for t in np.arange(nstep, observations.shape[0]):
+            tcm_obs = observations[t-nstep:t].reshape((1, nstep, -1))
+            tcm_obs = learning_algo.make_state_with_history(tcm_obs)
+            observations_tcm.append(tcm_obs.detach().numpy())
             reward_locs_tcm.append(reward_locs[t-1])
             agent_location = np.argwhere(observations[t-1]==10)[0,1]
             x_locations.append(agent_location // MyEnv.HEIGHT)
