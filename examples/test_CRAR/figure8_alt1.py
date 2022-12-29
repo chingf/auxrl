@@ -33,8 +33,8 @@ class MyEnv(Environment):
     WIDTH = 7 #Must be odd
     LEFT_STEM = 0; CENTRAL_STEM = WIDTH//2; RIGHT_STEM = WIDTH-1
     REWARD_COORDS = (
-        (0, HEIGHT//2), # LEFT
-        (WIDTH-1, HEIGHT//2), #RIGHT
+        (0, 1), # LEFT
+        (WIDTH-1, 1), #RIGHT
         (WIDTH//2, HEIGHT-1), #MIDDLE
         (WIDTH//2, 0), #RESET
         )
