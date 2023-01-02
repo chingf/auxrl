@@ -11,8 +11,8 @@ import os
 from deer.default_parser import process_args
 from deer.agent import NeuralAgent
 from deer.learning_algos.CRAR_torch import CRAR
-#from figure8_alt1 import MyEnv as figure8_env
-from figure8_env import MyEnv as figure8_env
+from figure8_alt1 import MyEnv as figure8_env
+#from figure8_env import MyEnv as figure8_env
 import deer.experiment.base_controllers as bc
 
 from deer.policies import EpsilonGreedyPolicy, FixedFigure8Policy
@@ -29,7 +29,7 @@ def cpu_parallel():
             results[key].append(result[key])
         results['fname'].append(fname)
         results['loss_weights'].append(loss_weights)
-    with open('pickles/transfer_figure8_grid_v5.p', 'wb') as f:
+    with open('pickles/transfer_figure8_grid_v7.p', 'wb') as f:
         pickle.dump(results, f)
 
 def run_env(arg):
@@ -38,7 +38,7 @@ def run_env(arg):
         set_network = None
     else:
         network_file_idx = np.random.choice(10)
-        set_network = [f'{network_file}_{network_file_idx}', 50, True]
+        set_network = [f'{network_file}_{network_file_idx}', 80, True]
     fname = f'{_fname}_{i}'
     encoder_type = 'regular'
     parameters = {
@@ -69,7 +69,8 @@ def run_env(arg):
         'deterministic': False,
         'loss_weights': loss_weights,
         'set_network': set_network,
-        'freeze_encoder': freeze_encoder
+        'freeze_encoder': freeze_encoder,
+        'expand_tcm': True
         }
     with open(f'params/{_fname}.yaml', 'w') as outfile:
         yaml.dump(parameters, outfile, default_flow_style=False)
@@ -87,7 +88,7 @@ def run_env(arg):
         lr=parameters['learning_rate'], nn_yaml=parameters['nn_yaml'],
         double_Q=True, loss_weights=parameters['loss_weights'],
         nstep=parameters['nstep'], nstep_decay=parameters['nstep_decay'],
-        encoder_type=parameters['encoder_type']
+        encoder_type=parameters['encoder_type'], expand_tcm=parameters['expand_tcm']
         )
     if parameters['figure8_give_rewards']:
         train_policy = EpsilonGreedyPolicy(

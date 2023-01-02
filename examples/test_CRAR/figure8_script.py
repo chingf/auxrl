@@ -24,7 +24,7 @@ def gpu_parallel(arg_idx):
     results['separability_slope'] = []
     results['separability_tracking'] = []
     results['dimensionality_tracking'] = []
-    results['valid_score'] = []
+    results['valid_scores'] = []
     results['fname'] = []
     results['loss_weights'] = []
     
@@ -43,17 +43,17 @@ def cpu_parallel():
     results['separability_slope'] = []
     results['separability_tracking'] = []
     results['dimensionality_tracking'] = []
-    results['valid_score'] = []
+    results['valid_scores'] = []
     results['fname'] = []
     results['loss_weights'] = []
-    job_results = Parallel(n_jobs=8)(delayed(run_env)(arg) for arg in args)
+    job_results = Parallel(n_jobs=56)(delayed(run_env)(arg) for arg in args)
     for job_result in job_results:
         fname, loss_weights, result = job_result
         for key in result.keys():
             results[key].append(result[key])
         results['fname'].append(fname)
         results['loss_weights'].append(loss_weights)
-    with open('pickles/figure8_collected_results_v2.p', 'wb') as f:
+    with open('pickles/expanded_tcm.p', 'wb') as f:
         pickle.dump(results, f)
 
 def run_env(arg):
@@ -66,12 +66,13 @@ def run_env(arg):
         'higher_dim_obs': False,
         'internal_dim': 10,
         'fname': fname,
-        'steps_per_epoch': 5000,
-        'epochs': 50,
+        'steps_per_epoch': 2500,
+        'epochs': 80,
         'steps_per_test': 1000,
         'period_btw_summary_perfs': 1,
         'nstep': 15,
-        'nstep_decay': 0.8,
+        'nstep_decay': 1.,
+        'expand_tcm': True,
         'encoder_type': encoder_type,
         'frame_skip': 2,
         'show_rewards': False,
@@ -104,7 +105,8 @@ def run_env(arg):
         lr=parameters['learning_rate'], nn_yaml=parameters['nn_yaml'],
         double_Q=True, loss_weights=parameters['loss_weights'],
         nstep=parameters['nstep'], nstep_decay=parameters['nstep_decay'],
-        encoder_type=parameters['encoder_type']
+        encoder_type=parameters['encoder_type'],
+        expand_tcm=parameters['expand_tcm']
         )
     if parameters['figure8_give_rewards']:
         train_policy = EpsilonGreedyPolicy(
@@ -148,7 +150,7 @@ def run_env(arg):
         'separability_slope': env._separability_slope[-1], 
         'separability_tracking': [s[-1] for s in env._separability_tracking],
         'dimensionality_tracking': env._dimensionality_tracking[-1],
-        'valid_score':  best_controller._validationScores[-1]
+        'valid_scores':  best_controller._validationScores
         }
     return _fname, loss_weights, result
 

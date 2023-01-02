@@ -479,7 +479,7 @@ class CRAR(LearningAlgo):
         tau = self._nstep_decay
         new_states = []
         for batch in range(n_batches):
-            walls = torch.argwhere(states_buffer[batch,-1] == -1).squeeze()
+            #walls = torch.argwhere(states_buffer[batch,-1] == -1).squeeze()
             batch_obs = []
             for t in range(self._nstep):
                 discount = torch.pow(tau, self._nstep-t)
