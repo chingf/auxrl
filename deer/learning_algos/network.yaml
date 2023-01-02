@@ -69,6 +69,7 @@ linear-pass-through: &linear-pass-through
 encoder:
   convs: *crar-convs
   fc: *crar-fc
+  flatten: False
 
 qnet:
   convs: *none

@@ -485,12 +485,11 @@ class CRAR(LearningAlgo):
                 discount = torch.pow(tau, self._nstep-t)
                 batch_obs.append(states_buffer[batch, t]*discount)
                 #states_val[batch, t][walls] = -1.
-            new_states.append(torch.vstack(batch_obs))
-        new_states = torch.vstack(new_states)
-        if self._expand_tcm:
-            new_states = new_states.reshape((n_batches, -1))
-        else:
-            new_states = torch.sum(new_states, dim=2)
+            if self._expand_tcm:
+                new_states.append(torch.hstack(batch_obs))
+            else:
+                new_states.append(torch.sum(batch_obs, dim=0))
+        new_states = torch.stack(new_states) # (N, H, W)
         return new_states
 
     def step_scheduler(self):
@@ -546,7 +545,7 @@ class CRAR(LearningAlgo):
         -------
         The best action : int
         """
-
+    
         if(mode==None):
             mode=0
         depths = [0,1,3,6,10] # Mode defines the planning depth di

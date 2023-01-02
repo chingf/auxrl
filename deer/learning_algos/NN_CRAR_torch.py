@@ -12,7 +12,8 @@ NN_MAP = {
 HERE = Path(__file__).parent
 
 def compute_feature_size(input_shape, convs):
-    return convs(torch.zeros(1, *input_shape)).view(1, -1).size(1)
+    conv_output = convs(torch.zeros(1, *input_shape))
+    return conv_output.view(1, -1).size(1)
 
 def make_convs(input_shape, conv_config):
     convs = []
@@ -123,10 +124,13 @@ class NN():
 
             def forward(self, x):
                 if self.convs is not None:
+                    if len(x.shape) > 3:
+                        import pdb; pdb.set_trace()
+                    x = x.unsqueeze(1) # Add singular channel
                     x = self.convs(x)
                     x = x.view(x.size(0), -1)
                 else:
-                    x = x.squeeze()
+                    x = x.reshape((x.shape[0], -1))
                 x = self.fc(x.float())
                 return x
 
@@ -229,7 +233,7 @@ class NN():
             feature_size = compute_feature_size(input_shape, convs)
         else:
             convs = None
-            feature_size = input_shape[1]
+            feature_size = np.prod(input_shape)
 
         # Recurrent, variational, or regular encoder
         if self._encoder_type == 'recurrent':
@@ -354,6 +358,7 @@ class NN():
             config = yaml.load(f, Loader=yaml.FullLoader)
         qnet_config = config['qnet']
         if self.ddqn_only:
+            print('q model')
             convs = make_convs(self._input_dimensions[0], qnet_config['convs'])
             feature_size = compute_feature_size(self._input_dimensions[0], convs)
         else:

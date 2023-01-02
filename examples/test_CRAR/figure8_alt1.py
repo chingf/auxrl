@@ -47,7 +47,7 @@ class MyEnv(Environment):
 
         self._height = MyEnv.HEIGHT
         self._width = MyEnv.WIDTH # Must be odd!
-        self._higher_dim_obs = kwargs['higher_dim_obs']
+        self._obs_as_images = kwargs['obs_as_images']
         self._show_rewards = kwargs.get('show_rewards', True)
         self.x = 3
         self.y = 0
@@ -78,7 +78,7 @@ class MyEnv(Environment):
                     space_labels[x,y] = 3
                 else:
                     raise ValueError('Unconsidered case')
-        if not self._higher_dim_obs:
+        if not self._obs_as_images:
             space_labels = space_labels.reshape((1, -1))
         return space_labels
 
@@ -452,9 +452,9 @@ class MyEnv(Environment):
         matplotlib.pyplot.close("all") # avoid memory leaks
 
     def inputDimensions(self):
-        if (self._higher_dim_obs==True):
+        if (self._obs_as_images==True):
             return [(1, self._width, self._height)]
-            return [(1, (self._width+2)*3, (self._height+2)*3)]
+            #return [(1, (self._width+2)*3, (self._height+2)*3)]
         else:
             return [(1, self._height*self._width)]
 
@@ -483,7 +483,7 @@ class MyEnv(Environment):
         #obs = obs + np.random.normal(0, 0.2, size=obs.shape)
         obs[x, y] = 10
 
-        if not self._higher_dim_obs: obs = obs.flatten()
+        if not self._obs_as_images: obs = obs.flatten()
 
         return obs
 

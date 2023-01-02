@@ -31,7 +31,7 @@ class MyEnv(Environment):
 
         self._height = MyEnv.HEIGHT
         self._width = MyEnv.WIDTH # Must be odd!
-        self._higher_dim_obs = kwargs['higher_dim_obs']
+        self._high_dim_obs = kwargs.get('high_dim_obs', False)
         self._show_rewards = kwargs.get('show_rewards', True)
         self.x = 3
         self.y = 0
@@ -62,8 +62,6 @@ class MyEnv(Environment):
                     space_labels[x,y] = 3
                 else:
                     raise ValueError('Unconsidered case')
-        if not self._higher_dim_obs:
-            space_labels = space_labels.reshape((1, -1))
         return space_labels
 
     def reset(self, mode):
@@ -76,14 +74,7 @@ class MyEnv(Environment):
                 self._mode_episode_count += 1
         elif self._mode != -1:
             self._mode = -1
-
-        possible_resets = [
-            (MyEnv.WIDTH//2, 0),
-            (MyEnv.WIDTH//2, MyEnv.HEIGHT-1),
-            (0, MyEnv.HEIGHT//2),
-            (MyEnv.WIDTH-1, MyEnv.HEIGHT//2),
-            ]
-        self.x, self.y = (MyEnv.WIDTH//2, 0) #possible_resets[np.random.choice(4)]
+        self.x, self.y = (MyEnv.WIDTH//2, 0)
         self._reward_location = MyEnv.LEFT_REWARD
         self._last_rewarded = MyEnv.RIGHT_REWARD
         
@@ -199,7 +190,7 @@ class MyEnv(Environment):
             agent_location = np.argwhere(observations[t-1]==10)[0,1]
             x_locations.append(agent_location // MyEnv.HEIGHT)
             y_locations.append(agent_location % MyEnv.HEIGHT)
-            color_label = self._space_label[0, agent_location]
+            color_label = self._space_label[0, agent_location] # TODO
             color_labels.append(color_label)
         hlen = 500
         observations_tcm = np.array(observations_tcm, dtype='float')[-hlen:]
@@ -448,11 +439,10 @@ class MyEnv(Environment):
         matplotlib.pyplot.close("all") # avoid memory leaks
 
     def inputDimensions(self):
-        if (self._higher_dim_obs==True):
-            return [(1, self._width, self._height)]
-            return [(1, (self._width+2)*3, (self._height+2)*3)]
+        if self._high_dim_obs:
+            return [(1, self._width*6, self._height*6)]
         else:
-            return [(1, self._height*self._width)]
+            return [(1, self._width, self._height)]
 
     def observationType(self, subject):
         return np.float32
@@ -481,12 +471,36 @@ class MyEnv(Environment):
                 obs[right_reward[0], right_reward[1]] = 1
             else:
                 obs[reset_reward[0], reset_reward[1]] = 1
-
-        #obs = obs + np.random.normal(0, 0.2, size=obs.shape)
         obs[x, y] = 10
+        if self._high_dim_obs:
+            obs = self.get_higher_dim_obs((x,y), obs)
+        return obs
 
-        if not self._higher_dim_obs: obs = obs.flatten()
+    def get_higher_dim_obs(self, agent_loc, obs):
+        """
+        Obtain the high-dimensional observation
+        (agent is a humanoid instead of a box).
+        """
 
+        obs = copy.deepcopy(obs)
+        obs = np.repeat(np.repeat(obs, 6, axis=0),6, axis=1)
+        x, y = agent_loc
+        agent_obs=np.zeros((6,6))
+        agent_obs[0,2] = 0.7
+        agent_obs[1,0:5] = 0.8
+        agent_obs[2,1:4] = 0.8
+        agent_obs[3,1:4] = 0.8
+        agent_obs[4,1] = 0.8
+        agent_obs[4,3] = 0.8
+        agent_obs[5,0:2] = 0.8
+        agent_obs[5,3:5] = 0.8
+        obs[x*6:(x+1)*6:, y*6:(y+1)*6] = agent_obs
+
+        #import matplotlib
+        #import matplotlib.pyplot as plt
+        #plt.style.use('ggplot')
+        #matplotlib.use( 'tkagg' )
+        #plt.figure(); plt.imshow(obs); plt.show()
         return obs
 
     def inTerminalState(self):
