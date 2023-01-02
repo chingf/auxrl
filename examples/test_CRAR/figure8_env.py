@@ -44,6 +44,7 @@ class MyEnv(Environment):
         self._separability_tracking = [[] for _ in range(3)]
         self._separability_slope = []
         self._separability_matrix = None
+        self._agent_loc_map = {}
 
     def make_space_labels(self):
         space_labels = np.zeros((MyEnv.WIDTH, MyEnv.HEIGHT), dtype=int)
@@ -183,14 +184,16 @@ class MyEnv(Environment):
         x_locations = []
         nstep = learning_algo._nstep
         for t in np.arange(nstep, observations.shape[0]):
-            tcm_obs = observations[t-nstep:t].reshape((1, nstep, -1))
+            tcm_obs = np.swapaxes(observations[t-nstep:t], 0, 1)
             tcm_obs = learning_algo.make_state_with_history(tcm_obs)
-            observations_tcm.append(tcm_obs.detach().numpy())
+            observations_tcm.append(tcm_obs.detach().numpy().squeeze())
             reward_locs_tcm.append(reward_locs[t-1])
-            agent_location = np.argwhere(observations[t-1]==10)[0,1]
-            x_locations.append(agent_location // MyEnv.HEIGHT)
-            y_locations.append(agent_location % MyEnv.HEIGHT)
-            color_label = self._space_label[0, agent_location] # TODO
+            agent_location = np.argwhere(observations[t-1]==10)[0,1:].tolist()
+            if self._high_dim_obs:
+                agent_location = self._agent_loc_map[str(agent_location)]
+            x_locations.append(agent_location[0])
+            y_locations.append(agent_location[1])
+            color_label = self._space_label[agent_location[0], agent_location[1]]
             color_labels.append(color_label)
         hlen = 500
         observations_tcm = np.array(observations_tcm, dtype='float')[-hlen:]
@@ -486,15 +489,16 @@ class MyEnv(Environment):
         obs = np.repeat(np.repeat(obs, 6, axis=0),6, axis=1)
         x, y = agent_loc
         agent_obs=np.zeros((6,6))
-        agent_obs[0,2] = 0.7
-        agent_obs[1,0:5] = 0.8
-        agent_obs[2,1:4] = 0.8
-        agent_obs[3,1:4] = 0.8
-        agent_obs[4,1] = 0.8
-        agent_obs[4,3] = 0.8
-        agent_obs[5,0:2] = 0.8
-        agent_obs[5,3:5] = 0.8
+        agent_obs[0,2] = 10
+        agent_obs[1,0:5] = 8
+        agent_obs[2,1:4] = 8
+        agent_obs[3,1:4] = 8
+        agent_obs[4,1] = 8
+        agent_obs[4,3] = 8
+        agent_obs[5,0:2] = 8
+        agent_obs[5,3:5] = 8
         obs[x*6:(x+1)*6:, y*6:(y+1)*6] = agent_obs
+        self._agent_loc_map[str([x*6, y*6+2])] = agent_loc
 
         #import matplotlib
         #import matplotlib.pyplot as plt

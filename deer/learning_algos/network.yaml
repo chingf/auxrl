@@ -15,9 +15,9 @@ crar-convs: &crar-convs
   - [Conv2d, 8, 16, { kernel_size: 2 }]
   - *act
   - [MaxPool2d, { kernel_size: 2 }]
-  - [Conv2d, 16, 32, { kernel_size: 3 }]
-  - *act
-  - [MaxPool2d, { kernel_size: 3 }]
+#  - [Conv2d, 16, 32, { kernel_size: 3 }]
+#  - *act
+#  - [MaxPool2d, { kernel_size: 3 }]
 
 crar-fc: &crar-fc
   - [Linear, auto, 200]

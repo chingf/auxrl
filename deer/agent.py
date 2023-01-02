@@ -8,6 +8,7 @@ to specify its behavior in the environment.
 import os
 import numpy as np
 import copy
+import torch
 import sys
 import joblib
 from warnings import warn
@@ -402,6 +403,9 @@ class NeuralAgent(object):
                         self._state[0] = obs[0]
                 
                 V, action, reward, hidden = self._step()
+
+                if (torch.is_tensor(V)) and (self._learning_algo.device.type == 'cuda'):
+                    V = V.item()
                 
                 self._Vs_on_last_episode.append(V)
                 if self._mode != -1:

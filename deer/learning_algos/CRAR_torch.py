@@ -474,7 +474,7 @@ class CRAR(LearningAlgo):
         return loss_Q.item(), loss_Q_unreduced
 
     def make_state_with_history(self, states_buffer):
-        states_buffer = torch.tensor(states_buffer)
+        states_buffer = torch.tensor(states_buffer) # (N, T, H, W)
         n_batches = states_buffer.shape[0]
         tau = self._nstep_decay
         new_states = []
