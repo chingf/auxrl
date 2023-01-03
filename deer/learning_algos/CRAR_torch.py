@@ -252,16 +252,14 @@ class CRAR(LearningAlgo):
         # Q network stuff
         if self.update_counter % self._freeze_interval == 0:
             self.resetQHat()
-        next_q_target = self.crar_target.Q(
-            self.crar_target.encoder(next_states_val)
-            )
-        if self._double_Q: # Action selection by Q
-            next_q = self.crar.Q(Esp)
-            argmax_next_q = torch.argmax(next_q, axis=1)
-            max_next_q = next_q_target[
-                np.arange(self._batch_size), argmax_next_q
+        if self._double_Q: # Action selection by Q' and evaluation by Q
+            target_Q_curr = self.crar_target.Q(Es) #self.crar_target.encoder(next_states_val))
+            model_Q_next = self.crar.Q(Esp)
+            selected_action = torch.argmax(target_Q_curr, axis=1)
+            max_next_q = model_Q_next[
+                np.arange(self._batch_size), selected_action
                 ].reshape((-1, 1))
-        else: # Action selection by Q'
+        else: # Action selection by Q' #TODO this is broken
             max_next_q = np.max(next_q_target, axis=1, keepdims=True)
         target = rewards_val.squeeze() + terminals_mask*self._df*max_next_q.squeeze()
         q_vals = self.crar.Q(Es)
