@@ -124,8 +124,6 @@ class NN():
 
             def forward(self, x):
                 if self.convs is not None:
-                    if len(x.shape) > 3:
-                        import pdb; pdb.set_trace()
                     x = x.unsqueeze(1) # Add singular channel
                     x = self.convs(x)
                     x = x.view(x.size(0), -1)

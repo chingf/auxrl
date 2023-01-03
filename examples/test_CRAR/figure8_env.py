@@ -207,7 +207,7 @@ class MyEnv(Environment):
         color_labels = color_labels[unique_idxs]
         x_locations = x_locations[unique_idxs]
         y_locations = y_locations[unique_idxs]
-        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        device = learning_algo.device
         n = unique_observations_tcm.shape[0]
         with torch.no_grad():
             o = torch.tensor(unique_observations_tcm).float().to(device)
@@ -264,8 +264,9 @@ class MyEnv(Environment):
                 action_encoding[action] = 1
                 with torch.no_grad():
                     pred = learning_algo.crar.transition(torch.cat([
-                        abs_states[i:i+1], torch.as_tensor([action_encoding])
-                        ], dim=1).float().to(device)).cpu().numpy()
+                        abs_states[i:i+1].to(device),
+                        torch.as_tensor([action_encoding]).to(device)
+                        ], dim=1).float()).cpu().numpy()
                 if (self._intern_dim > 3) and (abs_states_np.shape[0] > 2):
                     pred = pca.transform(pred)
                 x_transitions = np.concatenate([x[i:i+1],pred[0,:1]])
