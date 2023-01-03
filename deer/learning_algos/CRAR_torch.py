@@ -50,8 +50,7 @@ class CRAR(LearningAlgo):
         self._internal_dim = kwargs.get('internal_dim', 2)
         self._entropy_temp = kwargs.get('entropy_temp', 5.)
         self._nstep = kwargs.get('nstep', 1)
-        #self._nstep_decay = kwargs.get('nstep_decay', 1)
-        self._nstep_decay = nn.Parameter(torch.tensor(1.))
+        self._nstep_decay = nn.Parameter(torch.tensor(1.), requires_grad=False)
         self._expand_tcm = kwargs.get('expand_tcm', False)
         self._encoder_type = kwargs.get('encoder_type', None)
         self.loss_T = [0]
