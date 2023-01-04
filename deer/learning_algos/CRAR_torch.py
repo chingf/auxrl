@@ -169,10 +169,8 @@ class CRAR(LearningAlgo):
             raise ValueError('Dimension mismatch')
         states_val = states_val[0]
         next_states_val = next_states_val[0]
-
-        if self._nstep > 1:
-            states_val = self.make_state_with_history(states_val)
-            next_states_val = self.make_state_with_history(next_states_val)
+        states_val = self.make_state_with_history(states_val)
+        next_states_val = self.make_state_with_history(next_states_val)
 
         states_val = torch.as_tensor(states_val, device=self.device).float()
         next_states_val = torch.as_tensor(next_states_val, device=self.device).float()
@@ -253,22 +251,22 @@ class CRAR(LearningAlgo):
             self.resetQHat()
         if self._double_Q: # Action selection by Q' and evaluation by Q
             # old code-- action selection by Q and evaluation by Q'?
-#            next_q_target = self.crar_target.Q(
-#                self.crar_target.encoder(next_states_val)
-#                )
-#            next_q = self.crar.Q(Esp)
-#            argmax_next_q = torch.argmax(next_q, axis=1)
-#            max_next_q = next_q_target[
-#                np.arange(self._batch_size), argmax_next_q
-#                ].reshape((-1, 1))
+            next_q_target = self.crar_target.Q(
+                self.crar_target.encoder(next_states_val)
+                )
+            next_q = self.crar.Q(Esp)
+            argmax_next_q = torch.argmax(next_q, axis=1)
+            max_next_q = next_q_target[
+                np.arange(self._batch_size), argmax_next_q
+                ].reshape((-1, 1))
 
             # Fixed code??
-            target_Q_curr = self.crar_target.Q(Es)
-            model_Q_next = self.crar.Q(Esp)
-            selected_action = torch.argmax(target_Q_curr, axis=1)
-            max_next_q = model_Q_next[
-                np.arange(self._batch_size), selected_action
-                ].reshape((-1, 1))
+#            target_Q_curr = self.crar_target.Q(Es)
+#            model_Q_next = self.crar.Q(Esp)
+#            selected_action = torch.argmax(target_Q_curr, axis=1)
+#            max_next_q = model_Q_next[
+#                np.arange(self._batch_size), selected_action
+#                ].reshape((-1, 1))
         else: # Action selection and evaluation by Q' #TODO this is broken
             max_next_q = np.max(next_q_target, axis=1, keepdims=True)
         target = rewards_val.squeeze() + terminals_mask*self._df*max_next_q.squeeze()
@@ -482,6 +480,8 @@ class CRAR(LearningAlgo):
         return loss_Q.item(), loss_Q_unreduced
 
     def make_state_with_history(self, states_buffer):
+        if self._nstep <= 1:
+            return np.squeeze(states_buffer, axis=1)
         states_buffer = torch.tensor(states_buffer) # (N, T, H, W)
         n_batches = states_buffer.shape[0]
         tau = self._nstep_decay

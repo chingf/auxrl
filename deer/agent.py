@@ -422,7 +422,6 @@ class NeuralAgent(object):
             for c in self._controllers: c.onActionTaken(self)
             if is_terminal:
                 break
-        #print((obs_history/history_n).reshape(5, 6))
         self._in_episode = False
         for c in self._controllers: c.onEpisodeEnd(self, is_terminal, reward)
         return maxSteps

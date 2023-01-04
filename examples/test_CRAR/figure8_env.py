@@ -23,7 +23,7 @@ class MyEnv(Environment):
     WIDTH = 7 #Must be odd
     LEFT_STEM = 0; CENTRAL_STEM = WIDTH//2; RIGHT_STEM = WIDTH-1
 
-    def __init__(self, give_rewards=False, intern_dim=2, plotfig=True, **kwargs):
+    def __init__(self, give_rewards=False, plotfig=True, **kwargs):
         self._give_rewards = give_rewards
         self._mode = -1
         self._mode_score = 0.0
@@ -37,7 +37,6 @@ class MyEnv(Environment):
         self.y = 0
         self._reward_location = MyEnv.LEFT_REWARD
         self._last_reward_location = MyEnv.RIGHT_REWARD
-        self._intern_dim = intern_dim
         self._plotfig = plotfig
         self._space_label = self.make_space_labels()
         self._dimensionality_tracking = []
@@ -217,7 +216,7 @@ class MyEnv(Environment):
                 abs_states = learning_algo.crar.encoder(o)
     
         actions = test_data_set.actions()[0:n]
-        if self.inTerminalState() == False:
+        if not self.inTerminalState():
             self._mode_episode_count += 1
         print("== Mean score per episode is {} over {} episodes ==".format(
             self._mode_score/(self._mode_episode_count+0.0001), self._mode_episode_count
@@ -229,11 +228,12 @@ class MyEnv(Environment):
         if len(abs_states_np.shape) == 1:
             abs_states_np = abs_states_np.reshape((1, -1))
 
-        if self._intern_dim == 2:
+        intern_dim = learning_algo._internal_dim
+        if intern_dim == 2:
             x = np.array(abs_states_np)[:,0]
             y = np.array(abs_states_np)[:,1]
             z = np.zeros(y.shape)
-        elif self._intern_dim == 3:
+        elif intern_dim == 3:
             x = np.array(abs_states_np)[:,0]
             y = np.array(abs_states_np)[:,1]
             z = np.array(abs_states_np)[:,2]
@@ -267,11 +267,11 @@ class MyEnv(Environment):
                         abs_states[i:i+1].to(device),
                         torch.as_tensor([action_encoding]).to(device)
                         ], dim=1).float()).cpu().numpy()
-                if (self._intern_dim > 3) and (abs_states_np.shape[0] > 2):
+                if (intern_dim > 3) and (abs_states_np.shape[0] > 2):
                     pred = pca.transform(pred)
                 x_transitions = np.concatenate([x[i:i+1],pred[0,:1]])
                 y_transitions = np.concatenate([y[i:i+1],pred[0,1:2]])
-                if self._intern_dim == 2:
+                if intern_dim == 2:
                     z_transitions = np.zeros(y_transitions.shape)
                 else:
                     z_transitions = np.concatenate([z[i:i+1],pred[0,2:3]])
@@ -322,7 +322,7 @@ class MyEnv(Environment):
             plt.savefig(f'{fig_dir}latents_{learning_algo.update_counter}.pdf')
 
         # Plot continuous measure of dimensionality
-        if (self._intern_dim > 3) and (abs_states_np.shape[0] > 2):
+        if (intern_dim > 3) and (abs_states_np.shape[0] > 2):
             variance_curve = np.cumsum(pca.explained_variance_ratio_)
             auc = np.trapz(variance_curve, dx=1/variance_curve.size)
             self._dimensionality_tracking.append(auc)
@@ -413,7 +413,6 @@ class MyEnv(Environment):
         if self._plotfig:
             plt.savefig(f'{fig_dir}dist_slope.pdf')
 
-        
         # Plot losses over epochs
         losses, loss_names = learning_algo.get_losses()
         loss_weights = learning_algo._loss_weights
@@ -500,12 +499,6 @@ class MyEnv(Environment):
         agent_obs[5,3:5] = 8
         obs[x*6:(x+1)*6:, y*6:(y+1)*6] = agent_obs
         self._agent_loc_map[str([x*6, y*6+2])] = agent_loc
-
-        #import matplotlib
-        #import matplotlib.pyplot as plt
-        #plt.style.use('ggplot')
-        #matplotlib.use( 'tkagg' )
-        #plt.figure(); plt.imshow(obs); plt.show()
         return obs
 
     def inTerminalState(self):

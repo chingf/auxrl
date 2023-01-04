@@ -94,10 +94,8 @@ def run_env(arg):
     rng = np.random.RandomState()
     env = figure8_env(
         give_rewards=parameters['figure8_give_rewards'],
-        intern_dim=parameters['internal_dim'],
         higher_dim_obs=parameters['higher_dim_obs'],
-        show_rewards=parameters['show_rewards'], nstep=parameters['nstep'],
-        nstep_decay=parameters['nstep_decay'], plotfig=False
+        show_rewards=parameters['show_rewards'], plotfig=False
         )
     learning_algo = CRAR(
         env, parameters['freeze_interval'], parameters['batch_size'], rng,
