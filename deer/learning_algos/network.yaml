@@ -76,7 +76,7 @@ qnet:
   fc: *crar-q-fc
 
 trans-pred:
-  fc: *crar-trans-pred-fc
+  fc: *crar-q-fc #*crar-trans-pred-fc
 
 float-pred:
   fc: *crar-float-fc

@@ -27,7 +27,7 @@ class MyEnv(Environment):
         self._mode = -1
         self._mode_score = 0.0
         self._mode_episode_count = 0
-        self._size_maze = kwargs.get("size_maze", 16)
+        self._size_maze = kwargs.get("size_maze", 10)
         self._higher_dim_obs = kwargs.get("higher_dim_obs", False)
         self._reward = kwargs.get("reward", False)
         self._plotfig = kwargs.get("plotfig", True)
@@ -36,12 +36,12 @@ class MyEnv(Environment):
         self.create_map()
 
     def create_map(self, reset_goal=True):
-        self._map=np.zeros((self._size_maze, self._size_maze))
+        self._map = np.zeros((self._size_maze, self._size_maze))
         self._map[-1,:] = 1; self._map[0,:] = 1
         self._map[:,0] = 1; self._map[:,-1] = 1
-        midpoint = self._size_maze//2
-        self._map[:, midpoint] = 1
-        self._map[midpoint-2:midpoint+2, midpoint] = 0
+        #midpoint = self._size_maze//2
+        #self._map[:, midpoint] = 1
+        #self._map[midpoint-2:midpoint+2, midpoint] = 0
         valid_pos = np.argwhere(self._map != 1)
         self._pos_agent = valid_pos[np.random.choice(len(valid_pos))]
         if reset_goal:
@@ -67,8 +67,8 @@ class MyEnv(Environment):
         Parameters
         -----------
         action : int
-            The action selected by the agent to operate on the environment. Should be an identifier 
-            included between 0 included and nActions() excluded.
+            The action selected by the agent to operate on the environment.
+            Should be an identifier in [0, nActions())
         """
 
         self._cur_action=action
@@ -111,22 +111,21 @@ class MyEnv(Environment):
         intern_dim = learning_algo._internal_dim
         for y_a in range(self._size_maze):
             for x_a in range(self._size_maze):                
-                state=copy.deepcopy(self._map)
-                state[self._size_maze//2,self._size_maze//2]=0
-                if state[x_a,y_a] == 0:
+                state = copy.deepcopy(self._map)
+                if state[x_a, y_a] != 1:
                     if self._higher_dim_obs:
                         all_possib_inp.append(self.get_higher_dim_obs([x_a, y_a]))
                     else:
-                        state[x_a,y_a] = 0.5
+                        state[x_a, y_a] = 0.5
                         all_possib_inp.append(state)
                     
         device = learning_algo.device
         with torch.no_grad():
-            all_possib_abs_states=learning_algo.crar.encoder(
+            all_possib_abs_states = learning_algo.crar.encoder(
                 torch.tensor(all_possib_inp).float().to(device)
                 ).cpu().numpy()
-        if(all_possib_abs_states.ndim==4):
-            all_possib_abs_states=np.transpose(all_possib_abs_states, (0, 3, 1, 2))    # data_format='channels_last' --> 'channels_first'
+        if all_possib_abs_states.ndim == 4: # data_format='channels_last' --> 'channels_first'
+            all_possib_abs_states=np.transpose(all_possib_abs_states, (0, 3, 1, 2))    
         
         n = 1000
         historics = test_data_set.observations()[0][0:n]
@@ -134,8 +133,8 @@ class MyEnv(Environment):
         with torch.no_grad():
             abs_states = learning_algo.crar.encoder(
                 torch.tensor(historics).float().to(device))
-        if abs_states.ndim == 4:
-            abs_states = np.transpose(abs_states, (0, 3, 1, 2)) # data_format='channels_last' --> 'channels_first'
+        if abs_states.ndim == 4: # data_format='channels_last' --> 'channels_first'
+            abs_states = np.transpose(abs_states, (0, 3, 1, 2))
     
         actions=test_data_set.actions()[0:n]
         
@@ -166,7 +165,7 @@ class MyEnv(Environment):
                 y = np.array(abs_states_np)[:,1]
                 z = np.array(abs_states_np)[:,2]
         if intern_dim > 2:
-            z = np.array(abs_states)[:,2]
+            z = np.array(abs_states_np)[:,2]
                     
         fig = plt.figure()
         if intern_dim == 2:
@@ -269,8 +268,7 @@ class MyEnv(Environment):
             ax.plot(loss)
             ax.set_ylabel(loss_name)
         plt.tight_layout()
-        if self._plotfig:
-            plt.savefig(f'{fig_dir}losses.pdf', dpi=300)
+        plt.savefig(f'{fig_dir}losses.pdf', dpi=300)
         _, axs = plt.subplots(4, 2, figsize=(7, 10))
         for i in range(8):
             loss = losses[i]; loss_name = loss_names[i]
@@ -278,13 +276,11 @@ class MyEnv(Environment):
             ax.plot(np.array(loss)*loss_weights[i])
             ax.set_ylabel(loss_name)
         plt.tight_layout()
-        if self._plotfig:
-            plt.savefig(f'{fig_dir}scaled_losses.pdf', dpi=300)
+        plt.savefig(f'{fig_dir}scaled_losses.pdf', dpi=300)
         plt.figure()
         plt.plot(losses[-1])
         plt.title('Total Loss')
-        if self._plotfig:
-            plt.savefig(f'{fig_dir}total_losses.pdf', dpi=300)
+        plt.savefig(f'{fig_dir}total_losses.pdf', dpi=300)
         matplotlib.pyplot.close("all") # avoid memory leaks
 
     def inputDimensions(self):
@@ -327,7 +323,6 @@ class MyEnv(Environment):
         x, y = pos_agent
         obs[x*6:(x+1)*6:, y*6:(y+1)*6] = agent_obs
         return obs
-
 
     def inTerminalState(self):
         if self._reward:

@@ -16,11 +16,8 @@ import deer.experiment.base_controllers as bc
 
 from deer.policies import EpsilonGreedyPolicy
 
-nn_yaml = 'network_simpler.yaml'
-internal_dim = 10
-
 def gpu_parallel(job_idx):
-    results_dir = 'pickles/foraging_simpler_dim10/'
+    results_dir = 'pickles/foraging_rewardless_results/'
     os.makedirs(results_dir, exist_ok=True)
     results = {}
     results['dimensionality_tracking'] = []
@@ -41,9 +38,9 @@ def run_env(arg):
     fname = f'{_fname}_{i}'
     encoder_type = 'variational' if loss_weights[-1] > 0 else 'regular'
     parameters = {
-        'nn_yaml': nn_yaml,
+        'nn_yaml': 'network_simple.yaml',
         'higher_dim_obs': True,
-        'internal_dim': internal_dim,
+        'internal_dim': 10,
         'fname': fname,
         'steps_per_epoch': 1000,
         'epochs': 40,
@@ -63,7 +60,7 @@ def run_env(arg):
         'freeze_interval': 1000,
         'deterministic': False,
         'loss_weights': loss_weights,
-        'foraging_give_rewards': True
+        'foraging_give_rewards': False
         }
     with open(f'params/{_fname}.yaml', 'w') as outfile:
         yaml.dump(parameters, outfile, default_flow_style=False)
@@ -79,12 +76,11 @@ def run_env(arg):
         double_Q=True, loss_weights=parameters['loss_weights'],
         encoder_type=parameters['encoder_type']
         )
-    train_policy = EpsilonGreedyPolicy(learning_algo, env.nActions(), rng, 0.2)
     test_policy = EpsilonGreedyPolicy(learning_algo, env.nActions(), rng, 0.)
     agent = NeuralAgent(
         env, learning_algo, parameters['replay_memory_size'], 1,
         parameters['batch_size'], rng,
-        train_policy=train_policy, test_policy=test_policy)
+        test_policy=test_policy)
     agent.run(10, 500)
     agent.attach(bc.VerboseController( evaluate_on='epoch', periodicity=1))
     agent.attach(bc.LearningRateController(
@@ -112,14 +108,11 @@ def run_env(arg):
 # load user-defined parameters
 job_idx = int(sys.argv[1])
 n_jobs = int(sys.argv[2])
-fname_grid = ['foraging_mf', 'foraging_entro', 'foraging_mb', 'foraging_mb_larger']
+fname_grid = ['foraging_rewardless']
 loss_weights_grid = [
-    [0., 0., 0., 0., 0., 0., 1., 0.],
-    [0., 1E-3, 1E-3, 0, 0, 1E-2, 1., 0],
-    [1E-2, 1E-3, 1E-3, 0, 0, 1E-2, 1., 0],
-    [1E-1, 1E-2, 1E-2, 0, 0, 1E-2, 1., 0],
+    [1E-2, 1E-3, 1E-3, 0, 0, 1E-2, 0., 0]
     ]
-iters = np.arange(25)
+iters = np.arange(5)
 args = []
 for fname, loss_weights in zip(fname_grid, loss_weights_grid):
     for i in iters:
