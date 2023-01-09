@@ -20,7 +20,7 @@ nn_yaml = 'network_simpler.yaml'
 internal_dim = 10
 
 def gpu_parallel(job_idx):
-    results_dir = 'pickles/foraging_simpler_dim10/'
+    results_dir = 'pickles/foraging_simpler_dim10_pt4/'
     os.makedirs(results_dir, exist_ok=True)
     results = {}
     results['dimensionality_tracking'] = []
@@ -112,14 +112,18 @@ def run_env(arg):
 # load user-defined parameters
 job_idx = int(sys.argv[1])
 n_jobs = int(sys.argv[2])
-fname_grid = ['foraging_mf', 'foraging_entro', 'foraging_mb', 'foraging_mb_larger']
+#fname_grid = ['foraging_mf', 'foraging_entro', 'foraging_mb', 'foraging_mb_larger']
+#loss_weights_grid = [
+#    [0., 0., 0., 0., 0., 0., 1., 0.],
+#    [0., 1E-3, 1E-3, 0, 0, 0., 1., 0],
+#    [1E-2, 1E-3, 1E-3, 0, 0, 1E-2, 1., 0],
+#    [1E-1, 1E-2, 1E-2, 0, 0, 1E-2, 1., 0],
+#    ]
+fname_grid = ['foraging_entro_larger']
 loss_weights_grid = [
-    [0., 0., 0., 0., 0., 0., 1., 0.],
-    [0., 1E-3, 1E-3, 0, 0, 1E-2, 1., 0],
-    [1E-2, 1E-3, 1E-3, 0, 0, 1E-2, 1., 0],
-    [1E-1, 1E-2, 1E-2, 0, 0, 1E-2, 1., 0],
+    [0, 1E-2, 1E-2, 0, 0, 0, 1., 0],
     ]
-iters = np.arange(25)
+iters = np.arange(75)
 args = []
 for fname, loss_weights in zip(fname_grid, loss_weights_grid):
     for i in iters:

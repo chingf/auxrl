@@ -1,7 +1,6 @@
 import sys
 import logging
 import pickle
-import re
 import yaml
 from joblib import Parallel, delayed
 import numpy as np
@@ -12,18 +11,21 @@ import os
 from deer.default_parser import process_args
 from deer.agent import NeuralAgent
 from deer.learning_algos.CRAR_torch import CRAR
-from simple_maze_env import MyEnv as simple_maze_env
+from catcher_env import MyEnv as Env
 import deer.experiment.base_controllers as bc
-
 from deer.policies import EpsilonGreedyPolicy
 
+net_type = 'simpler'
+nn_yaml = f'network_{net_type}.yaml'
 internal_dim = 10
-encoder_only = False
-nn_yaml = 'network_simpler.yaml'
+fname_prefix = 'catcher'
+epochs = 30
+exp_dir = f'{fname_prefix}_{net_type}_dim{internal_dim}'
+for d in ['pickles/', 'nnets/', 'scores/', 'figs/', 'params/']:
+    os.makedirs(f'{d}{exp_dir}', exist_ok=True)
 
 def gpu_parallel(job_idx):
-    results_dir = 'pickles/foraging_fulltransfer_simpler_dim10/'
-    os.makedirs(results_dir, exist_ok=True)
+    results_dir = f'pickles/{exp_dir}/'
     results = {}
     results['dimensionality_tracking'] = []
     results['valid_scores'] = []
@@ -39,17 +41,8 @@ def gpu_parallel(job_idx):
         pickle.dump(results, f)
 
 def run_env(arg):
-    _fname, network_file, loss_weights, i = arg
-    if network_file is None:
-        set_network = None
-    else:
-        network_file_options = [
-            s for s in os.listdir('nnets/') if \
-            (re.search(f"^({network_file})_\\d+", s) != None)]
-        network_file_idx = np.random.choice(len(network_file_options))
-        set_network = [
-            f'{network_file_options[network_file_idx]}', 40, encoder_only]
-    fname = f'{_fname}_{i}'
+    _fname, loss_weights, i = arg
+    fname = f'{exp_dir}/{_fname}_{i}'
     encoder_type = 'variational' if loss_weights[-1] > 0 else 'regular'
     parameters = {
         'nn_yaml': nn_yaml,
@@ -57,7 +50,7 @@ def run_env(arg):
         'internal_dim': internal_dim,
         'fname': fname,
         'steps_per_epoch': 1000,
-        'epochs': 40,
+        'epochs': epochs,
         'steps_per_test': 1000,
         'period_btw_summary_perfs': 1,
         'encoder_type': encoder_type,
@@ -79,7 +72,7 @@ def run_env(arg):
     with open(f'params/{_fname}.yaml', 'w') as outfile:
         yaml.dump(parameters, outfile, default_flow_style=False)
     rng = np.random.RandomState()
-    env = simple_maze_env(
+    env = Env(
         rng, reward=parameters['foraging_give_rewards'],
         higher_dim_obs=parameters['higher_dim_obs'], plotfig=False
         )
@@ -90,17 +83,13 @@ def run_env(arg):
         double_Q=True, loss_weights=parameters['loss_weights'],
         encoder_type=parameters['encoder_type']
         )
+    print(f'DEVICE USED: {learning_algo.device}')
     train_policy = EpsilonGreedyPolicy(learning_algo, env.nActions(), rng, 0.2)
     test_policy = EpsilonGreedyPolicy(learning_algo, env.nActions(), rng, 0.)
     agent = NeuralAgent(
         env, learning_algo, parameters['replay_memory_size'], 1,
         parameters['batch_size'], rng,
         train_policy=train_policy, test_policy=test_policy)
-    if set_network is not None:
-        agent.setNetwork(
-            f'{set_network[0]}/fname', nEpoch=set_network[1],
-            encoder_only=set_network[2]
-            )
     agent.run(10, 500)
     agent.attach(bc.VerboseController( evaluate_on='epoch', periodicity=1))
     agent.attach(bc.LearningRateController(
@@ -111,21 +100,11 @@ def run_env(arg):
         evaluate_on='action', periodicity=parameters['update_frequency'],
         show_episode_avg_V_value=True, show_avg_Bellman_residual=True))
     best_controller = bc.FindBestController(
-        validationID=simple_maze_env.VALIDATION_MODE, testID=None, unique_fname=fname)
+        validationID=env.VALIDATION_MODE, testID=None, unique_fname=fname)
     agent.attach(best_controller)
     agent.attach(bc.InterleavedTestEpochController(
-        id=simple_maze_env.VALIDATION_MODE, epoch_length=parameters['steps_per_test'],
+        id=env.VALIDATION_MODE, epoch_length=parameters['steps_per_test'],
         periodicity=1, show_score=True, summarize_every=1, unique_fname=fname))
-    if set_network is not None:
-        agent.setNetwork(
-            f'{set_network[0]}/fname', nEpoch=set_network[1],
-            encoder_only=set_network[2]
-            )
-    if freeze_encoder:
-        for p in agent._learning_algo.crar.encoder.parameters():
-            p.requires_grad = False
-        for p in agent._learning_algo.crar_target.encoder.parameters():
-            p.requires_grad = False
     agent.run(parameters['epochs'], parameters['steps_per_epoch'])
 
     result = {
@@ -134,33 +113,23 @@ def run_env(arg):
         }
     return _fname, loss_weights, result
 
+
 # load user-defined parameters
 job_idx = int(sys.argv[1])
 n_jobs = int(sys.argv[2])
-fname_grid = [
-    'transfer_foraging_mf',
-    'transfer_foraging_mb',
-    'transfer_foraging_mb_larger',
-    'transfer_foraging_entro'
-    ]
-network_files = [
-    'foraging_mf', 'foraging_mb', 'foraging_mb_larger', 'foraging_entro'
-    ]
+fname_grid = ['mf', 'entro', 'mb', 'mb_larger']
+fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
 loss_weights_grid = [
     [0., 0., 0., 0., 0., 0., 1., 0.],
+    [0., 1E-3, 1E-3, 0, 0, 0., 1., 0],
     [1E-2, 1E-3, 1E-3, 0, 0, 1E-2, 1., 0],
     [1E-1, 1E-2, 1E-2, 0, 0, 1E-2, 1., 0],
-    [0., 1E-3, 1E-3, 0, 0, 1E-2, 1., 0],
     ]
-freeze_encoder = False
-iters = np.arange(40)
+iters = np.arange(25)
 args = []
-for j in range(len(fname_grid)):
-    fname = fname_grid[j]
-    network_file = network_files[j]
-    loss_weights = loss_weights_grid[j]
+for fname, loss_weights in zip(fname_grid, loss_weights_grid):
     for i in iters:
-        args.append([fname, network_file, loss_weights, i])
+        args.append([fname, loss_weights, i])
 split_args = np.array_split(args, n_jobs)
 
 # Run relevant parallelization script

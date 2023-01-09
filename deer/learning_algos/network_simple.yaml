@@ -11,9 +11,9 @@ encoder-convs: &encoder-convs
 encoder-fc: &encoder-fc
   - [Linear, auto, 50]
   - *act
-  - [Linear, 50, 10]
+  - [Linear, 50, 20]
   - *act
-  - [Linear, 10, auto]
+  - [Linear, 20, auto]
 
 crar-fc: &crar-fc
   - [Linear, auto, 10]

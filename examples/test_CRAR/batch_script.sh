@@ -7,8 +7,8 @@
 #SBATCH --gres=gpu:1
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=chingfang17@gmail.com
-#SBATCH --array=0-29
+#SBATCH --array=0-14
 
 source ~/.bashrc
 source activate auxrl
-python foraging_transfer_script.py $SLURM_ARRAY_TASK_ID 30
+python foraging_script.py $SLURM_ARRAY_TASK_ID 15
