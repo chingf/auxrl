@@ -2,6 +2,7 @@
 
 """
 import numpy as np
+import os
 import torch
 from deer.base_classes import Environment
 
@@ -26,8 +27,10 @@ class MyEnv(Environment):
         self._width = 11 #preferably an odd number so that it's symmetrical
         self._width_paddle=1
         self._nx_block = self._width #number of different x positions of the falling blocks
-        self._higher_dim_obs=kwargs["higher_dim_obs"]
-        self._reverse=kwargs["reverse"]
+        self._higher_dim_obs = kwargs["higher_dim_obs"]
+        self._reverse = kwargs["reverse"]
+        self._reward_location = -1
+        self.dead = False
         self.set_x_block()
 
     def set_x_block(self):
@@ -52,6 +55,7 @@ class MyEnv(Environment):
         self.y = self._height-1
         self.x = np.random.randint(self._width-self._width_paddle+1) #self._width//2
         self.set_x_block()
+        self.dead = False
         return [1 * [self._height * [self._width * [0]]]] #[0,0,1]+[0,1,0]
         
         
@@ -72,10 +76,12 @@ class MyEnv(Environment):
 
         self.y = self.y-1
               
-        if(self.y==0 and self.x>self._x_block-1-self._width_paddle and self.x<=self._x_block+1):
-            self.reward = -1
+        if(self.y == 0 and self.x>self._x_block-1-self._width_paddle and self.x<=self._x_block+1):
+            self.reward = -999
+            self.dead = True
         elif(self.y==0):
             self.reward = +1
+            self.y = self._height - 1
             self.set_x_block()
         else:
             self.reward = +1
@@ -83,39 +89,37 @@ class MyEnv(Environment):
         self._mode_score += self.reward
         return self.reward
 
-    def summarizePerformance(self, test_data_set, learning_algo, *args, **kwargs):
-        """ Plot of the low-dimensional representation of the environment built by the model
+    def summarizePerformance(self, test_data_set, learning_algo, fname):
         """
+        Plot of the low-dimensional representation of the environment
+        built by the model
+        """
+
+        if fname is None:
+            fig_dir = './'
+        else:
+            fig_dir = f'figs/{fname}/'
+            if not os.path.isdir(fig_dir):
+                os.makedirs(fig_dir)
         
         all_possib_inp=[]
-        #labels=[]
-        for x_b in range(self._nx_block):#[1]:#range(self._nx_block):
+        for x_b in [0, self._nx_block-1]:#[1]:#range(self._nx_block):
             for y_b in range(self._height):
                 for x_p in range(self._width-self._width_paddle+1):
                     state=self.get_observation(y_b,x_b*((self._width-1)//(self._nx_block-1)),x_p)
                     all_possib_inp.append(state)
-                    
-                    #labels.append(x_b)
 
-        #arr=np.array(all_possib_inp)
-        #arr=arr.reshape(arr.shape[0],-1)            
-        #np.savetxt('tsne_python/catcherH_X.txt',arr.reshape(arr.shape[0],-1))
-        #np.savetxt('tsne_python/cacherH_labels.txt',np.array(labels))
-
-        all_possib_inp = np.expand_dims(all_possib_inp,axis=1)
+        #all_possib_inp = np.expand_dims(all_possib_inp,axis=1)
         all_possib_inp = torch.tensor(all_possib_inp).to(
             learning_algo.device).float()
         with torch.no_grad():
             all_possib_abs_states = learning_algo.crar.encoder(all_possib_inp)
             all_possib_abs_states = all_possib_abs_states.cpu().numpy()
         
-        n=self._height-1
-        historics=[]
-        for i,observ in enumerate(test_data_set.observations()[0][0:n]):
-            historics.append(np.expand_dims(observ,axis=0))
-        historics=np.array(historics)
-        historics = torch.tensor(historics).to(
-            learning_algo.device).float()
+        n = self._height-1
+        historics = test_data_set.observations()[0][0:n]
+        historics = np.squeeze(historics, axis=1)
+        historics = torch.tensor(historics).to(learning_algo.device).float()
         with torch.no_grad():
             abs_states = learning_algo.crar.encoder(historics)
         actions = test_data_set.actions()[0:n]
@@ -227,147 +231,39 @@ class MyEnv(Environment):
         el2b = Rectangle((25, 10), 15,2, fc="0.25", alpha=0.75) 
         box2b.add_artist(el1b)
         box2b.add_artist(el2b)
-
-        boxb = HPacker(children=[box1b, box2b],
-                      align="center",
-                      pad=0, sep=5)
-        
-        anchored_box = AnchoredOffsetbox(loc=3,
-                                         child=boxb, pad=0.,
-                                         frameon=True,
-                                         bbox_to_anchor=(0., 0.98),
-                                         bbox_transform=ax.transAxes,
-                                         borderpad=0.,
-                                         )        
+        boxb = HPacker(children=[box1b, box2b], align="center", pad=0, sep=5)
+        anchored_box = AnchoredOffsetbox(
+            loc=3, child=boxb, pad=0., frameon=True, bbox_to_anchor=(0., 0.98),
+            bbox_transform=ax.transAxes, borderpad=0.,)
         ax.add_artist(anchored_box)
-
-        
-
         ax.w_xaxis.set_pane_color((0.99, 0.99, 0.99, 0.99))
         ax.w_yaxis.set_pane_color((0.99, 0.99, 0.99, 0.99))
         ax.w_zaxis.set_pane_color((0.99, 0.99, 0.99, 0.99))
         #plt.savefig('fig_base'+str(learning_algo.update_counter)+'.pdf')
 
-
-        # Plot the Q_vals
-        q_inputs = torch.cat([
-            torch.tensor(x).reshape((-1, 1)),
-            torch.tensor(y).reshape((-1, 1)),
-            torch.tensor(z).reshape((-1, 1))
-            ], dim=1).to(learning_algo.device).float()
-        with torch.no_grad():
-            c = learning_algo.crar.Q(q_inputs).cpu().numpy()
-        m1 = ax.scatter(
-            x, y, z+zrange/20, c=c[:,0], vmin=-1., vmax=1., cmap=plt.cm.RdYlGn
-            )
-        m2 = ax.scatter(
-            x, y, z+3*zrange/40, c=c[:,1], vmin=-1., vmax=1., cmap=plt.cm.RdYlGn
-            )
-        
-        #plt.colorbar(m3)
-        ax2 = fig.add_axes([0.85, 0.15, 0.025, 0.7])
-        cmap = matplotlib.cm.RdYlGn
-        norm = matplotlib.colors.Normalize(vmin=-1, vmax=1)
-
-        # ColorbarBase derives from ScalarMappable and puts a colorbar
-        # in a specified axes, so it has everything needed for a
-        # standalone colorbar.  There are many more kwargs, but the
-        # following gives a basic continuous colorbar with ticks
-        # and labels.
-        cb1 = matplotlib.colorbar.ColorbarBase(
-            ax2, cmap=cmap,norm=norm,orientation='vertical'
-            )
-        cb1.set_label('Estimated expected return')
-
-        plt.show()
-        for ii in range(-15,345,30):
-            ax.view_init(elev=20., azim=ii)
-            plt.savefig(f'fig_w_V_div5_forcelr_forcessdiv2_{learning_algo.update_counter}_{ii}.pdf')
-
-        # fig_visuV
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection='3d')
-        
-        x = np.array([i for i in range(5) for jk in range(25)])/4.*(axes_lims[0][1]-axes_lims[0][0])+axes_lims[0][0]
-        y = np.array([j for i in range(5) for j in range(5) for k in range(5)])/4.*(axes_lims[1][1]-axes_lims[1][0])+axes_lims[1][0]
-        z = np.array([k for i in range(5) for j in range(5) for k in range(5)])/4.*(axes_lims[2][1]-axes_lims[2][0])+axes_lims[2][0]
-
-        q_inputs = torch.cat([
-            torch.tensor(x).reshape((-1, 1)),
-            torch.tensor(y).reshape((-1, 1)),
-            torch.tensor(z).reshape((-1, 1))
-            ], dim=1).to(learning_algo.device).float()
-        with torch.no_grad():
-            c = learning_algo.crar.Q(q_inputs).cpu().numpy()
-        c = np.max(c,axis=1)
-        
-        m=ax.scatter(x, y, z, c=c, vmin=-1., vmax=1., cmap=plt.hot())
-        fig.subplots_adjust(right=0.8)
-        ax2 = fig.add_axes([0.875, 0.15, 0.025, 0.7])
-        cmap = matplotlib.cm.hot
-        norm = matplotlib.colors.Normalize(vmin=-1, vmax=1)
-
-        # ColorbarBase derives from ScalarMappable and puts a colorbar
-        # in a specified axes, so it has everything needed for a
-        # standalone colorbar.  There are many more kwargs, but the
-        # following gives a basic continuous colorbar with ticks
-        # and labels.
-        cb1 = matplotlib.colorbar.ColorbarBase(ax2, cmap=cmap,norm=norm,orientation='vertical')
-        cb1.set_label('Estimated expected return')
-
-        #plt.show()
-        #plt.savefig('fig_visuV'+str(learning_algo.update_counter)+'.pdf')
-
-
-        # fig_visuR
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection='3d')
-        
-        x = np.array([i for i in range(5) for jk in range(25)])/4.*(axes_lims[0][1]-axes_lims[0][0])+axes_lims[0][0]
-        y = np.array([j for i in range(5) for j in range(5) for k in range(5)])/4.*(axes_lims[1][1]-axes_lims[1][0])+axes_lims[1][0]
-        z = np.array([k for i in range(5) for j in range(5) for k in range(5)])/4.*(axes_lims[2][1]-axes_lims[2][0])+axes_lims[2][0]
-
-        coords=np.concatenate((np.expand_dims(x,axis=1),np.expand_dims(y,axis=1),np.expand_dims(z,axis=1)),axis=1)
-        repeat_n=np.repeat(coords,self.nActions(),axis=0)
-        identity_matrix = np.diag(np.ones(self.nActions()))
-        tile_identity_matrix=np.tile(identity_matrix,(5*5*5,1))
-
-        with torch.no_grad():
-            c = learning_algo.crar.R(torch.cat([
-                torch.tensor(repeat_nactions_coord),
-                torch.tensor(tile_identity_matrix)
-                ], dim=1).to(learning_algo.device).float()
-                )
-            c = c.cpu().numpy()
-        c = np.max(np.reshape(c,(125,self.nActions())),axis=1)
-        
-        m=ax.scatter(x, y, z, c=c, vmin=-1., vmax=1., cmap=plt.hot())
-        fig.subplots_adjust(right=0.8)
-        ax2 = fig.add_axes([0.875, 0.15, 0.025, 0.7])
-        cmap = matplotlib.cm.hot
-        norm = matplotlib.colors.Normalize(vmin=-1, vmax=1)
-
-        # ColorbarBase derives from ScalarMappable and puts a colorbar
-        # in a specified axes, so it has everything needed for a
-        # standalone colorbar.  There are many more kwargs, but the
-        # following gives a basic continuous colorbar with ticks
-        # and labels.
-        cb1 = matplotlib.colorbar.ColorbarBase(ax2, cmap=cmap,norm=norm,orientation='vertical')
-        cb1.set_label('Estimated expected return')
-
-        #plt.show()
-        #plt.savefig('fig_visuR'+str(learning_algo.update_counter)+'.pdf')
-
+        # Plot losses over epochs
+        losses, loss_names = learning_algo.get_losses()
+        loss_weights = learning_algo._loss_weights
+        _, axs = plt.subplots(4, 2, figsize=(7, 10))
+        for i in range(8):
+            loss = losses[i]; loss_name = loss_names[i]
+            ax = axs[i%4][i//4]
+            ax.plot(loss)
+            ax.set_ylabel(loss_name)
+        plt.tight_layout()
+        plt.savefig(f'{fig_dir}losses.pdf', dpi=300)
+        _, axs = plt.subplots(4, 2, figsize=(7, 10))
+        for i in range(8):
+            loss = losses[i]; loss_name = loss_names[i]
+            ax = axs[i%4][i//4]
+            ax.plot(np.array(loss)*loss_weights[i])
+            ax.set_ylabel(loss_name)
+        plt.tight_layout()
+        plt.savefig(f'{fig_dir}scaled_losses.pdf', dpi=300)
         plt.figure()
-        plt.plot(learning_algo.tracked_disamb1, label='disamb1')
-        plt.plot(learning_algo.tracked_disamb2, label='disamb2')
-        plt.plot(learning_algo.tracked_disentang, label='disentang')
-        plt.plot(learning_algo.tracked_T_err, label='T error')
-        plt.plot(learning_algo.tracked_gamma_err, label='Gamma error')
-        plt.plot(learning_algo.tracked_R_err, label='R error')
-        plt.plot(learning_algo.tracked_Q_err, label='Q error')
-        plt.legend()
-        plt.savefig('errors.pdf')
+        plt.plot(losses[-1])
+        plt.title('Total Loss')
+        plt.savefig(f'{fig_dir}total_losses.pdf', dpi=300)
 
         matplotlib.pyplot.close("all") # avoids memory leaks
 
@@ -393,12 +289,13 @@ class MyEnv(Environment):
         obs=self.get_observation(self.y,self._x_block,self.x)
         return [obs]
 
-    def get_observation(self,y,x_block,x):
-        obs=np.zeros((self._height,self._width))
+    def get_observation(self, y, x_block, x):
+        obs = np.zeros((self._height,self._width))
         obs[y,x_block]=0.5
         obs[0,x-self._width_paddle+1:x+1]=1
         
         if(self._higher_dim_obs==True):
+            #print(f'Paddle: {x}; Ball: ({x_block}, {y})')
             y_t=(1+y)*3
             x_block_t=(1+x_block)*3
             x_t=(1+x)*3
@@ -423,7 +320,7 @@ class MyEnv(Environment):
         return obs
 
     def inTerminalState(self):
-        return False
+        return self.dead
         #if (self.y==0):
         #    return True
         #else:
