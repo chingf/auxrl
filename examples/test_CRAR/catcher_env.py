@@ -100,8 +100,8 @@ class MyEnv(Environment):
             fig_dir = f'figs/{fname}/'
             if not os.path.isdir(fig_dir):
                 os.makedirs(fig_dir)
-        intern_dim = learning_algo._internal_dim       
-        all_possib_inp=[]
+        intern_dim = learning_algo._internal_dim
+        all_possib_inp = []
         for x_b in range(self._nx_block):
             for y_b in range(self._height):
                 for x_p in range(self._width-self._width_paddle+1):
@@ -339,7 +339,6 @@ class MyEnv(Environment):
             return True
         else:
             return False
-
 
 
 if __name__ == "__main__":

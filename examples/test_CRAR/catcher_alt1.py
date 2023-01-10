@@ -5,7 +5,7 @@ import numpy as np
 import os
 import torch
 from deer.base_classes import Environment
-
+from sklearn.decomposition import PCA
 import matplotlib
 # matplotlib.use('qt5agg')
 from mpl_toolkits.axes_grid1 import host_subplot
@@ -28,8 +28,8 @@ class MyEnv(Environment):
         self._width_paddle=1
         self._nx_block = self._width #number of different x positions of the falling blocks
         self._higher_dim_obs = kwargs["higher_dim_obs"]
-        self._reverse = kwargs["reverse"]
-        self._reward_location = -1
+        self._dimensionality_tracking = []
+        self._reward_location = 0 # Just a placeholder
         self.dead = False
         self.set_x_block()
 
@@ -46,7 +46,7 @@ class MyEnv(Environment):
                 self._mode = MyEnv.VALIDATION_MODE
                 self._mode_score = 0.0
                 self._mode_episode_count = 0
-                np.random.seed(seed=11) #Seed the generator so that the sequence of falling blocks is the same in validation
+                np.random.seed(seed=11) # consistency in validation
             else:
                 self._mode_episode_count += 1
         elif self._mode != -1: # and thus mode == -1
@@ -101,15 +101,14 @@ class MyEnv(Environment):
             fig_dir = f'figs/{fname}/'
             if not os.path.isdir(fig_dir):
                 os.makedirs(fig_dir)
-        
+        intern_dim = learning_algo._internal_dim
         all_possib_inp=[]
-        for x_b in [0, self._nx_block-1]:#[1]:#range(self._nx_block):
+        for x_b in range(self._nx_block):
             for y_b in range(self._height):
                 for x_p in range(self._width-self._width_paddle+1):
                     state=self.get_observation(y_b,x_b*((self._width-1)//(self._nx_block-1)),x_p)
                     all_possib_inp.append(state)
 
-        #all_possib_inp = np.expand_dims(all_possib_inp,axis=1)
         all_possib_inp = torch.tensor(all_possib_inp).to(
             learning_algo.device).float()
         with torch.no_grad():
@@ -133,11 +132,29 @@ class MyEnv(Environment):
         import matplotlib.cm as cm
         m = cm.ScalarMappable(cmap=cm.jet)
 
-        abs_states_cpu = abs_states.cpu().numpy()
-        x = np.array(abs_states_cpu)[:,0]
-        y = np.array(abs_states_cpu)[:,1]
-        z = np.array(abs_states_cpu)[:,2]
-        
+        abs_states_np = abs_states.cpu().numpy()
+        if intern_dim == 2:
+            x = np.array(abs_states_np)[:,0]
+            y = np.array(abs_states_np)[:,1]
+            z = np.zeros(y.shape)
+        elif intern_dim == 3:
+            x = np.array(abs_states_np)[:,0]
+            y = np.array(abs_states_np)[:,1]
+            z = np.array(abs_states_np)[:,2]
+        else:
+            if abs_states_np.shape[0] > 2:
+                pca = PCA()
+                reduced_states = pca.fit_transform(abs_states_np)
+                x = np.array(reduced_states)[:,0]
+                y = np.array(reduced_states)[:,1]
+                z = np.array(reduced_states)[:,2]
+            else:
+                x = np.array(abs_states_np)[:,0]
+                y = np.array(abs_states_np)[:,1]
+                z = np.array(abs_states_np)[:,2]
+        if intern_dim > 2:
+            z = np.array(abs_states_np)[:,2]
+
         fig = plt.figure()
         ax = fig.add_subplot(111,projection='3d')
         ax.set_xlabel(r'$X_1$')
@@ -241,6 +258,17 @@ class MyEnv(Environment):
         ax.w_zaxis.set_pane_color((0.99, 0.99, 0.99, 0.99))
         #plt.savefig('fig_base'+str(learning_algo.update_counter)+'.pdf')
 
+        # Plot continuous measure of dimensionality
+        if (intern_dim > 3) and (abs_states_np.shape[0] > 2):
+            variance_curve = np.cumsum(pca.explained_variance_ratio_)
+            auc = np.trapz(variance_curve, dx=1/variance_curve.size)
+            self._dimensionality_tracking.append(auc)
+            plt.figure()
+            plt.plot(self._dimensionality_tracking)
+            plt.ylabel('AUC of PCA Explained Variance Ratio')
+            plt.xlabel('Epochs')
+            plt.savefig(f'{fig_dir}dimensionality.pdf')
+
         # Plot losses over epochs
         losses, loss_names = learning_algo.get_losses()
         loss_weights = learning_algo._loss_weights
@@ -306,20 +334,10 @@ class MyEnv(Environment):
             obs[y_t-2:y_t+3,x_block_t-3:x_block_t+4]=ball
             obs[3:6,x_t-3:x_t+4]=paddle
         
-        if(self._reverse==True):
-            obs=-obs
-            #plt.imshow(np.flip(obs,axis=0), cmap='gray_r')
-            #plt.show()
-
         return obs
 
     def inTerminalState(self):
         return self.dead
-        #if (self.y==0):
-        #    return True
-        #else:
-        #    return False
-
 
 
 if __name__ == "__main__":

@@ -2,6 +2,7 @@ import sys
 import logging
 import pickle
 import yaml
+import re
 from joblib import Parallel, delayed
 import numpy as np
 import matplotlib.pyplot as plt
@@ -11,18 +12,21 @@ import os
 from deer.default_parser import process_args
 from deer.agent import NeuralAgent
 from deer.learning_algos.CRAR_torch import CRAR
-from catcher_env import MyEnv as Env
+from catcher_alt1 import MyEnv as Env
 import deer.experiment.base_controllers as bc
 from deer.policies import EpsilonGreedyPolicy
 
 net_type = 'simpler'
 nn_yaml = f'network_{net_type}.yaml'
 internal_dim = 10
-fname_prefix = 'catcher'
+fname_prefix = 'transfer_catcher'
+source_prefix = 'catcher'
 epochs = 30
 exp_dir = f'{fname_prefix}_{net_type}_dim{internal_dim}'
+source_dir = f'{source_prefix}_{net_type}_dim{internal_dim}/'
 for d in ['pickles/', 'nnets/', 'scores/', 'figs/', 'params/']:
     os.makedirs(f'{d}{exp_dir}', exist_ok=True)
+encoder_only = True
 
 def gpu_parallel(job_idx):
     results_dir = f'pickles/{exp_dir}/'
@@ -58,8 +62,18 @@ def cpu_parallel():
         pickle.dump(results, f)
 
 def run_env(arg):
-    _fname, loss_weights, i = arg
-    fname = f'{exp_dir}/{_fname}_{i}'
+    _fname, network_file, loss_weights, i = arg
+    nnet_dir = f'nnets/{source_dir}'
+    if network_file is None:
+        set_network = None
+    else:
+        network_file_options = [
+            s for s in os.listdir(nnet_dir) if \
+            (re.search(f"^({network_file})_\\d+", s) != None)]
+        network_file_idx = np.random.choice(len(network_file_options))
+        network_file_path = f'{source_dir}{network_file_options[network_file_idx]}'
+        set_network = [f'{network_file_path}', 30, encoder_only]
+    fname = f'{exp_dir}{_fname}_{i}'
     encoder_type = 'variational' if loss_weights[-1] > 0 else 'regular'
     parameters = {
         'nn_yaml': nn_yaml,
@@ -84,6 +98,7 @@ def run_env(arg):
         'freeze_interval': 1000,
         'deterministic': False,
         'loss_weights': loss_weights,
+        'foraging_give_rewards': True
         }
     with open(f'params/{_fname}.yaml', 'w') as outfile:
         yaml.dump(parameters, outfile, default_flow_style=False)
@@ -103,6 +118,11 @@ def run_env(arg):
         env, learning_algo, parameters['replay_memory_size'], 1,
         parameters['batch_size'], rng,
         train_policy=train_policy, test_policy=test_policy)
+    if set_network is not None:
+        agent.setNetwork(
+            f'{set_network[0]}/fname', nEpoch=set_network[1],
+            encoder_only=set_network[2]
+            )
     agent.run(10, 500)
     agent.attach(bc.VerboseController( evaluate_on='epoch', periodicity=1))
     agent.attach(bc.LearningRateController(
@@ -118,6 +138,16 @@ def run_env(arg):
     agent.attach(bc.InterleavedTestEpochController(
         id=env.VALIDATION_MODE, epoch_length=parameters['steps_per_test'],
         periodicity=1, show_score=True, summarize_every=1, unique_fname=fname))
+    if set_network is not None:
+        agent.setNetwork(
+            f'{set_network[0]}/fname', nEpoch=set_network[1],
+            encoder_only=set_network[2]
+            )
+    if freeze_encoder:
+        for p in agent._learning_algo.crar.encoder.parameters():
+            p.requires_grad = False
+        for p in agent._learning_algo.crar_target.encoder.parameters():
+            p.requires_grad = False
     agent.run(parameters['epochs'], parameters['steps_per_epoch'])
 
     result = {
@@ -130,19 +160,28 @@ def run_env(arg):
 # load user-defined parameters
 job_idx = int(sys.argv[1])
 n_jobs = int(sys.argv[2])
-fname_grid = ['mf', 'entro', 'mb', 'mb_larger']
+fname_grid = ['mf', 'entro', 'mb_larger', 'entro_qloss', 'mb_larger_qloss']
 fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
+network_files = [
+    'catcher_mf', 'catcher_entro', 'catcher_mb_larger',
+    'catcher_entro', 'catcher_mb_larger',
+    ]
 loss_weights_grid = [
     [0., 0., 0., 0., 0., 0., 1., 0.],
     [0., 1E-3, 1E-3, 0, 0, 0., 1., 0],
-    [1E-2, 1E-3, 1E-3, 0, 0, 1E-2, 1., 0],
     [1E-1, 1E-2, 1E-2, 0, 0, 1E-2, 1., 0],
+    [0., 0., 0., 0., 0., 0., 1., 0.],
+    [0., 0., 0., 0., 0., 0., 1., 0.],
     ]
-iters = np.arange(25)
+freeze_encoder = False
+iters = np.arange(50)
 args = []
-for fname, loss_weights in zip(fname_grid, loss_weights_grid):
-    for i in iters:
-        args.append([fname, loss_weights, i])
+for i in iters:
+    for j in range(len(fname_grid)):
+        fname = fname_grid[j]
+        network_file = network_files[j]
+        loss_weights = loss_weights_grid[j]
+        args.append([fname, network_file, loss_weights, i])
 split_args = np.array_split(args, n_jobs)
 
 # Run relevant parallelization script
