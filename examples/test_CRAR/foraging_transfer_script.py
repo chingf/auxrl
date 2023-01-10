@@ -17,12 +17,20 @@ import deer.experiment.base_controllers as bc
 
 from deer.policies import EpsilonGreedyPolicy
 
+net_type = 'simpler'
+nn_yaml = f'network_{net_type}.yaml'
 internal_dim = 10
-encoder_only = False
-nn_yaml = 'network_simpler.yaml'
+fname_prefix = 'transfer_foraging'
+source_prefix = 'foraging'
+epochs = 40
+exp_dir = f'{fname_prefix}_{net_type}_dim{internal_dim}/'
+source_dir = f'{source_prefix}_{net_type}_dim{internal_dim}/'
+for d in ['pickles/', 'nnets/', 'scores/', 'figs/', 'params/']:
+    os.makedirs(f'{d}{exp_dir}', exist_ok=True)
+encoder_only = True
 
 def gpu_parallel(job_idx):
-    results_dir = 'pickles/foraging_fulltransfer_simpler_dim10/'
+    results_dir = f'pickles/{exp_dir}'
     os.makedirs(results_dir, exist_ok=True)
     results = {}
     results['dimensionality_tracking'] = []
@@ -40,16 +48,17 @@ def gpu_parallel(job_idx):
 
 def run_env(arg):
     _fname, network_file, loss_weights, i = arg
+    nnet_dir = f'nnets/{source_dir}'
     if network_file is None:
         set_network = None
     else:
         network_file_options = [
-            s for s in os.listdir('nnets/') if \
+            s for s in os.listdir(nnet_dir) if \
             (re.search(f"^({network_file})_\\d+", s) != None)]
         network_file_idx = np.random.choice(len(network_file_options))
-        set_network = [
-            f'{network_file_options[network_file_idx]}', 40, encoder_only]
-    fname = f'{_fname}_{i}'
+        network_file_path = f'{source_dir}{network_file_options[network_file_idx]}'
+        set_network = [f'{network_file_path}', 40, encoder_only]
+    fname = f'{exp_dir}{_fname}_{i}'
     encoder_type = 'variational' if loss_weights[-1] > 0 else 'regular'
     parameters = {
         'nn_yaml': nn_yaml,
@@ -57,7 +66,7 @@ def run_env(arg):
         'internal_dim': internal_dim,
         'fname': fname,
         'steps_per_epoch': 1000,
-        'epochs': 40,
+        'epochs': epochs,
         'steps_per_test': 1000,
         'period_btw_summary_perfs': 1,
         'encoder_type': encoder_type,
@@ -90,6 +99,7 @@ def run_env(arg):
         double_Q=True, loss_weights=parameters['loss_weights'],
         encoder_type=parameters['encoder_type']
         )
+    print(f'DEVICE USED: {learning_algo.device}')
     train_policy = EpsilonGreedyPolicy(learning_algo, env.nActions(), rng, 0.2)
     test_policy = EpsilonGreedyPolicy(learning_algo, env.nActions(), rng, 0.)
     agent = NeuralAgent(
@@ -139,27 +149,32 @@ job_idx = int(sys.argv[1])
 n_jobs = int(sys.argv[2])
 fname_grid = [
     'transfer_foraging_mf',
-    'transfer_foraging_mb',
     'transfer_foraging_mb_larger',
-    'transfer_foraging_entro'
+    'transfer_foraging_entro_larger',
+    'transfer_foraging_mb_larger_qloss',
+    'transfer_foraging_entro_larger_qloss',
+    'clean'
     ]
 network_files = [
-    'foraging_mf', 'foraging_mb', 'foraging_mb_larger', 'foraging_entro'
+    'foraging_mf', 'foraging_mb_larger', 'foraging_entro_larger',
+    'foraging_mb_larger', 'foraging_entro_larger', None
     ]
 loss_weights_grid = [
     [0., 0., 0., 0., 0., 0., 1., 0.],
-    [1E-2, 1E-3, 1E-3, 0, 0, 1E-2, 1., 0],
     [1E-1, 1E-2, 1E-2, 0, 0, 1E-2, 1., 0],
-    [0., 1E-3, 1E-3, 0, 0, 1E-2, 1., 0],
+    [0., 1E-2, 1E-2, 0, 0, 0., 1., 0],
+    [0., 0., 0., 0., 0., 0., 1., 0.],
+    [0., 0., 0., 0., 0., 0., 1., 0.],
+    [0., 0., 0., 0., 0., 0., 1., 0.],
     ]
 freeze_encoder = False
-iters = np.arange(40)
+iters = np.arange(100)
 args = []
-for j in range(len(fname_grid)):
-    fname = fname_grid[j]
-    network_file = network_files[j]
-    loss_weights = loss_weights_grid[j]
-    for i in iters:
+for i in iters:
+    for j in range(len(fname_grid)):
+        fname = fname_grid[j]
+        network_file = network_files[j]
+        loss_weights = loss_weights_grid[j]
         args.append([fname, network_file, loss_weights, i])
 split_args = np.array_split(args, n_jobs)
 
