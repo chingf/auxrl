@@ -16,13 +16,17 @@ import deer.experiment.base_controllers as bc
 
 from deer.policies import EpsilonGreedyPolicy
 
-net_type = 'simpler'
+# Experiment Parameters
+net_type = 'noconv'
 nn_yaml = f'network_{net_type}.yaml'
 internal_dim = 10
 fname_prefix = 'foraging_ep100'
 fname_suffix = ''
-epochs = 80 #TODO
+epochs = 35
 policy_eps = 1.
+higher_dim_obs = True
+
+# Make directories
 exp_dir = f'{fname_prefix}_{net_type}_dim{internal_dim}{fname_suffix}'
 for d in ['pickles/', 'nnets/', 'scores/', 'figs/', 'params/']:
     os.makedirs(f'{d}{exp_dir}', exist_ok=True)
@@ -49,7 +53,7 @@ def run_env(arg):
     encoder_type = 'variational' if loss_weights[-1] > 0 else 'regular'
     parameters = {
         'nn_yaml': nn_yaml,
-        'higher_dim_obs': True,
+        'higher_dim_obs': higher_dim_obs,
         'internal_dim': internal_dim,
         'fname': fname,
         'steps_per_epoch': 1000,
@@ -129,7 +133,7 @@ loss_weights_grid = [
     [1E-1, 1E-2, 1E-2, 0, 0, 0, 1., 0],
     ]
 fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
-iters = np.arange(30)
+iters = np.arange(15)
 args = []
 for fname, loss_weights in zip(fname_grid, loss_weights_grid):
     for i in iters:
