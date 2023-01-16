@@ -267,7 +267,7 @@ class MyEnv(Environment):
             plt.plot(self._dimensionality_tracking)
             plt.ylabel('AUC of PCA Explained Variance Ratio')
             plt.xlabel('Epochs')
-            plt.savefig(f'{fig_dir}dimensionality.pdf')
+            #plt.savefig(f'{fig_dir}dimensionality.pdf')
 
         # Plot losses over epochs
         losses, loss_names = learning_algo.get_losses()
@@ -279,7 +279,7 @@ class MyEnv(Environment):
             ax.plot(loss)
             ax.set_ylabel(loss_name)
         plt.tight_layout()
-        plt.savefig(f'{fig_dir}losses.pdf', dpi=300)
+        #plt.savefig(f'{fig_dir}losses.pdf', dpi=300)
         _, axs = plt.subplots(4, 2, figsize=(7, 10))
         for i in range(8):
             loss = losses[i]; loss_name = loss_names[i]
@@ -287,11 +287,11 @@ class MyEnv(Environment):
             ax.plot(np.array(loss)*loss_weights[i])
             ax.set_ylabel(loss_name)
         plt.tight_layout()
-        plt.savefig(f'{fig_dir}scaled_losses.pdf', dpi=300)
+        #plt.savefig(f'{fig_dir}scaled_losses.pdf', dpi=300)
         plt.figure()
         plt.plot(losses[-1])
         plt.title('Total Loss')
-        plt.savefig(f'{fig_dir}total_losses.pdf', dpi=300)
+        #plt.savefig(f'{fig_dir}total_losses.pdf', dpi=300)
 
         matplotlib.pyplot.close("all") # avoids memory leaks
 

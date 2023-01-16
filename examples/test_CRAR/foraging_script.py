@@ -16,12 +16,19 @@ import deer.experiment.base_controllers as bc
 
 from deer.policies import EpsilonGreedyPolicy
 
-nn_yaml = 'network_simpler.yaml'
+net_type = 'simpler'
+nn_yaml = f'network_{net_type}.yaml'
 internal_dim = 10
+fname_prefix = 'foraging_ep100'
+fname_suffix = ''
+epochs = 80 #TODO
+policy_eps = 1.
+exp_dir = f'{fname_prefix}_{net_type}_dim{internal_dim}{fname_suffix}'
+for d in ['pickles/', 'nnets/', 'scores/', 'figs/', 'params/']:
+    os.makedirs(f'{d}{exp_dir}', exist_ok=True)
 
 def gpu_parallel(job_idx):
-    results_dir = 'pickles/foraging_simpler_dim10_pt4/'
-    os.makedirs(results_dir, exist_ok=True)
+    results_dir = f'pickles/{exp_dir}/'
     results = {}
     results['dimensionality_tracking'] = []
     results['valid_scores'] = []
@@ -31,14 +38,14 @@ def gpu_parallel(job_idx):
         fname, loss_weights, result = run_env(_arg)
         for key in result.keys():
             results[key].append(result[key])
-            results['fname'].append(fname)
-            results['loss_weights'].append(loss_weights)
+        results['fname'].append(fname)
+        results['loss_weights'].append(loss_weights)
     with open(f'{results_dir}results_{job_idx}.p', 'wb') as f:
         pickle.dump(results, f)
 
 def run_env(arg):
     _fname, loss_weights, i = arg
-    fname = f'{_fname}_{i}'
+    fname = f'{exp_dir}/{_fname}_{i}'
     encoder_type = 'variational' if loss_weights[-1] > 0 else 'regular'
     parameters = {
         'nn_yaml': nn_yaml,
@@ -46,7 +53,7 @@ def run_env(arg):
         'internal_dim': internal_dim,
         'fname': fname,
         'steps_per_epoch': 1000,
-        'epochs': 40,
+        'epochs': epochs,
         'steps_per_test': 1000,
         'period_btw_summary_perfs': 1,
         'encoder_type': encoder_type,
@@ -79,7 +86,8 @@ def run_env(arg):
         double_Q=True, loss_weights=parameters['loss_weights'],
         encoder_type=parameters['encoder_type']
         )
-    train_policy = EpsilonGreedyPolicy(learning_algo, env.nActions(), rng, 0.2)
+    train_policy = EpsilonGreedyPolicy(
+        learning_algo, env.nActions(), rng, policy_eps)
     test_policy = EpsilonGreedyPolicy(learning_algo, env.nActions(), rng, 0.)
     agent = NeuralAgent(
         env, learning_algo, parameters['replay_memory_size'], 1,
@@ -112,18 +120,16 @@ def run_env(arg):
 # load user-defined parameters
 job_idx = int(sys.argv[1])
 n_jobs = int(sys.argv[2])
-#fname_grid = ['foraging_mf', 'foraging_entro', 'foraging_mb', 'foraging_mb_larger']
-#loss_weights_grid = [
-#    [0., 0., 0., 0., 0., 0., 1., 0.],
-#    [0., 1E-3, 1E-3, 0, 0, 0., 1., 0],
-#    [1E-2, 1E-3, 1E-3, 0, 0, 1E-2, 1., 0],
-#    [1E-1, 1E-2, 1E-2, 0, 0, 1E-2, 1., 0],
-#    ]
-fname_grid = ['foraging_entro_larger']
-loss_weights_grid = [
-    [0, 1E-2, 1E-2, 0, 0, 0, 1., 0],
+fname_grid = [
+    'foraging_mf', 'foraging_entro', 'foraging_mb_noR'
     ]
-iters = np.arange(75)
+loss_weights_grid = [
+    [0., 0., 0., 0., 0., 0., 1., 0.],
+    [0., 1E-2, 1E-2, 0, 0, 0, 1., 0],
+    [1E-1, 1E-2, 1E-2, 0, 0, 0, 1., 0],
+    ]
+fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
+iters = np.arange(30)
 args = []
 for fname, loss_weights in zip(fname_grid, loss_weights_grid):
     for i in iters:
@@ -131,5 +137,8 @@ for fname, loss_weights in zip(fname_grid, loss_weights_grid):
 split_args = np.array_split(args, n_jobs)
 
 # Run relevant parallelization script
-gpu_parallel(job_idx)
+if job_idx == -1:
+    cpu_parallel()
+else:
+    gpu_parallel(job_idx)
 

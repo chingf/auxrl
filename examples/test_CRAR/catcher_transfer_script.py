@@ -20,9 +20,10 @@ net_type = 'simpler'
 nn_yaml = f'network_{net_type}.yaml'
 internal_dim = 10
 fname_prefix = 'transfer_catcher'
+fname_suffix = '_pt9'
 source_prefix = 'catcher'
-epochs = 30
-exp_dir = f'{fname_prefix}_{net_type}_dim{internal_dim}'
+epochs = 50
+exp_dir = f'{fname_prefix}_{net_type}_dim{internal_dim}{fname_suffix}/'
 source_dir = f'{source_prefix}_{net_type}_dim{internal_dim}/'
 for d in ['pickles/', 'nnets/', 'scores/', 'figs/', 'params/']:
     os.makedirs(f'{d}{exp_dir}', exist_ok=True)
@@ -80,9 +81,9 @@ def run_env(arg):
         'higher_dim_obs': True,
         'internal_dim': internal_dim,
         'fname': fname,
-        'steps_per_epoch': 1000,
+        'steps_per_epoch': 500,
         'epochs': epochs,
-        'steps_per_test': 1000,
+        'steps_per_test': 500,
         'period_btw_summary_perfs': 1,
         'encoder_type': encoder_type,
         'frame_skip': 2,
@@ -144,10 +145,17 @@ def run_env(arg):
             encoder_only=set_network[2]
             )
     if freeze_encoder:
-        for p in agent._learning_algo.crar.encoder.parameters():
-            p.requires_grad = False
-        for p in agent._learning_algo.crar_target.encoder.parameters():
-            p.requires_grad = False
+        parameter_lists = [
+            agent._learning_algo.crar.encoder.parameters(),
+            agent._learning_algo.crar_target.encoder.parameters(),
+            agent._learning_algo.crar.R.parameters(),
+            agent._learning_algo.crar_target.R.parameters(),
+            agent._learning_algo.crar.transition.parameters(),
+            agent._learning_algo.crar_target.transition.parameters(),
+            ]
+        for parameter_list in parameter_lists:
+            for p in parameter_list:
+                p.requires_grad = False
     agent.run(parameters['epochs'], parameters['steps_per_epoch'])
 
     result = {
@@ -160,21 +168,23 @@ def run_env(arg):
 # load user-defined parameters
 job_idx = int(sys.argv[1])
 n_jobs = int(sys.argv[2])
-fname_grid = ['mf', 'entro', 'mb_larger', 'entro_qloss', 'mb_larger_qloss']
+fname_grid = ['mf', 'entro_qloss', 'mb_noR_qloss', 'random']
 fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
-network_files = [
-    'catcher_mf', 'catcher_entro', 'catcher_mb_larger',
-    'catcher_entro', 'catcher_mb_larger',
-    ]
+network_files = ['catcher_mf', 'catcher_entro', 'catcher_mb_noR', None]
 loss_weights_grid = [
     [0., 0., 0., 0., 0., 0., 1., 0.],
-    [0., 1E-3, 1E-3, 0, 0, 0., 1., 0],
-    [1E-1, 1E-2, 1E-2, 0, 0, 1E-2, 1., 0],
+    [0., 0., 0., 0., 0., 0., 1., 0.],
     [0., 0., 0., 0., 0., 0., 1., 0.],
     [0., 0., 0., 0., 0., 0., 1., 0.],
     ]
+#fname_grid = ['entro_qloss']
+#fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
+#network_files = ['catcher_entro']
+#loss_weights_grid = [
+#    [0, 0, 0, 0, 0, 0, 1., 0],
+#    ]
 freeze_encoder = False
-iters = np.arange(50)
+iters = np.arange(5)
 args = []
 for i in iters:
     for j in range(len(fname_grid)):

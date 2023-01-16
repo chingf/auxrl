@@ -19,8 +19,9 @@ net_type = 'simpler'
 nn_yaml = f'network_{net_type}.yaml'
 internal_dim = 10
 fname_prefix = 'catcher'
+fname_suffix = '_pt2'
 epochs = 30
-exp_dir = f'{fname_prefix}_{net_type}_dim{internal_dim}'
+exp_dir = f'{fname_prefix}_{net_type}_dim{internal_dim}{fname_suffix}'
 for d in ['pickles/', 'nnets/', 'scores/', 'figs/', 'params/']:
     os.makedirs(f'{d}{exp_dir}', exist_ok=True)
 
@@ -35,8 +36,8 @@ def gpu_parallel(job_idx):
         fname, loss_weights, result = run_env(_arg)
         for key in result.keys():
             results[key].append(result[key])
-            results['fname'].append(fname)
-            results['loss_weights'].append(loss_weights)
+        results['fname'].append(fname)
+        results['loss_weights'].append(loss_weights)
     with open(f'{results_dir}results_{job_idx}.p', 'wb') as f:
         pickle.dump(results, f)
 
@@ -130,13 +131,10 @@ def run_env(arg):
 # load user-defined parameters
 job_idx = int(sys.argv[1])
 n_jobs = int(sys.argv[2])
-fname_grid = ['mf', 'entro', 'mb', 'mb_larger']
+fname_grid = ['mb_noR']
 fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
 loss_weights_grid = [
-    [0., 0., 0., 0., 0., 0., 1., 0.],
-    [0., 1E-3, 1E-3, 0, 0, 0., 1., 0],
-    [1E-2, 1E-3, 1E-3, 0, 0, 1E-2, 1., 0],
-    [1E-1, 1E-2, 1E-2, 0, 0, 1E-2, 1., 0],
+    [1E-1, 1E-2, 1E-2, 0, 0, 0, 1., 0],
     ]
 iters = np.arange(25)
 args = []

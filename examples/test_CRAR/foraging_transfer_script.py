@@ -17,17 +17,23 @@ import deer.experiment.base_controllers as bc
 
 from deer.policies import EpsilonGreedyPolicy
 
+# PARAMETERS
+fname_prefix = 'transfer_foraging_ep100_2x'
+fname_suffix = ''
+source_prefix = 'foraging_ep100'
+source_epoch = 80
 net_type = 'simpler'
-nn_yaml = f'network_{net_type}.yaml'
 internal_dim = 10
-fname_prefix = 'transfer_foraging'
-source_prefix = 'foraging'
-epochs = 40
-exp_dir = f'{fname_prefix}_{net_type}_dim{internal_dim}/'
+epochs = 35
+policy_eps = 1.
+encoder_only = True
+
+# SET UP
+nn_yaml = f'network_{net_type}.yaml'
+exp_dir = f'{fname_prefix}_{net_type}_dim{internal_dim}{fname_suffix}/'
 source_dir = f'{source_prefix}_{net_type}_dim{internal_dim}/'
 for d in ['pickles/', 'nnets/', 'scores/', 'figs/', 'params/']:
     os.makedirs(f'{d}{exp_dir}', exist_ok=True)
-encoder_only = True
 
 def gpu_parallel(job_idx):
     results_dir = f'pickles/{exp_dir}'
@@ -57,7 +63,7 @@ def run_env(arg):
             (re.search(f"^({network_file})_\\d+", s) != None)]
         network_file_idx = np.random.choice(len(network_file_options))
         network_file_path = f'{source_dir}{network_file_options[network_file_idx]}'
-        set_network = [f'{network_file_path}', 40, encoder_only]
+        set_network = [f'{network_file_path}', source_epoch, encoder_only]
     fname = f'{exp_dir}{_fname}_{i}'
     encoder_type = 'variational' if loss_weights[-1] > 0 else 'regular'
     parameters = {
@@ -100,7 +106,8 @@ def run_env(arg):
         encoder_type=parameters['encoder_type']
         )
     print(f'DEVICE USED: {learning_algo.device}')
-    train_policy = EpsilonGreedyPolicy(learning_algo, env.nActions(), rng, 0.2)
+    train_policy = EpsilonGreedyPolicy(
+        learning_algo, env.nActions(), rng, policy_eps)
     test_policy = EpsilonGreedyPolicy(learning_algo, env.nActions(), rng, 0.)
     agent = NeuralAgent(
         env, learning_algo, parameters['replay_memory_size'], 1,
@@ -132,10 +139,17 @@ def run_env(arg):
             encoder_only=set_network[2]
             )
     if freeze_encoder:
-        for p in agent._learning_algo.crar.encoder.parameters():
-            p.requires_grad = False
-        for p in agent._learning_algo.crar_target.encoder.parameters():
-            p.requires_grad = False
+        parameter_lists = [
+            agent._learning_algo.crar.encoder.parameters(),
+            agent._learning_algo.crar_target.encoder.parameters(),
+            agent._learning_algo.crar.R.parameters(),
+            agent._learning_algo.crar_target.R.parameters(),
+            agent._learning_algo.crar.transition.parameters(),
+            agent._learning_algo.crar_target.transition.parameters(),
+            ]
+        for parameter_list in parameter_lists:
+            for p in parameter_list:
+                p.requires_grad = False
     agent.run(parameters['epochs'], parameters['steps_per_epoch'])
 
     result = {
@@ -147,28 +161,22 @@ def run_env(arg):
 # load user-defined parameters
 job_idx = int(sys.argv[1])
 n_jobs = int(sys.argv[2])
-fname_grid = [
-    'transfer_foraging_mf',
-    'transfer_foraging_mb_larger',
-    'transfer_foraging_entro_larger',
-    'transfer_foraging_mb_larger_qloss',
-    'transfer_foraging_entro_larger_qloss',
-    'clean'
-    ]
+
+fname_grid = ['mf', 'mb_noR_qloss', 'entro_qloss', 'clean']
 network_files = [
-    'foraging_mf', 'foraging_mb_larger', 'foraging_entro_larger',
-    'foraging_mb_larger', 'foraging_entro_larger', None
+    'foraging_ep100_foraging_mf', 'foraging_ep100_foraging_mb_noR',
+    'foraging_ep100_foraging_entro', None
     ]
 loss_weights_grid = [
     [0., 0., 0., 0., 0., 0., 1., 0.],
-    [1E-1, 1E-2, 1E-2, 0, 0, 1E-2, 1., 0],
-    [0., 1E-2, 1E-2, 0, 0, 0., 1., 0],
     [0., 0., 0., 0., 0., 0., 1., 0.],
     [0., 0., 0., 0., 0., 0., 1., 0.],
     [0., 0., 0., 0., 0., 0., 1., 0.],
     ]
+fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
+
 freeze_encoder = False
-iters = np.arange(100)
+iters = np.arange(15)
 args = []
 for i in iters:
     for j in range(len(fname_grid)):
@@ -178,6 +186,10 @@ for i in iters:
         args.append([fname, network_file, loss_weights, i])
 split_args = np.array_split(args, n_jobs)
 
+
 # Run relevant parallelization script
-gpu_parallel(job_idx)
+if job_idx == -1:
+    cpu_parallel()
+else:
+    gpu_parallel(job_idx)
 
