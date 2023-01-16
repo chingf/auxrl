@@ -34,6 +34,16 @@ class MyEnv(Environment):
         self._dimensionality_tracking = []
         self._reward_location = 0 # Just a placeholder
         self.create_map()
+        if not self._higher_dim_obs:
+            self._expansion = np.random.normal(size=(32, 2))
+            self._obs_map = {}
+            for x in range(self._size_maze):
+                self._obs_map[x] = {}
+                for y in range(self._size_maze):
+                    position = np.array([x, y])
+                    obs = self._expansion @ position
+                    obs[obs < 0] = 0
+                    self._obs_map[x][y] = obs
 
     def create_map(self, reset_goal=True):
         self._map = np.zeros((self._size_maze, self._size_maze))
@@ -92,7 +102,9 @@ class MyEnv(Environment):
         self._mode_score += reward
         return reward
 
-    def summarizePerformance(self, test_data_set, learning_algo, fname):
+    def summarizePerformance(
+        self, test_data_set, learning_algo, fname, fig_dir_root='./'
+        ):
         """
         Plot of the low-dimensional representation of the environment
         built by the model
@@ -101,12 +113,12 @@ class MyEnv(Environment):
         if fname is None:
             fig_dir = './'
         else:
-            fig_dir = f'figs/{fname}/'
+            fig_dir = f'{fig_dir_root}figs/{fname}/'
             if not os.path.isdir(fig_dir):
                 os.makedirs(fig_dir)
 
         all_possib_inp = [] 
-        labels_maze=[]
+        labels = [] # which quadrant
         self.create_map(reset_goal=False)
         intern_dim = learning_algo._internal_dim
         for y_a in range(self._size_maze):
@@ -116,35 +128,25 @@ class MyEnv(Environment):
                     if self._higher_dim_obs:
                         all_possib_inp.append(self.get_higher_dim_obs([x_a, y_a]))
                     else:
-                        state[x_a, y_a] = 0.5
-                        all_possib_inp.append(state)
-                    
+                        all_possib_inp.append(self.get_low_dim_obs([x_a, y_a]))
+                    label = 0 if x_a < self._size_maze//2 else 2
+                    label += (0 if y_a < self._size_maze//2 else 1)
+                    labels.append(label)
         device = learning_algo.device
         with torch.no_grad():
-            all_possib_abs_states = learning_algo.crar.encoder(
-                torch.tensor(all_possib_inp).float().to(device)
-                ).cpu().numpy()
-        if all_possib_abs_states.ndim == 4: # data_format='channels_last' --> 'channels_first'
-            all_possib_abs_states=np.transpose(all_possib_abs_states, (0, 3, 1, 2))    
-        
-        n = 1000
-        historics = test_data_set.observations()[0][0:n]
-        historics = np.squeeze(historics, axis=1)
-        with torch.no_grad():
             abs_states = learning_algo.crar.encoder(
-                torch.tensor(historics).float().to(device))
+                torch.tensor(all_possib_inp).float().to(device)
+                )
+        abs_states_np = abs_states.cpu().numpy()
         if abs_states.ndim == 4: # data_format='channels_last' --> 'channels_first'
-            abs_states = np.transpose(abs_states, (0, 3, 1, 2))
-    
-        actions=test_data_set.actions()[0:n]
-        
+            abs_states = np.transpose(abs_states_np, (0, 3, 1, 2))
+        labels = np.array(labels)
+       
         if not self.inTerminalState():
             self._mode_episode_count += 1
         print("== Mean score per episode is {} over {} episodes ==".format(self._mode_score / (self._mode_episode_count+0.0001), self._mode_episode_count))
-                
         m = cm.ScalarMappable(cmap=cm.jet)
        
-        abs_states_np = abs_states.cpu().numpy()
         if intern_dim == 2:
             x = np.array(abs_states_np)[:,0]
             y = np.array(abs_states_np)[:,1]
@@ -179,44 +181,41 @@ class MyEnv(Environment):
             ax.set_zlabel(r'$X_3$')
                     
         # Plot the estimated transitions
+        n = abs_states.shape[0]
         for i in range(n-1):
-            with torch.no_grad():
-                predicted1 = learning_algo.crar.transition(torch.cat([
-                    abs_states[i:i+1],
-                    torch.as_tensor([[1,0,0,0]], device=device).float()
-                    ], dim=1)).cpu().numpy()
-                predicted2 = learning_algo.crar.transition(torch.cat([
-                    abs_states[i:i+1],
-                    torch.as_tensor([[0,1,0,0]], device=device).float()
-                    ], dim=1)).cpu().numpy()
-                predicted3 = learning_algo.crar.transition(torch.cat([
-                    abs_states[i:i+1],
-                    torch.as_tensor([[0,0,1,0]], device=device).float()
-                    ], dim=1)).cpu().numpy()
-                predicted4 = learning_algo.crar.transition(torch.cat([
-                    abs_states[i:i+1],
-                    torch.as_tensor([[0,0,0,1]], device=device).float()
-                    ], dim=1)).cpu().numpy()
-            if intern_dim == 2:
-                ax.plot(np.concatenate([x[i:i+1],predicted1[0,:1]]), np.concatenate([y[i:i+1],predicted1[0,1:2]]), color="0.9", alpha=0.75)
-                ax.plot(np.concatenate([x[i:i+1],predicted2[0,:1]]), np.concatenate([y[i:i+1],predicted2[0,1:2]]), color="0.65", alpha=0.75)
-                ax.plot(np.concatenate([x[i:i+1],predicted3[0,:1]]), np.concatenate([y[i:i+1],predicted3[0,1:2]]), color="0.4", alpha=0.75)
-                ax.plot(np.concatenate([x[i:i+1],predicted4[0,:1]]), np.concatenate([y[i:i+1],predicted4[0,1:2]]), color="0.15", alpha=0.75)
-            else:
-                ax.plot(np.concatenate([x[i:i+1],predicted1[0,:1]]), np.concatenate([y[i:i+1],predicted1[0,1:2]]), np.concatenate([z[i:i+1],predicted1[0,2:3]]), color="0.9", alpha=0.75)
-                ax.plot(np.concatenate([x[i:i+1],predicted2[0,:1]]), np.concatenate([y[i:i+1],predicted2[0,1:2]]), np.concatenate([z[i:i+1],predicted2[0,2:3]]), color="0.65", alpha=0.75)
-                ax.plot(np.concatenate([x[i:i+1],predicted3[0,:1]]), np.concatenate([y[i:i+1],predicted3[0,1:2]]), np.concatenate([z[i:i+1],predicted3[0,2:3]]), color="0.4", alpha=0.75)
-                ax.plot(np.concatenate([x[i:i+1],predicted4[0,:1]]), np.concatenate([y[i:i+1],predicted4[0,1:2]]), np.concatenate([z[i:i+1],predicted4[0,2:3]]), color="0.15", alpha=0.75)            
+            n_actions = 4
+            action_colors = ["0.9", "0.65", "0.4", "0.15"]
+            for action in range(n_actions):
+                action_encoding = np.zeros(n_actions)
+                action_encoding[action] = 1
+                with torch.no_grad():
+                    pred = learning_algo.crar.transition(torch.cat([
+                        abs_states[i:i+1].to(device),
+                        torch.as_tensor([action_encoding]).to(device)
+                        ], dim=1).float()).cpu().numpy()
+                if (intern_dim > 3) and (abs_states_np.shape[0] > 2):
+                    pred = pca.transform(pred)
+                x_transitions = np.concatenate([x[i:i+1],pred[0,:1]])
+                y_transitions = np.concatenate([y[i:i+1],pred[0,1:2]])
+                if intern_dim == 2:
+                    z_transitions = np.zeros(y_transitions.shape)
+                else:
+                    z_transitions = np.concatenate([z[i:i+1],pred[0,2:3]])
+                ax.plot(
+                    x_transitions, y_transitions, z_transitions,
+                    color=action_colors[action], alpha=0.75)
         
         # Plot the dots at each time step depending on the action taken
-        length_block=[[0,18],[18,19],[19,31]]
-        for i in range(3):
-            colors=['blue','orange','green']
+        colors=['blue', 'orange', 'green', 'red']
+        for i in range(4): # For each quadrant
+            label_idxs = labels == i
             if intern_dim == 2:
-                line3 = ax.scatter(all_possib_abs_states[length_block[i][0]:length_block[i][1],0], all_possib_abs_states[length_block[i][0]:length_block[i][1],1], c=colors[i], marker='x', edgecolors='k', alpha=0.5, s=100)
+                line3 = ax.scatter(x[label_idxs], y[label_idxs],
+                    c=colors[i], marker='x', edgecolors='k', alpha=0.5, s=100)
             else:
-                line3 = ax.scatter(all_possib_abs_states[length_block[i][0]:length_block[i][1],0], all_possib_abs_states[length_block[i][0]:length_block[i][1],1] ,all_possib_abs_states[length_block[i][0]:length_block[i][1],2], marker='x', depthshade=True, edgecolors='k', alpha=0.5, s=50)
-
+                line3 = ax.scatter(x[label_idxs], y[label_idxs], z[label_idxs],
+                    c=colors[i], marker='x', depthshade=True, edgecolors='k',
+                    alpha=0.5, s=50)
         if intern_dim == 2:
             axes_lims=[ax.get_xlim(),ax.get_ylim()]
         else:
@@ -225,17 +224,15 @@ class MyEnv(Environment):
         # Plot the legend for transition estimates
         box1b = TextArea(" Estimated transitions (action 0, 1, 2 and 3): ", textprops=dict(color="k"))
         box2b = DrawingArea(90, 20, 0, 0)
-        el1b = Rectangle((5, 10), 15,2, fc="0.9", alpha=0.75)
-        el2b = Rectangle((25, 10), 15,2, fc="0.65", alpha=0.75) 
-        el3b = Rectangle((45, 10), 15,2, fc="0.4", alpha=0.75)
-        el4b = Rectangle((65, 10), 15,2, fc="0.15", alpha=0.75) 
+        el1b = Rectangle((5, 10), 15,2, fc=action_colors[0], alpha=0.75)
+        el2b = Rectangle((25, 10), 15,2, fc=action_colors[1], alpha=0.75) 
+        el3b = Rectangle((45, 10), 15,2, fc=action_colors[2], alpha=0.75)
+        el4b = Rectangle((65, 10), 15,2, fc=action_colors[3], alpha=0.75) 
         box2b.add_artist(el1b)
         box2b.add_artist(el2b)
         box2b.add_artist(el3b)
         box2b.add_artist(el4b)
-        
         boxb = HPacker(children=[box1b, box2b], align="center", pad=0, sep=5)
-        
         anchored_box = AnchoredOffsetbox(
             loc=3, child=boxb, pad=0., frameon=True,
             bbox_to_anchor=(0., 0.98), bbox_transform=ax.transAxes,
@@ -261,18 +258,18 @@ class MyEnv(Environment):
         # Plot losses over epochs
         losses, loss_names = learning_algo.get_losses()
         loss_weights = learning_algo._loss_weights
-        _, axs = plt.subplots(4, 2, figsize=(7, 10))
-        for i in range(8):
+        _, axs = plt.subplots(3, 2, figsize=(7, 10))
+        for i in range(5):
             loss = losses[i]; loss_name = loss_names[i]
-            ax = axs[i%4][i//4]
+            ax = axs[i%3][i//3]
             ax.plot(loss)
             ax.set_ylabel(loss_name)
         plt.tight_layout()
         plt.savefig(f'{fig_dir}losses.pdf', dpi=300)
-        _, axs = plt.subplots(4, 2, figsize=(7, 10))
-        for i in range(8):
+        _, axs = plt.subplots(3, 2, figsize=(7, 10))
+        for i in range(5):
             loss = losses[i]; loss_name = loss_names[i]
-            ax = axs[i%4][i//4]
+            ax = axs[i%3][i//3]
             ax.plot(np.array(loss)*loss_weights[i])
             ax.set_ylabel(loss_name)
         plt.tight_layout()
@@ -287,7 +284,7 @@ class MyEnv(Environment):
         if self._higher_dim_obs:
             return [(1, self._size_maze*6, self._size_maze*6)]
         else:
-            return [(1,self._size_maze,self._size_maze)]
+            return [(1, 32)]
 
     def observationType(self, subject):
         return np.float
@@ -296,12 +293,17 @@ class MyEnv(Environment):
         return 4
 
     def observe(self):
-        obs = copy.deepcopy(self._map)
-        #obs[self._pos_goal[0],self._pos_goal[1]] = 8
-        obs[self._pos_agent[0],self._pos_agent[1]] = 0.5
         if self._higher_dim_obs:
+            obs = copy.deepcopy(self._map)
+            #obs[self._pos_goal[0],self._pos_goal[1]] = 8
+            obs[self._pos_agent[0],self._pos_agent[1]] = 0.5
             obs = self.get_higher_dim_obs(self._pos_agent)
+        else:
+            obs = self.get_low_dim_obs(self._pos_agent)
         return [obs]
+
+    def get_low_dim_obs(self, pos_agent):
+        return self._obs_map[self._pos_agent[0]][self._pos_agent[1]].copy()
     
     def get_higher_dim_obs(self, pos_agent):
         """

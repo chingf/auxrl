@@ -17,22 +17,24 @@ import deer.experiment.base_controllers as bc
 from deer.policies import EpsilonGreedyPolicy
 
 # Experiment Parameters
-net_type = 'noconv'
-nn_yaml = f'network_{net_type}.yaml'
-internal_dim = 10
-fname_prefix = 'foraging_ep100'
+net_type = 'noconv_newstate'
+internal_dim = 5
+fname_prefix = 'foraging_random'
 fname_suffix = ''
 epochs = 35
 policy_eps = 1.
-higher_dim_obs = True
+higher_dim_obs = False
+foraging_give_rewards = False
 
 # Make directories
-exp_dir = f'{fname_prefix}_{net_type}_dim{internal_dim}{fname_suffix}'
+nn_yaml = f'network_{net_type}.yaml'
+engram_dir = '/home/cf2794/engram/Ching/rl/'
+exp_dir = f'{fname_prefix}_{net_type}_dim{internal_dim}{fname_suffix}/'
 for d in ['pickles/', 'nnets/', 'scores/', 'figs/', 'params/']:
-    os.makedirs(f'{d}{exp_dir}', exist_ok=True)
+    os.makedirs(f'{engram_dir}{d}{exp_dir}', exist_ok=True)
 
 def gpu_parallel(job_idx):
-    results_dir = f'pickles/{exp_dir}/'
+    results_dir = f'pickles/{exp_dir}'
     results = {}
     results['dimensionality_tracking'] = []
     results['valid_scores'] = []
@@ -47,9 +49,27 @@ def gpu_parallel(job_idx):
     with open(f'{results_dir}results_{job_idx}.p', 'wb') as f:
         pickle.dump(results, f)
 
+def cpu_parallel():
+    results_dir = f'{engram_dir}pickles/{exp_dir}'
+    os.makedirs(results_dir, exist_ok=True)
+    results = {}
+    results['dimensionality_tracking'] = []
+    results['valid_scores'] = []
+    results['fname'] = []
+    results['loss_weights'] = []
+    job_results = Parallel(n_jobs=28)(delayed(run_env)(arg) for arg in args)
+    for job_result in job_results:
+        fname, loss_weights, result = job_result
+        for key in result.keys():
+            results[key].append(result[key])
+        results['fname'].append(fname)
+        results['loss_weights'].append(loss_weights)
+    with open(f'{results_dir}results_0.p', 'wb') as f:
+        pickle.dump(results, f)
+
 def run_env(arg):
     _fname, loss_weights, i = arg
-    fname = f'{exp_dir}/{_fname}_{i}'
+    fname = f'{exp_dir}{_fname}_{i}'
     encoder_type = 'variational' if loss_weights[-1] > 0 else 'regular'
     parameters = {
         'nn_yaml': nn_yaml,
@@ -74,7 +94,7 @@ def run_env(arg):
         'freeze_interval': 1000,
         'deterministic': False,
         'loss_weights': loss_weights,
-        'foraging_give_rewards': True
+        'foraging_give_rewards': foraging_give_rewards
         }
     with open(f'params/{_fname}.yaml', 'w') as outfile:
         yaml.dump(parameters, outfile, default_flow_style=False)
@@ -96,7 +116,9 @@ def run_env(arg):
     agent = NeuralAgent(
         env, learning_algo, parameters['replay_memory_size'], 1,
         parameters['batch_size'], rng,
-        train_policy=train_policy, test_policy=test_policy)
+        train_policy=train_policy, test_policy=test_policy,
+        save_dir=engram_dir
+        )
     agent.run(10, 500)
     agent.attach(bc.VerboseController( evaluate_on='epoch', periodicity=1))
     agent.attach(bc.LearningRateController(
@@ -107,7 +129,8 @@ def run_env(arg):
         evaluate_on='action', periodicity=parameters['update_frequency'],
         show_episode_avg_V_value=True, show_avg_Bellman_residual=True))
     best_controller = bc.FindBestController(
-        validationID=simple_maze_env.VALIDATION_MODE, testID=None, unique_fname=fname)
+        validationID=simple_maze_env.VALIDATION_MODE, testID=None,
+        unique_fname=fname, save_root=engram_dir)
     agent.attach(best_controller)
     agent.attach(bc.InterleavedTestEpochController(
         id=simple_maze_env.VALIDATION_MODE, epoch_length=parameters['steps_per_test'],
@@ -124,16 +147,22 @@ def run_env(arg):
 # load user-defined parameters
 job_idx = int(sys.argv[1])
 n_jobs = int(sys.argv[2])
+#fname_grid = [
+#    'foraging_mf', 'foraging_entro', 'foraging_mb_noR'
+#    ]
+#loss_weights_grid = [
+#    [0., 0., 0., 0., 0., 0., 1., 0.],
+#    [0., 1E-2, 1E-2, 0, 0, 0, 1., 0],
+#    [1E-1, 1E-2, 1E-2, 0, 0, 0, 1., 0],
+#    ]
 fname_grid = [
-    'foraging_mf', 'foraging_entro', 'foraging_mb_noR'
+    'mb_only'
     ]
 loss_weights_grid = [
-    [0., 0., 0., 0., 0., 0., 1., 0.],
-    [0., 1E-2, 1E-2, 0, 0, 0, 1., 0],
-    [1E-1, 1E-2, 1E-2, 0, 0, 0, 1., 0],
+    [1E-1, 1E-2, 1E-2, 0, 0, 0, 0., 0],
     ]
 fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
-iters = np.arange(15)
+iters = np.arange(30) #np.arange(15)
 args = []
 for fname, loss_weights in zip(fname_grid, loss_weights_grid):
     for i in iters:

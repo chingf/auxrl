@@ -34,7 +34,7 @@ class CRAR(LearningAlgo):
             freeze_interval=1000, batch_size=32,
             random_state=np.random.RandomState(),
             double_Q=False, neural_network=NN, lr=1E-4, nn_yaml='network.yaml',
-            loss_weights=[1, 0.2, 1, 1, 1, 1, 1, 0],
+            loss_weights=[1, 1, 1, 1, 1], # T, entropy, entropy, Q, VAE
             **kwargs
             ):
         """ Initialize the environment. """
@@ -54,13 +54,10 @@ class CRAR(LearningAlgo):
         self._expand_tcm = kwargs.get('expand_tcm', False)
         self._encoder_type = kwargs.get('encoder_type', None)
         self.loss_T = [0]
-        self.loss_R = [0]
         self.loss_Q = [0]
         self.loss_VAE = [0]
         self.loss_entropy_neighbor = [0]
         self.loss_entropy_random = [0]
-        self.loss_volume = [0]
-        self.loss_gamma = [0]
         self.loss_total = [0]
         self.device = torch.device(
             "cuda:0" if torch.cuda.is_available() else "cpu")
@@ -109,7 +106,6 @@ class CRAR(LearningAlgo):
             crar_target_state_dicts.append(model.state_dict())
         params = {
             'crar': crar_state_dicts, 'crar_target': crar_target_state_dicts,
-            #'tau': self._nstep_decay
             }
         return params
 
@@ -123,6 +119,11 @@ class CRAR(LearningAlgo):
 
         crar_state_dicts = params['crar']
         crar_target_state_dicts = params['crar_target']
+        if len(crar_state_dicts) == (len(self.crar.models)+2):
+            crar_state_dicts = [crar_state_dicts[0], crar_state_dicts[3], crar_state_dicts[4]]
+            crar_target_state_dicts = [
+                crar_target_state_dicts[0],
+                crar_target_state_dicts[3], crar_target_state_dicts[4]]
         for model, p_to_load in zip(self.crar.models, crar_state_dicts):
             if encoder_only:
                 if type(model) == type(self.crar.Q):
@@ -182,23 +183,6 @@ class CRAR(LearningAlgo):
             Es = self.crar.encoder(states_val)
         Es_and_actions = torch.cat([Es, onehot_actions], dim=1)
         TEs = self.crar.transition(Es_and_actions)
-        R = self.crar.R(Es_and_actions)
-
-        if(self.update_counter%500==0):
-            print("Printing a few elements useful for debugging:")
-            print("actions_val[0], rewards_val[0], terminals_val[0]")
-            print(actions_val[0], rewards_val[0], terminals_val[0])
-            print("Es[0], TEs[0], Esp_[0]")
-            if(Es.ndim==4):
-                print(
-                    np.transpose(Es, (0, 3, 1, 2))[0],
-                    np.transpose(TEs, (0, 3, 1, 2))[0],
-                    np.transpose(Esp, (0, 3, 1, 2))[0]
-                    ) # data_format='channels_last' --> 'channels_first'
-            else:
-                print(Es[0].data, TEs[0].data, Esp[0].data)
-            print("R[0]")
-            print(R[0])
 
         # Transition loss
         loss_T = torch.nn.functional.mse_loss(TEs, Esp, reduction='none')
@@ -206,29 +190,6 @@ class CRAR(LearningAlgo):
         loss_T = loss_T * terminals_mask[:, None]
         loss_T = torch.mean(loss_T)
         self.loss_T[-1] += loss_T.item()
-
-        # Rewards loss
-        rewards_val = torch.tensor(rewards_val).view(-1,1).to(self.device).float()
-        loss_R = torch.nn.functional.mse_loss(
-            self.crar.R(Es_and_actions), rewards_val
-            )
-        self.loss_R[-1] += loss_R.item()
-
-        # Fit gammas
-        gamma_val = terminals_mask * self._df
-        gamma_val = gamma_val.view(-1,1).float().to(self.device)
-        loss_gamma = torch.nn.functional.mse_loss(
-            self.crar.gamma(Es_and_actions), gamma_val
-            )
-        self.loss_gamma[-1] += loss_gamma.item()
-
-        # Enforce limited volume in abstract state space
-        loss_volume = torch.pow(
-            torch.norm(Es, p=float('inf'), dim=1),
-            2) - 1
-        loss_volume = torch.clip(loss_volume, min=0)
-        loss_volume = torch.mean(loss_volume)
-        self.loss_volume[-1] += loss_volume.item()
 
         # Increase entropy of randomly sampled states
         # This works only when states_val is made up of only one observation
@@ -249,26 +210,18 @@ class CRAR(LearningAlgo):
         # Q network stuff
         if self.update_counter % self._freeze_interval == 0:
             self.resetQHat()
-        if self._double_Q: # Action selection by Q' and evaluation by Q
-            # old code-- action selection by Q and evaluation by Q'?
-            next_q_target = self.crar_target.Q(
-                self.crar_target.encoder(next_states_val)
-                )
+        next_q_target = self.crar_target.Q(
+            self.crar_target.encoder(next_states_val)
+            )
+        if self._double_Q: # Action selection by Q and evaluation by Q'
             next_q = self.crar.Q(Esp)
             argmax_next_q = torch.argmax(next_q, axis=1)
             max_next_q = next_q_target[
                 np.arange(self._batch_size), argmax_next_q
                 ].reshape((-1, 1))
-
-            # Fixed code??
-#            target_Q_curr = self.crar_target.Q(Es)
-#            model_Q_next = self.crar.Q(Esp)
-#            selected_action = torch.argmax(target_Q_curr, axis=1)
-#            max_next_q = model_Q_next[
-#                np.arange(self._batch_size), selected_action
-#                ].reshape((-1, 1))
-        else: # Action selection and evaluation by Q' #TODO this is broken
+        else: # Action selection and evaluation by Q'
             max_next_q = np.max(next_q_target, axis=1, keepdims=True)
+        rewards_val = torch.tensor(rewards_val).view(-1,1).to(self.device).float()
         target = rewards_val.squeeze() + terminals_mask*self._df*max_next_q.squeeze()
         q_vals = self.crar.Q(Es)
         q_vals = q_vals[np.arange(self._batch_size), actions_val]
@@ -281,14 +234,11 @@ class CRAR(LearningAlgo):
         all_losses = self._loss_weights[0] * loss_T \
             + self._loss_weights[1] * loss_entropy_neighbor \
             + self._loss_weights[2] * loss_entropy_random \
-            + self._loss_weights[3] * loss_volume \
-            + self._loss_weights[4] * loss_gamma \
-            + self._loss_weights[5] * loss_R \
-            + self._loss_weights[6] * loss_Q
+            + self._loss_weights[3] * loss_Q
         if self._encoder_type == 'variational':
             loss_VAE = torch.mean(self.crar.encoder.return_kls())
             self.loss_VAE[-1] += loss_VAE.item()
-            all_losses = all_losses + self._loss_weights[7] * loss_VAE
+            all_losses = all_losses + self._loss_weights[4] * loss_VAE
         self.loss_total[-1] += all_losses.item()
         all_losses.backward()
         self.optimizer.step()
@@ -296,187 +246,22 @@ class CRAR(LearningAlgo):
 
         # Occasional logging
         if(self.update_counter%500==0):
-            self.loss_R[-1] /= 500; self.loss_gamma[-1] /= 500
             self.loss_Q[-1] /= 500; self.loss_T[-1] /= 500
             self.loss_entropy_neighbor[-1] /= 500
             self.loss_entropy_random[-1] /= 500
-            self.loss_volume[-1] /= 500; self.loss_VAE[-1] /= 500
+            self.loss_VAE[-1] /= 500
             self.loss_total[-1] /= 500
             print('LOSSES')
-            print(f'T = {self.loss_T[-1]}; R = {self.loss_R[-1]}; \
-                Gamma = {self.loss_gamma[-1]}; Q = {self.loss_Q[-1]};')
+            print(f'T = {self.loss_T[-1]}; Q = {self.loss_Q[-1]};')
             print(f'Entropy Neighbor = {self.loss_entropy_neighbor[-1]}; \
                 Entropy Random = {self.loss_entropy_random[-1]}; \
-                Volume = {self.loss_volume[-1]}; VAE = {self.loss_VAE[-1]}')
-            self.loss_R.append(0); self.loss_gamma.append(0)
+                VAE = {self.loss_VAE[-1]}')
             self.loss_Q.append(0); self.loss_T.append(0)
             self.loss_entropy_neighbor.append(0)
             self.loss_entropy_random.append(0)
-            self.loss_volume.append(0); self.loss_VAE.append(0)
+            self.loss_VAE.append(0)
             self.loss_total.append(0)
 
-        return loss_Q.item(), loss_Q_unreduced
-
-    def recurrent_train(
-        self, observations, actions_val, rewards_val,
-        terminals_val, hidden_states):
-        """
-        Train CRAR from one batch of data. Like the train method, but each
-        value in a batch is now a history of observations.
-        """
-
-        raise ValueError('LSTM encoder is not fully implemented.')
-
-        self.optimizer.zero_grad()
-        states_val = [obs[:,:-1,:] for obs in observations]
-        next_states_val = [obs[:,1:,:] for obs in observations]
-        actions_val = actions_val[:, -1]
-        rewards_val = rewards_val[:,-1]
-        terminals_val = terminals_val[:,-1]
-        onehot_actions = np.zeros((self._batch_size, self._n_actions))
-        onehot_actions[np.arange(self._batch_size), actions_val] = 1
-        onehot_actions = torch.as_tensor(onehot_actions, device=self.device).float()
-
-        if (len(states_val) > 1) or (len(next_states_val) > 1):
-            raise ValueError('Dimension mismatch')
-
-        states_val = states_val[0]
-        next_states_val = next_states_val[0]
-        states_val = torch.as_tensor(states_val, device=self.device).float()
-        next_states_val = torch.as_tensor(next_states_val, device=self.device).float()
-
-        Esp = self.crar.encoder(
-            next_states_val, [h[1] for h in hidden_states], update_hidden=True
-            )
-        Es = self.crar.encoder(
-            states_val, [h[0] for h in hidden_states], update_hidden=True
-            )
-        Es_and_actions = torch.cat([Es, onehot_actions], dim=1)
-        TEs = self.crar.transition(Es_and_actions)
-        R = self.crar.R(Es_and_actions)
-
-        if(self.update_counter%500==0):
-            print("Printing a few elements useful for debugging:")
-            print("actions_val[0], rewards_val[0], terminals_val[0]")
-            print(actions_val[0], rewards_val[0], terminals_val[0])
-            print("Es[0], TEs[0], Esp_[0]")
-            if(Es.ndim==4):
-                print(
-                    np.transpose(Es, (0, 3, 1, 2))[0],
-                    np.transpose(TEs, (0, 3, 1, 2))[0],
-                    np.transpose(Esp, (0, 3, 1, 2))[0]
-                    ) # data_format='channels_last' --> 'channels_first'
-            else:
-                print(Es[0].data, TEs[0].data, Esp[0].data)
-            print("R[0]")
-            print(R[0])
-
-        # Transition loss
-        loss_T = torch.nn.functional.mse_loss(TEs, Esp, reduction='none')
-        terminals_mask = torch.tensor(1-terminals_val).float().to(self.device)
-        loss_T = loss_T * terminals_mask[:, None]
-        loss_T = torch.mean(loss_T)
-        self.loss_T += loss_T.item()
-
-        # Rewards loss
-        rewards_val = torch.tensor(rewards_val).view(-1,1).to(self.device).float()
-        loss_R = torch.nn.functional.mse_loss(
-            self.crar.R(Es_and_actions), rewards_val
-            )
-        self.loss_R += loss_R.item()
-
-        # Fit gammas
-        gamma_val = terminals_mask * self._df
-        gamma_val = gamma_val.view(-1,1).float().to(self.device)
-        loss_gamma = torch.nn.functional.mse_loss(
-            self.crar.gamma(Es_and_actions), gamma_val
-            )
-        self.loss_gamma += loss_gamma.item()
-
-        # Enforce limited volume in abstract state space
-        loss_volume = torch.pow(
-            torch.norm(Es, p=float('inf'), dim=1),
-            2) - 1
-        loss_volume = torch.clip(loss_volume, min=0)
-        loss_volume = torch.mean(loss_volume)
-        self.loss_volume += loss_volume.item()
-
-        # Increase entropy of randomly sampled states
-        # This works only when states_val is made up of only one observation
-        rolled = torch.roll(Es, 1, dims=0)
-        loss_entropy_random = torch.exp(
-            -self._entropy_temp * torch.norm(Es - rolled, dim=1)
-            )
-        loss_entropy_random = torch.mean(loss_entropy_random)
-        self.loss_entropy_random += loss_entropy_random.item()
-
-        # Increase entropy of neighboring states
-        loss_entropy_neighbor = torch.exp(
-            -self._entropy_temp * torch.norm(Es - Esp, dim=1)
-            )
-        loss_entropy_neighbor = torch.mean(loss_entropy_neighbor)
-        self.loss_entropy_neighbor += loss_entropy_neighbor.item()
-
-        # Q network stuff
-        if self.update_counter % self._freeze_interval == 0:
-            self.resetQHat()
-        next_q_target = self.crar_target.Q(self.crar_target.encoder(
-            next_states_val, [h[1] for h in hidden_states], update_hidden=False
-            ))
-
-        if self._double_Q: # Action selection by Q
-            next_q = self.crar.Q(Esp)
-            argmax_next_q = torch.argmax(next_q, axis=1)
-            max_next_q = next_q_target[
-                np.arange(self._batch_size), argmax_next_q
-                ].reshape((-1, 1))
-        else: # Action selection by Q'
-            max_next_q = np.max(next_q_target, axis=1, keepdims=True)
-        target = rewards_val.squeeze() + terminals_mask*self._df*max_next_q.squeeze()
-        q_vals = self.crar.Q(Es)
-        q_vals = q_vals[np.arange(self._batch_size), actions_val]
-        loss_Q = torch.nn.functional.mse_loss(q_vals, target, reduction='none')
-        loss_Q_unreduced = loss_Q
-        loss_Q = torch.mean(loss_Q)
-        self.loss_Q += loss_Q.item()
-
-        # Aggregate all losses and update parameters
-        all_losses = self._loss_weights[0] * loss_T \
-            + self._loss_weights[1] * loss_entropy_neighbor \
-            + self._loss_weights[2] * loss_entropy_random \
-            + self._loss_weights[3] * loss_volume \
-            + self._loss_weights[4] * loss_gamma \
-            + self._loss_weights[5] * loss_R \
-            + self._loss_weights[6] * loss_Q
-        if self._encoder_type == 'variational':
-            loss_VAE = torch.mean(self.crar.encoder.return_kls())
-            self.loss_VAE[-1] += loss_VAE.item()
-            all_losses = all_losses + self._loss_weights[7] * loss_VAE
-        self.loss_total[-1] += all_losses.item()
-        all_losses.backward()
-        self.optimizer.step()
-        self.update_counter += 1
-
-        # Occasional logging
-        if(self.update_counter%500==0):
-            self.loss_R[-1] /= 500; self.loss_gamma[-1] /= 500
-            self.loss_Q[-1] /= 500; self.loss_T[-1] /= 500
-            self.loss_entropy_neighbor[-1] /= 500
-            self.loss_entropy_random[-1] /= 500
-            self.loss_volume[-1] /= 500; self.loss_VAE[-1] /= 500
-            self.loss_total[-1] /= 500
-            print('LOSSES')
-            print(f'T = {self.loss_T[-1]}; R = {self.loss_R[-1]}; \
-                Gamma = {self.loss_gamma[-1]}; Q = {self.loss_Q[-1]};')
-            print(f'Entropy Neighbor = {self.loss_entropy_neighbor[-1]}; \
-                Entropy Random = {self.loss_entropy_random[-1]}; \
-                Volume = {self.loss_volume[-1]}; VAE = {self.loss_VAE[-1]}')
-            self.loss_R.append(0); self.loss_gamma.append(0)
-            self.loss_Q.append(0); self.loss_T.append(0)
-            self.loss_entropy_neighbor.append(0)
-            self.loss_entropy_random.append(0)
-            self.loss_volume.append(0); self.loss_VAE.append(0)
-            self.loss_total.append(0)
         return loss_Q.item(), loss_Q_unreduced
 
     def make_state_with_history(self, states_buffer):
@@ -559,13 +344,9 @@ class CRAR(LearningAlgo):
         depths = [0,1,3,6,10] # Mode defines the planning depth di
         depth = depths[mode]
         with torch.no_grad():
-            if self._encoder_type == 'recurrent':
-                state = torch.as_tensor(state, device=self.device).float()
-                xs = self.crar.encoder(state, self.crar.encoder.hidden)
-            else:
-                _state = self.make_state_with_history(state)
-                state = torch.as_tensor(_state, device=self.device).float()
-                xs = self.crar.encoder(state)
+            _state = self.make_state_with_history(state)
+            state = torch.as_tensor(_state, device=self.device).float()
+            xs = self.crar.encoder(state)
         q_vals = self.qValues(xs, d=depth)
         return torch.argmax(q_vals), torch.max(q_vals)
 
@@ -606,13 +387,11 @@ class CRAR(LearningAlgo):
         losses = [
             self.loss_T[:-1],
             self.loss_entropy_neighbor[:-1], self.loss_entropy_random[:-1],
-            self.loss_volume[:-1], 
-            self.loss_gamma[:-1], self.loss_R[:-1], self.loss_Q[:-1],
-            self.loss_VAE[:-1], self.loss_total[:-1]
+            self.loss_Q[:-1], self.loss_VAE[:-1], self.loss_total[:-1]
             ]
         loss_names = [
-            'Transition', 'Entropy (neighbor)', 'Entropy (random)', 'Volume',
-            'Gamma', 'Reward', 'Q Value', 'VAE', 'TOTAL'
+            'Transition', 'Entropy (neighbor)', 'Entropy (random)',
+            'Q Value', 'VAE', 'TOTAL'
             ]
         return losses, loss_names
 

@@ -36,6 +36,7 @@ qnet:
 
 trans-pred:
   fc: *crar-fc
+  encode_new_state: False
 
 float-pred:
   fc: *crar-float-fc

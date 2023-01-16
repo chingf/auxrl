@@ -17,23 +17,25 @@ import deer.experiment.base_controllers as bc
 
 from deer.policies import EpsilonGreedyPolicy
 
-# PARAMETERS
-fname_prefix = 'transfer_foraging_ep100_2x'
+# Experiment Parameters
+net_type = 'noconv'
+internal_dim = 5
+fname_prefix = 'transfer_foraging_random'
 fname_suffix = ''
-source_prefix = 'foraging_ep100'
-source_epoch = 80
-net_type = 'simpler'
-internal_dim = 10
 epochs = 35
+source_prefix = 'foraging_random'
+source_epoch = 35
 policy_eps = 1.
 encoder_only = True
+higher_dim_obs = False
 
-# SET UP
+# Make directories
 nn_yaml = f'network_{net_type}.yaml'
+engram_dir = '/home/cf2794/engram/Ching/rl/'
 exp_dir = f'{fname_prefix}_{net_type}_dim{internal_dim}{fname_suffix}/'
 source_dir = f'{source_prefix}_{net_type}_dim{internal_dim}/'
 for d in ['pickles/', 'nnets/', 'scores/', 'figs/', 'params/']:
-    os.makedirs(f'{d}{exp_dir}', exist_ok=True)
+    os.makedirs(f'{engram_dir}{d}{exp_dir}', exist_ok=True)
 
 def gpu_parallel(job_idx):
     results_dir = f'pickles/{exp_dir}'
@@ -52,9 +54,27 @@ def gpu_parallel(job_idx):
     with open(f'{results_dir}results_{job_idx}.p', 'wb') as f:
         pickle.dump(results, f)
 
+def cpu_parallel():
+    results_dir = f'{engram_dir}pickles/{exp_dir}'
+    os.makedirs(results_dir, exist_ok=True)
+    results = {}
+    results['dimensionality_tracking'] = []
+    results['valid_scores'] = []
+    results['fname'] = []
+    results['loss_weights'] = []
+    job_results = Parallel(n_jobs=28)(delayed(run_env)(arg) for arg in args)
+    for job_result in job_results:
+        fname, loss_weights, result = job_result
+        for key in result.keys():
+            results[key].append(result[key])
+        results['fname'].append(fname)
+        results['loss_weights'].append(loss_weights)
+    with open(f'{results_dir}results_0.p', 'wb') as f:
+        pickle.dump(results, f)
+
 def run_env(arg):
     _fname, network_file, loss_weights, i = arg
-    nnet_dir = f'nnets/{source_dir}'
+    nnet_dir = f'{engram_dir}nnets/{source_dir}'
     if network_file is None:
         set_network = None
     else:
@@ -68,7 +88,7 @@ def run_env(arg):
     encoder_type = 'variational' if loss_weights[-1] > 0 else 'regular'
     parameters = {
         'nn_yaml': nn_yaml,
-        'higher_dim_obs': True,
+        'higher_dim_obs': higher_dim_obs,
         'internal_dim': internal_dim,
         'fname': fname,
         'steps_per_epoch': 1000,
@@ -112,7 +132,9 @@ def run_env(arg):
     agent = NeuralAgent(
         env, learning_algo, parameters['replay_memory_size'], 1,
         parameters['batch_size'], rng,
-        train_policy=train_policy, test_policy=test_policy)
+        train_policy=train_policy, test_policy=test_policy,
+        save_dir=engram_dir
+        )
     if set_network is not None:
         agent.setNetwork(
             f'{set_network[0]}/fname', nEpoch=set_network[1],
@@ -128,7 +150,8 @@ def run_env(arg):
         evaluate_on='action', periodicity=parameters['update_frequency'],
         show_episode_avg_V_value=True, show_avg_Bellman_residual=True))
     best_controller = bc.FindBestController(
-        validationID=simple_maze_env.VALIDATION_MODE, testID=None, unique_fname=fname)
+        validationID=simple_maze_env.VALIDATION_MODE, testID=None,
+        unique_fname=fname)
     agent.attach(best_controller)
     agent.attach(bc.InterleavedTestEpochController(
         id=simple_maze_env.VALIDATION_MODE, epoch_length=parameters['steps_per_test'],
@@ -142,8 +165,6 @@ def run_env(arg):
         parameter_lists = [
             agent._learning_algo.crar.encoder.parameters(),
             agent._learning_algo.crar_target.encoder.parameters(),
-            agent._learning_algo.crar.R.parameters(),
-            agent._learning_algo.crar_target.R.parameters(),
             agent._learning_algo.crar.transition.parameters(),
             agent._learning_algo.crar_target.transition.parameters(),
             ]
@@ -162,14 +183,9 @@ def run_env(arg):
 job_idx = int(sys.argv[1])
 n_jobs = int(sys.argv[2])
 
-fname_grid = ['mf', 'mb_noR_qloss', 'entro_qloss', 'clean']
-network_files = [
-    'foraging_ep100_foraging_mf', 'foraging_ep100_foraging_mb_noR',
-    'foraging_ep100_foraging_entro', None
-    ]
+fname_grid = ['mb_only', 'clean']
+network_files = ['foraging_random_foraging_mb_only', None]
 loss_weights_grid = [
-    [0., 0., 0., 0., 0., 0., 1., 0.],
-    [0., 0., 0., 0., 0., 0., 1., 0.],
     [0., 0., 0., 0., 0., 0., 1., 0.],
     [0., 0., 0., 0., 0., 0., 1., 0.],
     ]
@@ -185,7 +201,6 @@ for i in iters:
         loss_weights = loss_weights_grid[j]
         args.append([fname, network_file, loss_weights, i])
 split_args = np.array_split(args, n_jobs)
-
 
 # Run relevant parallelization script
 if job_idx == -1:

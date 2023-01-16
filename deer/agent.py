@@ -53,7 +53,8 @@ class NeuralAgent(object):
         self, environment, learning_algo,
         replay_memory_size=1000000, replay_start_size=None, batch_size=32,
         random_state=np.random.RandomState(), exp_priority=0,
-        train_policy=None, test_policy=None, only_full_history=True
+        train_policy=None, test_policy=None, only_full_history=True,
+        save_dir='./'
         ):
 
         inputDims = environment.inputDimensions()
@@ -86,6 +87,7 @@ class NeuralAgent(object):
         self._Vs_on_last_episode = []
         self._in_episode = False
         self._selected_action = -1
+        self._save_dir = save_dir
         #for i in range(len(inputDims)):
         #    self._state.append(np.zeros(inputDims[i], dtype=float))
         curr_state_dims = (1,) + (inputDims[0][0]*self._nstep,) + inputDims[0][1:]
@@ -187,7 +189,7 @@ class NeuralAgent(object):
         if self._mode == -1:
             raise AgentError("Cannot summarize test performance outside test environment.")
         self._environment.summarizePerformance(
-            self._tmp_dataset, self._learning_algo, fname)
+            self._tmp_dataset, self._learning_algo, fname, self._save_dir)
 
     def train(self):
         """
@@ -245,11 +247,12 @@ class NeuralAgent(object):
         nEpoch : int
             Epoch number (Optional)
         """
+        basedir = f'{self._save_dir}nnets/{fname}/'
         try:
-            os.makedirs(f'nnets/{fname}', exist_ok=True)
+            os.makedirs(basedir, exist_ok=True)
         except Exception:
             pass
-        basename = f'nnets/{fname}/fname'
+        basename = f'{basedir}fname'
         all_params = self._learning_algo.getAllParams()
 
         if (nEpoch>=0):
@@ -268,7 +271,7 @@ class NeuralAgent(object):
             Epoch number (Optional)
         """
 
-        basename = "nnets/" + fname
+        basename = f'{self._save_dir}nnets/{fname}'
 
         if (nEpoch>=0):
             all_params = joblib.load(basename + ".epoch={}".format(nEpoch))

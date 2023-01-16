@@ -319,7 +319,7 @@ class InterleavedTestEpochController(Controller):
         self._summary_counter = 0
         self._summary_periodicity = summarize_every
         self._unique_fname = unique_fname
-        self.scores=[]
+        self.scores = []
 
     def onStart(self, agent):
         if (self._active == False) or (agent.mode() not in self._modes):
@@ -528,12 +528,10 @@ class FindBestController(Controller):
         self._trainingEpochCount = 0
         self._testID = testID
         self._validationID = validationID
-        self._filename = unique_fname
+        self._filename = f'{unique_fname}'
         self._plotfig = plotfig
         self._savefrequency = savefrequency
-        self._fig_dir = f'figs/{self._filename}/'
-        if not os.path.isdir(self._fig_dir):
-            os.makedirs(self._fig_dir)
+        self._fig_dir = f'figs/{unique_fname}/'
         self._bestValidationScoreSoFar = -9999999
 
     def onEpochEnd(self, agent):
@@ -566,7 +564,7 @@ class FindBestController(Controller):
                 plt.legend()
                 plt.xlabel("Number of epochs")
                 plt.ylabel("Score")
-                plt.savefig(f"{self._fig_dir}validation_scores.pdf")
+                plt.savefig(f"{agent._save_dir}{self._fig_dir}validation_scores.pdf")
 
                 plt.close()
             elif mode == self._testID:
@@ -576,7 +574,7 @@ class FindBestController(Controller):
                 plt.legend()
                 plt.xlabel("Number of epochs")
                 plt.ylabel("Score")
-                plt.savefig(f"{self._fig_dir}test_scores.pdf")
+                plt.savefig(f"{agent._save_dir}{self._fig_dir}test_scores.pdf")
                 plt.close()
         
     def onEnd(self, agent):
@@ -593,8 +591,6 @@ class FindBestController(Controller):
             os.mkdir("scores")
         except Exception:
             pass
-        basename = "scores/" + self._filename
-        joblib.dump({"vs": self._validationScores, "ts": self._testScores}, basename + "_scores.jldump")
 
 if __name__ == "__main__":
     pass

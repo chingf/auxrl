@@ -85,11 +85,9 @@ class NN():
             self.internal_dim=kwargs["internal_dim"]    #2 for laby
                                                         #3 for catcher
         self.encoder = self.encoder_model().to(self.device)
-        self.R = self.float_model().to(self.device)
         self.Q = self.Q_model().to(self.device)
-        self.gamma = self.float_model().to(self.device)
         self.transition = self.transition_model().to(self.device)
-        self.models = [self.encoder, self.R, self.gamma, self.transition, self.Q]
+        self.models = [self.encoder, self.transition, self.Q]
         self.params = []
         for model in self.models:
             self.params.extend([p for p in model.parameters()])
@@ -114,7 +112,7 @@ class NN():
 
         class Encoder(nn.Module):
             def __init__(
-                self, input_shape, fc, convs=None, abstract_dim=2
+                self, input_shape, fc, convs=None, abstract_dim=2,
                 ):
                 super().__init__()
                 self.input_shape = input_shape
@@ -170,53 +168,6 @@ class NN():
                 kl = kl.sum(-1)
                 return kl
 
-        class EncoderRNN(nn.Module):
-            def __init__(
-                self, input_shape, fc, mem, convs=None, abstract_dim=2
-                ):
-                super().__init__()
-                self.input_shape = input_shape
-                self.convs = convs
-                self.fc = fc
-                self.mem = mem
-                self.abstract_dim = abstract_dim
-                self.hidden = None
-
-            def forward(self, x, hidden=None, update_hidden=True):
-                timesteps = x.shape[1]
-                for t in range(timesteps):
-                    out, new_hidden = self._forward_step(x[:,t,:], hidden)
-                    hidden = new_hidden
-                if update_hidden:
-                    self.hidden = new_hidden
-                return out
-
-            def _forward_step(self, x, hidden):
-                if self.convs is not None:
-                    x = self.convs(x)
-                    x = x.view(x.size(0), -1)
-                else:
-                    x = x.squeeze()
-                x = self.fc(x.float())
-                if len(x.shape) == 2:
-                    x = x.view(x.shape[0], 1, x.shape[1])
-                elif len(x.shape) == 1:
-                    x = x.view(1, 1, x.shape[0])
-                else:
-                    raise ValueError('incorrect')
-                if (type(hidden) == list) and (hidden[0] == None): # hacky TODO
-                    hidden = None
-                x, new_hidden = self.mem(x, hidden)
-                x = x.squeeze()
-                return x, new_hidden
-            
-
-            def get_hidden(self):
-                return self.hidden
-
-            def reset_hidden(self, vec=None):
-                self.hidden = vec
-
         input_shape = self._input_dimensions[0]
         abstract_dim = self.internal_dim
 
@@ -233,20 +184,17 @@ class NN():
             convs = None
             feature_size = np.prod(input_shape)
 
-        # Recurrent, variational, or regular encoder
-        if self._encoder_type == 'recurrent':
-            fc = make_fc(feature_size, abstract_dim, encoder_config["fc"])
-            mem = make_fc(feature_size, abstract_dim, encoder_config["mem"])
-            encoder = EncoderRNN(
-                input_shape, fc, mem, convs, abstract_dim=abstract_dim)
-        elif self._encoder_type == 'variational':
+        # Variational, or regular encoder
+        if self._encoder_type == 'variational':
             fc_mu = make_fc(feature_size, abstract_dim, encoder_config["fc"])
             fc_var = make_fc(feature_size, abstract_dim, encoder_config["fc"])
             encoder = EncoderVariational(
                 input_shape, fc_mu, fc_var, abstract_dim=abstract_dim)
         else:
             fc = make_fc(feature_size, abstract_dim, encoder_config["fc"])
-            encoder = Encoder(input_shape, fc, convs, abstract_dim=abstract_dim)
+            encoder = Encoder(
+                input_shape, fc, convs, abstract_dim=abstract_dim,
+                )
         return encoder
 
     def transition_model(self): # MODULE
@@ -267,15 +215,19 @@ class NN():
         """
 
         class TransitionPredictor(nn.Module):
-            def __init__(self, abstract_state_dim, num_actions, fc):
+            def __init__(self, abstract_state_dim, num_actions, fc, encode_new_state):
                 super().__init__()
                 self.abstract_state_dim = abstract_state_dim
                 self.num_actions = num_actions
                 self.fc = fc
+                self.encode_new_state = encode_new_state
         
             def forward(self, x):
                 tr = self.fc(x.float())
-                return x[:, :self.abstract_state_dim] + tr
+                if self.encode_new_state:
+                    return tr
+                else:
+                    return x[:, :self.abstract_state_dim] + tr
 
         with open(HERE / self._yaml) as f:
             config = yaml.load(f, Loader=yaml.FullLoader)
@@ -283,42 +235,10 @@ class NN():
         abstract_dim = self.internal_dim
         tp_config = config["trans-pred"]
         fc = make_fc(abstract_dim + num_actions, abstract_dim, tp_config["fc"])
-        transition_predictor = TransitionPredictor(abstract_dim, num_actions, fc)
+        transition_predictor = TransitionPredictor(
+            abstract_dim, num_actions, fc,
+            encode_new_state=tp_config["encode_new_state"])
         return transition_predictor
-
-    def float_model(self):
-        """ Instantiate a Keras model for fitting a float from x.
-                
-        The model takes the following inputs:
-        x : internal state
-        a : int
-            the action considered at x
-        
-        Parameters
-        -----------
-            
-        Returns
-        -------
-        model that outputs a float
-    
-        """
-
-        class ScalarPredictor(nn.Module):
-            def __init__(self, abstract_state_dim, num_actions, fc):
-                super().__init__()
-                self.fc = fc
-        
-            def forward(self, x):
-                x = self.fc(x.float())
-                return x
-        with open(HERE / self._yaml) as f:
-            config = yaml.load(f, Loader=yaml.FullLoader)
-        num_actions = self._n_actions
-        abstract_dim = self.internal_dim
-        rp_config = config['float-pred']
-        fc = make_fc(abstract_dim + num_actions, abstract_dim, rp_config["fc"])
-        scalar_predictor = ScalarPredictor(abstract_dim, num_actions, fc)
-        return scalar_predictor
 
     def Q_model(self):
         """ Instantiate a  a Keras model for the Q-network from x.
