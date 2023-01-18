@@ -123,8 +123,7 @@ class MyEnv(Environment):
         intern_dim = learning_algo._internal_dim
         for y_a in range(self._size_maze):
             for x_a in range(self._size_maze):                
-                state = copy.deepcopy(self._map)
-                if state[x_a, y_a] != 1:
+                if self._map[x_a, y_a] != 1:
                     if self._higher_dim_obs:
                         all_possib_inp.append(self.get_higher_dim_obs([x_a, y_a]))
                     else:
@@ -156,18 +155,11 @@ class MyEnv(Environment):
             y = np.array(abs_states_np)[:,1]
             z = np.array(abs_states_np)[:,2]
         else:
-            if abs_states_np.shape[0] > 2:
-                pca = PCA()
-                reduced_states = pca.fit_transform(abs_states_np)
-                x = np.array(reduced_states)[:,0]
-                y = np.array(reduced_states)[:,1]
-                z = np.array(reduced_states)[:,2]
-            else:
-                x = np.array(abs_states_np)[:,0]
-                y = np.array(abs_states_np)[:,1]
-                z = np.array(abs_states_np)[:,2]
-        if intern_dim > 2:
-            z = np.array(abs_states_np)[:,2]
+            pca = PCA()
+            reduced_states = pca.fit_transform(abs_states_np)
+            x = np.array(reduced_states)[:,0]
+            y = np.array(reduced_states)[:,1]
+            z = np.array(reduced_states)[:,2]
                     
         fig = plt.figure()
         if intern_dim == 2:
@@ -195,8 +187,8 @@ class MyEnv(Environment):
                         ], dim=1).float()).cpu().numpy()
                 if (intern_dim > 3) and (abs_states_np.shape[0] > 2):
                     pred = pca.transform(pred)
-                x_transitions = np.concatenate([x[i:i+1],pred[0,:1]])
-                y_transitions = np.concatenate([y[i:i+1],pred[0,1:2]])
+                x_transitions = np.concatenate([x[i:i+1], pred[0,:1]])
+                y_transitions = np.concatenate([y[i:i+1], pred[0,1:2]])
                 if intern_dim == 2:
                     z_transitions = np.zeros(y_transitions.shape)
                 else:
@@ -216,10 +208,6 @@ class MyEnv(Environment):
                 line3 = ax.scatter(x[label_idxs], y[label_idxs], z[label_idxs],
                     c=colors[i], marker='x', depthshade=True, edgecolors='k',
                     alpha=0.5, s=50)
-        if intern_dim == 2:
-            axes_lims=[ax.get_xlim(),ax.get_ylim()]
-        else:
-            axes_lims=[ax.get_xlim(),ax.get_ylim(),ax.get_zlim()]
         
         # Plot the legend for transition estimates
         box1b = TextArea(" Estimated transitions (action 0, 1, 2 and 3): ", textprops=dict(color="k"))
@@ -282,6 +270,7 @@ class MyEnv(Environment):
 
     def inputDimensions(self):
         if self._higher_dim_obs:
+            return [(1, self._size_maze, self._size_maze)]
             return [(1, self._size_maze*6, self._size_maze*6)]
         else:
             return [(1, 32)]
@@ -294,9 +283,6 @@ class MyEnv(Environment):
 
     def observe(self):
         if self._higher_dim_obs:
-            obs = copy.deepcopy(self._map)
-            #obs[self._pos_goal[0],self._pos_goal[1]] = 8
-            obs[self._pos_agent[0],self._pos_agent[1]] = 0.5
             obs = self.get_higher_dim_obs(self._pos_agent)
         else:
             obs = self.get_low_dim_obs(self._pos_agent)
@@ -309,6 +295,11 @@ class MyEnv(Environment):
         """
         Go from box-visualization to a humanoid agent representation
         """
+
+
+        obs = copy.deepcopy(self._map)
+        obs[pos_agent[0], pos_agent[1]] = 0.5
+        return obs
 
         obs = copy.deepcopy(self._map)
         obs = obs/1.
