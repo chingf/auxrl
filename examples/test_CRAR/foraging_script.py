@@ -17,20 +17,20 @@ import deer.experiment.base_controllers as bc
 from deer.policies import EpsilonGreedyPolicy
 
 # Experiment Parameters
-net_type = 'noconv_newstate'
+net_type = 'simplest'
 internal_dim = 5
-fname_prefix = 'foraging_random'
+fname_prefix = 'twoconv_box'
 fname_suffix = ''
-epochs = 35
+epochs = 30
 policy_eps = 1.
-higher_dim_obs = False
-foraging_give_rewards = False
+higher_dim_obs = True
+foraging_give_rewards = True
 
 # Make directories
 nn_yaml = f'network_{net_type}.yaml'
 engram_dir = '/home/cf2794/engram/Ching/rl/'
 exp_dir = f'{fname_prefix}_{net_type}_dim{internal_dim}{fname_suffix}/'
-for d in ['pickles/', 'nnets/', 'scores/', 'figs/', 'params/']:
+for d in ['pickles/', 'nnets/', 'figs/', 'params/']:
     os.makedirs(f'{engram_dir}{d}{exp_dir}', exist_ok=True)
 
 def gpu_parallel(job_idx):
@@ -90,7 +90,7 @@ def run_env(arg):
         'epsilon_decay': 1000,
         'update_frequency': 1,
         'replay_memory_size': 100000, #50000
-        'batch_size': 64,
+        'batch_size': 64, #256,
         'freeze_interval': 1000,
         'deterministic': False,
         'loss_weights': loss_weights,
@@ -120,7 +120,6 @@ def run_env(arg):
         save_dir=engram_dir
         )
     agent.run(10, 500)
-    agent.attach(bc.VerboseController( evaluate_on='epoch', periodicity=1))
     agent.attach(bc.LearningRateController(
         initial_learning_rate=parameters['learning_rate'],
         learning_rate_decay=parameters['learning_rate_decay'],
@@ -130,11 +129,11 @@ def run_env(arg):
         show_episode_avg_V_value=True, show_avg_Bellman_residual=True))
     best_controller = bc.FindBestController(
         validationID=simple_maze_env.VALIDATION_MODE, testID=None,
-        unique_fname=fname, save_root=engram_dir)
+        unique_fname=fname)
     agent.attach(best_controller)
     agent.attach(bc.InterleavedTestEpochController(
         id=simple_maze_env.VALIDATION_MODE, epoch_length=parameters['steps_per_test'],
-        periodicity=1, show_score=True, summarize_every=1, unique_fname=fname))
+        periodicity=1, show_score=True, summarize_every=5, unique_fname=fname))
     agent.run(parameters['epochs'], parameters['steps_per_epoch'])
 
     result = {
@@ -155,23 +154,26 @@ n_jobs = int(sys.argv[2])
 #    [0., 1E-2, 1E-2, 0, 0, 0, 1., 0],
 #    [1E-1, 1E-2, 1E-2, 0, 0, 0, 1., 0],
 #    ]
-fname_grid = [
-    'mb_only'
-    ]
+fname_grid = ['entro', 'mb_only']
 loss_weights_grid = [
-    [1E-1, 1E-2, 1E-2, 0, 0, 0, 0., 0],
+    [0, 1E-1, 1E-1, 1, 0],
+    [1E-2, 1E-1, 1E-1, 1, 0],
     ]
 fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
-iters = np.arange(30) #np.arange(15)
+iters = np.arange(14)
 args = []
 for fname, loss_weights in zip(fname_grid, loss_weights_grid):
     for i in iters:
         args.append([fname, loss_weights, i])
 split_args = np.array_split(args, n_jobs)
 
+import time
+start = time.time()
 # Run relevant parallelization script
 if job_idx == -1:
     cpu_parallel()
 else:
     gpu_parallel(job_idx)
+end = time.time()
 
+print(f'ELAPSED TIME: {end-start} seconds')
