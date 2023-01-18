@@ -19,7 +19,7 @@ from deer.policies import EpsilonGreedyPolicy
 # Experiment Parameters
 net_type = 'simplest'
 internal_dim = 5
-fname_prefix = 'twoconv_box'
+fname_prefix = 'twoconv_6x6'
 fname_suffix = ''
 epochs = 30
 policy_eps = 1.

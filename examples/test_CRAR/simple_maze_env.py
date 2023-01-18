@@ -27,7 +27,7 @@ class MyEnv(Environment):
         self._mode = -1
         self._mode_score = 0.0
         self._mode_episode_count = 0
-        self._size_maze = kwargs.get("size_maze", 10)
+        self._size_maze = kwargs.get("size_maze", 8)
         self._higher_dim_obs = kwargs.get("higher_dim_obs", False)
         self._reward = kwargs.get("reward", False)
         self._plotfig = kwargs.get("plotfig", True)
@@ -270,7 +270,7 @@ class MyEnv(Environment):
 
     def inputDimensions(self):
         if self._higher_dim_obs:
-            return [(1, self._size_maze, self._size_maze)]
+            return [(1, self._size_maze-2, self._size_maze-2)]
             return [(1, self._size_maze*6, self._size_maze*6)]
         else:
             return [(1, 32)]
@@ -299,7 +299,7 @@ class MyEnv(Environment):
 
         obs = copy.deepcopy(self._map)
         obs[pos_agent[0], pos_agent[1]] = 0.5
-        return obs
+        return obs[1:-1, 1:-1]
 
         obs = copy.deepcopy(self._map)
         obs = obs/1.
