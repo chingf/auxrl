@@ -159,7 +159,6 @@ class CRAR(LearningAlgo):
         Average loss of the batch training for the Q-values (RMSE)
         Individual (square) losses for the Q-values for each tuple
         """
-
         self.optimizer.zero_grad()
 
         onehot_actions = np.zeros((self._batch_size, self._n_actions))
@@ -245,22 +244,11 @@ class CRAR(LearningAlgo):
         self.update_counter += 1
 
         # Occasional logging
-        if(self.update_counter%500==0):
-            self.loss_Q[-1] /= 500; self.loss_T[-1] /= 500
-            self.loss_entropy_neighbor[-1] /= 500
-            self.loss_entropy_random[-1] /= 500
-            self.loss_VAE[-1] /= 500
-            self.loss_total[-1] /= 500
-            print('LOSSES')
-            print(f'T = {self.loss_T[-1]}; Q = {self.loss_Q[-1]};')
-            print(f'Entropy Neighbor = {self.loss_entropy_neighbor[-1]}; \
-                Entropy Random = {self.loss_entropy_random[-1]}; \
-                VAE = {self.loss_VAE[-1]}')
-            self.loss_Q.append(0); self.loss_T.append(0)
-            self.loss_entropy_neighbor.append(0)
-            self.loss_entropy_random.append(0)
-            self.loss_VAE.append(0)
-            self.loss_total.append(0)
+        self.loss_Q.append(0); self.loss_T.append(0)
+        self.loss_entropy_neighbor.append(0)
+        self.loss_entropy_random.append(0)
+        self.loss_VAE.append(0)
+        self.loss_total.append(0)
 
         return loss_Q.item(), loss_Q_unreduced
 

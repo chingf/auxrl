@@ -320,14 +320,17 @@ class NeuralAgent(object):
         """
         for c in self._controllers: c.onStart(self)
         i = 0
+        import time
         while i < n_epochs:
+            start = time.time()
             nbr_steps_left=epoch_length
             self._training_loss_averages = []
             while nbr_steps_left > 0: # run new episodes until the number of steps left for the epoch has reached 0
                 nbr_steps_left = self._runEpisode(nbr_steps_left)
             i += 1
             for c in self._controllers: c.onEpochEnd(self)
-            
+            end = time.time()
+            print(f'======= EPOCH {i}: {end-start} sec ======')
         self._environment.end()
         for c in self._controllers: c.onEnd(self)
 

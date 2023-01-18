@@ -339,10 +339,10 @@ class InterleavedTestEpochController(Controller):
             self._summary_counter += 1
 
             if self._show_score:
-                score,nbr_episodes=agent.totalRewardOverLastTest()
-                print("Testing score per episode (id: {}) is {} (average over {} episode(s))".format(self._id, score, nbr_episodes))
+                score,nbr_episodes = agent.totalRewardOverLastTest()
                 self.scores.append(score)
-            if self._summary_periodicity > 0 and self._summary_counter % self._summary_periodicity == 0:
+            if (self._summary_periodicity > 0) and (self._summary_counter % self._summary_periodicity == 0):
+                print('SUMMARIZING TEST PERF')
                 agent.summarizeTestPerformance(self._unique_fname)
             agent.resumeTrainingMode()
 
@@ -517,7 +517,7 @@ class FindBestController(Controller):
     """
 
     def __init__(
-        self, validationID=0, testID=None, unique_fname="nnet", plotfig=True,
+        self, validationID=0, testID=None, unique_fname="nnet", plotfig=False,
         savefrequency=np.inf # 0: best valid score, n: save every n, np.inf: at end
         ):
         super(self.__class__, self).__init__()
@@ -557,6 +557,7 @@ class FindBestController(Controller):
 
         #live plotting of reward over time
         if self._plotfig:
+            os.makedirs(f"{agent._save_dir}{self._fig_dir}", exist_ok=True)
             if mode == self._validationID:
                 plt.plot(
                     range(1, len(self._validationScores)+1),
@@ -587,10 +588,16 @@ class FindBestController(Controller):
                 print("Test score of this neural net: {}".format(self._testScores[bestIndex]))
             if np.isinf(self._savefrequency):
                 agent.dumpNetwork(self._filename, self._trainingEpochCount)
-        try:
-            os.mkdir("scores")
-        except Exception:
-            pass
+        os.makedirs(f"{agent._save_dir}{self._fig_dir}", exist_ok=True)
+        plt.plot(
+            range(1, len(self._validationScores)+1),
+            self._validationScores, label="VS", color='b')
+        plt.legend()
+        plt.xlabel("Number of epochs")
+        plt.ylabel("Score")
+        plt.savefig(f"{agent._save_dir}{self._fig_dir}validation_scores.pdf")
+
+        plt.close()
 
 if __name__ == "__main__":
     pass
