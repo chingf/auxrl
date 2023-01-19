@@ -14,6 +14,7 @@ encoder-fc: &encoder-fc
   - [Linear, 50, auto]
 
 crar-fc: &crar-fc
+  - *act
   - [Linear, auto, 10]
   - *act
   - [Linear, 10, auto]
