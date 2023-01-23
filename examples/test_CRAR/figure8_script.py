@@ -16,9 +16,26 @@ import deer.experiment.base_controllers as bc
 
 from deer.policies import EpsilonGreedyPolicy, FixedFigure8Policy
 
+# Experiment Parameters
+net_type = 'simplest'
+internal_dim = 5
+fname_prefix = 'figure8'
+fname_suffix = ''
+epochs = 80
+policy_eps = 1.
+higher_dim_obs = False
+foraging_give_rewards = True
+expand_tcm = False
+
+# Make directories
+nn_yaml = f'network_{net_type}.yaml'
+engram_dir = '/home/cf2794/engram/Ching/rl/'
+exp_dir = f'{fname_prefix}_{net_type}_dim{internal_dim}{fname_suffix}/'
+for d in ['pickles/', 'nnets/', 'figs/', 'params/']:
+    os.makedirs(f'{engram_dir}{d}{exp_dir}', exist_ok=True)
+
 def gpu_parallel(arg_idx):
-    results_dir = 'pickles/figure8_results_v2/'
-    os.makedirs(results_dir, exist_ok=True)
+    results_dir = f'pickles/{exp_dir}'
     results = {}
     results['separability_matrix'] = []
     results['separability_slope'] = []
@@ -27,17 +44,17 @@ def gpu_parallel(arg_idx):
     results['valid_scores'] = []
     results['fname'] = []
     results['loss_weights'] = []
-    
-    for i in range(5*arg_idx, 5*(arg_idx+1)): 
+    for _arg in split_args[job_idx]:
         fname, loss_weights, result = run_env(args[i])
         for key in result.keys():
             results[key].append(result[key])
-            results['fname'].append(fname)
-            results['loss_weights'].append(loss_weights)
+        results['fname'].append(fname)
+        results['loss_weights'].append(loss_weights)
     with open(f'{results_dir}results_{arg_idx}.p', 'wb') as f:
         pickle.dump(results, f)
 
 def cpu_parallel():
+    results_dir = f'{engram_dir}pickles/{exp_dir}'
     results = {}
     results['separability_matrix'] = []
     results['separability_slope'] = []
@@ -46,33 +63,33 @@ def cpu_parallel():
     results['valid_scores'] = []
     results['fname'] = []
     results['loss_weights'] = []
-    job_results = Parallel(n_jobs=56)(delayed(run_env)(arg) for arg in args)
+    job_results = Parallel(n_jobs=40)(delayed(run_env)(arg) for arg in args)
     for job_result in job_results:
         fname, loss_weights, result = job_result
         for key in result.keys():
             results[key].append(result[key])
         results['fname'].append(fname)
         results['loss_weights'].append(loss_weights)
-    with open('pickles/expanded_tcm.p', 'wb') as f:
+    with open(f'{results_dir}results_0.p', 'wb') as f:
         pickle.dump(results, f)
 
 def run_env(arg):
     _fname, loss_weights, i = arg
-    fname = f'{_fname}_{i}'
+    fname = f'{exp_dir}{_fname}_{i}'
     encoder_type = 'variational' if loss_weights[-1] > 0 else 'regular'
     parameters = {
         'figure8_give_rewards': True,
-        'nn_yaml': 'network_noconv.yaml',
-        'higher_dim_obs': False,
-        'internal_dim': 10,
+        'nn_yaml': nn_yaml,
+        'higher_dim_obs': higher_dim_obs,
+        'internal_dim': internal_dim,
         'fname': fname,
         'steps_per_epoch': 2500,
-        'epochs': 80,
+        'epochs': epochs,
         'steps_per_test': 1000,
         'period_btw_summary_perfs': 1,
         'nstep': 15,
         'nstep_decay': 1.,
-        'expand_tcm': True,
+        'expand_tcm': expand_tcm,
         'encoder_type': encoder_type,
         'frame_skip': 2,
         'show_rewards': False,
@@ -140,7 +157,7 @@ def run_env(arg):
     agent.attach(best_controller)
     agent.attach(bc.InterleavedTestEpochController(
         id=figure8_env.VALIDATION_MODE, epoch_length=parameters['steps_per_test'],
-        periodicity=1, show_score=True, summarize_every=1, unique_fname=fname))
+        periodicity=1, show_score=True, summarize_every=10, unique_fname=fname))
     agent.run(parameters['epochs'], parameters['steps_per_epoch'])
 
     result = {
@@ -152,27 +169,31 @@ def run_env(arg):
         }
     return _fname, loss_weights, result
 
-
-# load user-defined parameters
-arg_idx = int(sys.argv[1])
-
-fname_grid = [
-    'mf_only', 'mf_and_vae', 'mf_and_mb', 'mf_and_mb_and_vae']
+job_idx = int(sys.argv[1])
+n_jobs = int(sys.argv[2])
+fname_grid = ['entro', 'mb', 'mb_only', 'mf']
 loss_weights_grid = [
-    [0., 0., 0., 0., 0., 0., 1., 0.],
-    [0., 0., 0., 0., 0., 0., 1., 1E-4],
-    [5E-3, 1E-2, 1E-2, 0, 0, 1E-2, 1., 0],
-    [5E-3, 1E-2, 1E-2, 0, 0, 1E-2, 1., 1E-4]
+    [0, 1E-1, 1E-1, 1, 0],
+    [1E-2, 1E-1, 1E-1, 1, 0],
+    [1E-2, 0, 0, 1, 0],
+    [0, 0, 0, 1, 0],
     ]
-iters = np.arange(10)
+fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
+iters = np.arange(20)
 args = []
 for fname, loss_weights in zip(fname_grid, loss_weights_grid):
     for i in iters:
         args.append([fname, loss_weights, i])
+split_args = np.array_split(args, n_jobs)
 
+import time
+start = time.time()
 # Run relevant parallelization script
-if arg_idx == -1:
+if job_idx == -1:
     cpu_parallel()
 else:
-    gpu_parallel(arg_idx)
+    gpu_parallel(job_idx)
+end = time.time()
+
+print(f'ELAPSED TIME: {end-start} seconds')
 
