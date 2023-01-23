@@ -32,6 +32,7 @@ class MyEnv(Environment):
         self._reward = kwargs.get("reward", False)
         self._plotfig = kwargs.get("plotfig", True)
         self._dimensionality_tracking = []
+        self._dimensionality_variance_ratio = None
         self._reward_location = 0 # Just a placeholder
         self.create_map()
         if not self._higher_dim_obs:
@@ -237,11 +238,14 @@ class MyEnv(Environment):
             variance_curve = np.cumsum(pca.explained_variance_ratio_)
             auc = np.trapz(variance_curve, dx=1/variance_curve.size)
             self._dimensionality_tracking.append(auc)
+            self._dimensionality_variance_ratio = pca.explained_variance_ratio_
             plt.figure()
             plt.plot(self._dimensionality_tracking)
             plt.ylabel('AUC of PCA Explained Variance Ratio')
             plt.xlabel('Epochs')
             plt.savefig(f'{fig_dir}dimensionality.pdf')
+        else:
+            self._dimensionality_tracking.append(-1)
 
         # Plot losses over epochs
         losses, loss_names = learning_algo.get_losses()
