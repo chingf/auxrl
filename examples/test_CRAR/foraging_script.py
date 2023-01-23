@@ -18,8 +18,8 @@ from deer.policies import EpsilonGreedyPolicy
 
 # Experiment Parameters
 net_type = 'simplest'
-internal_dim = 5
-fname_prefix = 'twoconv_6x6'
+internal_dim = 4
+fname_prefix = 'foraging'
 fname_suffix = ''
 epochs = 30
 policy_eps = 1.
@@ -37,7 +37,9 @@ def gpu_parallel(job_idx):
     results_dir = f'pickles/{exp_dir}'
     results = {}
     results['dimensionality_tracking'] = []
+    results['dimensionality_variance_ratio'] = []
     results['valid_scores'] = []
+    results['iteration'] = []
     results['fname'] = []
     results['loss_weights'] = []
     for _arg in split_args[job_idx]:
@@ -51,13 +53,14 @@ def gpu_parallel(job_idx):
 
 def cpu_parallel():
     results_dir = f'{engram_dir}pickles/{exp_dir}'
-    os.makedirs(results_dir, exist_ok=True)
     results = {}
     results['dimensionality_tracking'] = []
+    results['dimensionality_variance_ratio'] = []
     results['valid_scores'] = []
+    results['iteration'] = []
     results['fname'] = []
     results['loss_weights'] = []
-    job_results = Parallel(n_jobs=28)(delayed(run_env)(arg) for arg in args)
+    job_results = Parallel(n_jobs=56)(delayed(run_env)(arg) for arg in args)
     for job_result in job_results:
         fname, loss_weights, result = job_result
         for key in result.keys():
@@ -138,7 +141,8 @@ def run_env(arg):
 
     result = {
         'dimensionality_tracking': env._dimensionality_tracking[-1],
-        'valid_scores':  best_controller._validationScores
+        'dimensionality_variance_ratio': env._dimensionality_variance_ratio,
+        'valid_scores':  best_controller._validationScores, 'iteration': i
         }
     return _fname, loss_weights, result
 
@@ -146,21 +150,15 @@ def run_env(arg):
 # load user-defined parameters
 job_idx = int(sys.argv[1])
 n_jobs = int(sys.argv[2])
-#fname_grid = [
-#    'foraging_mf', 'foraging_entro', 'foraging_mb_noR'
-#    ]
-#loss_weights_grid = [
-#    [0., 0., 0., 0., 0., 0., 1., 0.],
-#    [0., 1E-2, 1E-2, 0, 0, 0, 1., 0],
-#    [1E-1, 1E-2, 1E-2, 0, 0, 0, 1., 0],
-#    ]
-fname_grid = ['entro', 'mb_only']
+fname_grid = ['entro', 'mb', 'mb_only', 'mf']
 loss_weights_grid = [
     [0, 1E-1, 1E-1, 1, 0],
     [1E-2, 1E-1, 1E-1, 1, 0],
+    [1E-2, 0, 0, 1, 0],
+    [0, 0, 0, 1, 0],
     ]
 fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
-iters = np.arange(14)
+iters = np.arange(40)
 args = []
 for fname, loss_weights in zip(fname_grid, loss_weights_grid):
     for i in iters:

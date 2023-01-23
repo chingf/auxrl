@@ -18,22 +18,23 @@ import deer.experiment.base_controllers as bc
 from deer.policies import EpsilonGreedyPolicy
 
 # Experiment Parameters
-net_type = 'noconv'
-internal_dim = 5
-fname_prefix = 'transfer_foraging_random'
+net_type = 'simplest'
+internal_dim = 4
+fname_prefix = 'transfer_foraging'
 fname_suffix = ''
-epochs = 35
-source_prefix = 'foraging_random'
-source_epoch = 35
+epochs = 30
+source_prefix = 'foraging'
+source_suffix = ''
+source_epoch = 30
 policy_eps = 1.
 encoder_only = True
-higher_dim_obs = False
+higher_dim_obs = True
 
 # Make directories
 nn_yaml = f'network_{net_type}.yaml'
 engram_dir = '/home/cf2794/engram/Ching/rl/'
 exp_dir = f'{fname_prefix}_{net_type}_dim{internal_dim}{fname_suffix}/'
-source_dir = f'{source_prefix}_{net_type}_dim{internal_dim}/'
+source_dir = f'{source_prefix}_{net_type}_dim{internal_dim}{source_suffix}/'
 for d in ['pickles/', 'nnets/', 'scores/', 'figs/', 'params/']:
     os.makedirs(f'{engram_dir}{d}{exp_dir}', exist_ok=True)
 
@@ -42,7 +43,9 @@ def gpu_parallel(job_idx):
     os.makedirs(results_dir, exist_ok=True)
     results = {}
     results['dimensionality_tracking'] = []
+    results['dimensionality_variance_ratio'] = []
     results['valid_scores'] = []
+    results['iteration'] = []
     results['fname'] = []
     results['loss_weights'] = []
     for _arg in split_args[job_idx]:
@@ -59,10 +62,12 @@ def cpu_parallel():
     os.makedirs(results_dir, exist_ok=True)
     results = {}
     results['dimensionality_tracking'] = []
+    results['dimensionality_variance_ratio'] = []
     results['valid_scores'] = []
+    results['iteration'] = []
     results['fname'] = []
     results['loss_weights'] = []
-    job_results = Parallel(n_jobs=28)(delayed(run_env)(arg) for arg in args)
+    job_results = Parallel(n_jobs=56)(delayed(run_env)(arg) for arg in args)
     for job_result in job_results:
         fname, loss_weights, result = job_result
         for key in result.keys():
@@ -175,7 +180,8 @@ def run_env(arg):
 
     result = {
         'dimensionality_tracking': env._dimensionality_tracking[-1],
-        'valid_scores':  best_controller._validationScores
+        'dimensionality_variance_ratio': env._dimensionality_variance_ratio,
+        'valid_scores':  best_controller._validationScores, 'iteration': i
         }
     return _fname, loss_weights, result
 
@@ -183,16 +189,21 @@ def run_env(arg):
 job_idx = int(sys.argv[1])
 n_jobs = int(sys.argv[2])
 
-fname_grid = ['mb_only', 'clean']
-network_files = ['foraging_random_foraging_mb_only', None]
+fname_grid = ['entro', 'mb', 'mb_only', 'mf', 'clean']
+network_files = [
+    'foraging_entro', 'foraging_mb', 'foraging_mb_only',
+    'foraging_mf', None]
 loss_weights_grid = [
-    [0., 0., 0., 0., 0., 0., 1., 0.],
-    [0., 0., 0., 0., 0., 0., 1., 0.],
+    [0., 0., 0., 1., 0.],
+    [0., 0., 0., 1., 0.],
+    [0., 0., 0., 1., 0.],
+    [0., 0., 0., 1., 0.],
+    [0., 0., 0., 1., 0.]
     ]
 fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
 
 freeze_encoder = False
-iters = np.arange(15)
+iters = np.arange(50)
 args = []
 for i in iters:
     for j in range(len(fname_grid)):
@@ -202,9 +213,13 @@ for i in iters:
         args.append([fname, network_file, loss_weights, i])
 split_args = np.array_split(args, n_jobs)
 
+import time
+start = time.time()
 # Run relevant parallelization script
 if job_idx == -1:
     cpu_parallel()
 else:
     gpu_parallel(job_idx)
+end = time.time()
 
+print(f'ELAPSED TIME: {end-start} seconds')
