@@ -269,6 +269,7 @@ class CRAR(LearningAlgo):
             if self._expand_tcm:
                 new_states.append(torch.hstack(batch_obs))
             else:
+                batch_obs = torch.cat([b.unsqueeze(0) for b in batch_obs])
                 new_states.append(torch.sum(batch_obs, dim=0))
         new_states = torch.stack(new_states) # (N, H, W)
         return new_states
