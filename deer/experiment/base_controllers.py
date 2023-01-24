@@ -320,6 +320,7 @@ class InterleavedTestEpochController(Controller):
         self._summary_periodicity = summarize_every
         self._unique_fname = unique_fname
         self.scores = []
+        self.episodes = []
 
     def onStart(self, agent):
         if (self._active == False) or (agent.mode() not in self._modes):
@@ -339,8 +340,9 @@ class InterleavedTestEpochController(Controller):
             self._summary_counter += 1
 
             if self._show_score:
-                score,nbr_episodes = agent.totalRewardOverLastTest()
+                score, nbr_episodes = agent.totalRewardOverLastTest()
                 self.scores.append(score)
+                self.episodes.append(nbr_episodes)
             if (self._summary_periodicity > 0) and (self._summary_counter % self._summary_periodicity == 0):
                 print('SUMMARIZING TEST PERF')
                 agent.summarizeTestPerformance(self._unique_fname)
@@ -523,6 +525,7 @@ class FindBestController(Controller):
         super(self.__class__, self).__init__()
 
         self._validationScores = []
+        self._validationEps = []
         self._testScores = []
         self._epochNumbers = []
         self._trainingEpochCount = 0
@@ -540,8 +543,9 @@ class FindBestController(Controller):
 
         mode = agent.mode()
         if mode == self._validationID:
-            score, _ = agent.totalRewardOverLastTest()
+            score, nbr_eps = agent.totalRewardOverLastTest()
             self._validationScores.append(score)
+            self._validationEps.append(nbr_eps)
             self._epochNumbers.append(self._trainingEpochCount)
             if score > self._bestValidationScoreSoFar:
                 self._bestValidationScoreSoFar = score

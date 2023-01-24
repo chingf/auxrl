@@ -18,13 +18,14 @@ from deer.policies import EpsilonGreedyPolicy
 
 # Experiment Parameters
 net_type = 'simplest'
-internal_dim = 4
-fname_prefix = 'foraging'
+internal_dim = 5
+fname_prefix = 'foraging4x4'
 fname_suffix = ''
 epochs = 30
 policy_eps = 1.
 higher_dim_obs = True
 foraging_give_rewards = True
+size_maze = 6 #8
 
 # Make directories
 nn_yaml = f'network_{net_type}.yaml'
@@ -97,14 +98,16 @@ def run_env(arg):
         'freeze_interval': 1000,
         'deterministic': False,
         'loss_weights': loss_weights,
-        'foraging_give_rewards': foraging_give_rewards
+        'foraging_give_rewards': foraging_give_rewards,
+        'size_maze': size_maze
         }
     with open(f'params/{_fname}.yaml', 'w') as outfile:
         yaml.dump(parameters, outfile, default_flow_style=False)
     rng = np.random.RandomState()
     env = simple_maze_env(
         rng, reward=parameters['foraging_give_rewards'],
-        higher_dim_obs=parameters['higher_dim_obs'], plotfig=False
+        higher_dim_obs=parameters['higher_dim_obs'], plotfig=False,
+        size_maze=parameters['size_maze']
         )
     learning_algo = CRAR(
         env, parameters['freeze_interval'], parameters['batch_size'], rng,
@@ -142,7 +145,9 @@ def run_env(arg):
     result = {
         'dimensionality_tracking': env._dimensionality_tracking[-1],
         'dimensionality_variance_ratio': env._dimensionality_variance_ratio,
-        'valid_scores':  best_controller._validationScores, 'iteration': i
+        'valid_scores':  best_controller._validationScores, 'iteration': i,
+        'valid_eps': best_controller._validationEps,
+        'epochs': best_controller._epochNumbers
         }
     return _fname, loss_weights, result
 
