@@ -41,6 +41,8 @@ def gpu_parallel(job_idx):
     results['dimensionality_variance_ratio'] = []
     results['valid_scores'] = []
     results['iteration'] = []
+    results['valid_eps'] = []
+    results['epochs'] = []
     results['fname'] = []
     results['loss_weights'] = []
     for _arg in split_args[job_idx]:
@@ -59,6 +61,8 @@ def cpu_parallel():
     results['dimensionality_variance_ratio'] = []
     results['valid_scores'] = []
     results['iteration'] = []
+    results['valid_eps'] = []
+    results['epochs'] = []
     results['fname'] = []
     results['loss_weights'] = []
     job_results = Parallel(n_jobs=56)(delayed(run_env)(arg) for arg in args)
