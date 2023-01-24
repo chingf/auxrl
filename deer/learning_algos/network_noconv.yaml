@@ -7,9 +7,9 @@ encoder-fc: &encoder-fc
   - [Linear, 32, 16]
   - *act
   - [Linear, 16, auto]
-  - *act
 
 crar-fc: &crar-fc
+  - *act
   - [Linear, auto, 10]
   - *act
   - [Linear, 10, auto]
