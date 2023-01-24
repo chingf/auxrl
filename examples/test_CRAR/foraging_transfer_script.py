@@ -40,8 +40,7 @@ for d in ['pickles/', 'nnets/', 'scores/', 'figs/', 'params/']:
     os.makedirs(f'{engram_dir}{d}{exp_dir}', exist_ok=True)
 
 def gpu_parallel(job_idx):
-    results_dir = f'pickles/{exp_dir}'
-    os.makedirs(results_dir, exist_ok=True)
+    results_dir = f'{engram_dir}pickles/{exp_dir}'
     results = {}
     results['dimensionality_tracking'] = []
     results['dimensionality_variance_ratio'] = []
@@ -60,7 +59,6 @@ def gpu_parallel(job_idx):
 
 def cpu_parallel():
     results_dir = f'{engram_dir}pickles/{exp_dir}'
-    os.makedirs(results_dir, exist_ok=True)
     results = {}
     results['dimensionality_tracking'] = []
     results['dimensionality_variance_ratio'] = []
