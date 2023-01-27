@@ -48,6 +48,7 @@ def gpu_parallel(job_idx):
     results['valid_scores'] = []
     results['iteration'] = []
     results['valid_eps'] = []
+    results['training_eps'] = []
     results['epochs'] = []
     results['fname'] = []
     results['loss_weights'] = []
@@ -69,6 +70,7 @@ def cpu_parallel():
     results['valid_scores'] = []
     results['iteration'] = []
     results['valid_eps'] = []
+    results['training_eps'] = []
     results['epochs'] = []
     results['fname'] = []
     results['loss_weights'] = []
@@ -190,7 +192,7 @@ def run_env(arg):
         'dimensionality_variance_ratio': env._dimensionality_variance_ratio,
         'valid_scores':  best_controller._validationScores, 'iteration': i,
         'valid_eps': best_controller._validationEps,
-        'epochs': best_controller._epochNumbers
+        'epochs': best_controller._epochNumbers, 'training_eps': agent.n_eps
         }
     return _fname, loss_weights, result
 
