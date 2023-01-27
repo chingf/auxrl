@@ -9,9 +9,9 @@ encoder-convs: &encoder-convs
   - [MaxPool2d, { kernel_size: 2 }]
 
 encoder-fc: &encoder-fc
-  - [Linear, auto, 10]
+  - [Linear, auto, 32]
   - *act
-  - [Linear, 10, auto]
+  - [Linear, 32, auto]
 
 crar-fc: &crar-fc
   - *act
