@@ -21,6 +21,10 @@ job_idx = int(sys.argv[1])
 n_jobs = int(sys.argv[2])
 net_type = sys.argv[3]
 internal_dim = int(sys.argv[4])
+device_num = sys.argv[5]
+if int(device_num) >= 0:
+    my_env = os.environ
+    my_env["CUDA_VISIBLE_DEVICES"] = device_num
 fname_prefix = 'foraging4x4'
 fname_suffix = ''
 epochs = 30
@@ -31,13 +35,14 @@ size_maze = 6
 
 # Make directories
 nn_yaml = f'network_{net_type}.yaml'
-engram_dir = '/home/cf2794/engram/Ching/rl/'
+engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
+engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
 exp_dir = f'{fname_prefix}_{net_type}_dim{internal_dim}{fname_suffix}/'
 for d in ['pickles/', 'nnets/', 'figs/', 'params/']:
     os.makedirs(f'{engram_dir}{d}{exp_dir}', exist_ok=True)
 
 def gpu_parallel(job_idx):
-    results_dir = f'pickles/{exp_dir}'
+    results_dir = f'{engram_dir}pickles/{exp_dir}'
     results = {}
     results['dimensionality_tracking'] = []
     results['dimensionality_variance_ratio'] = []
