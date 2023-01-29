@@ -18,18 +18,20 @@ import deer.experiment.base_controllers as bc
 from deer.policies import EpsilonGreedyPolicy
 
 # Experiment Parameters
-net_type = 'simplest'
-internal_dim = 5
-fname_prefix = 'transfer_foraging4x4'
+job_idx = int(sys.argv[1])
+n_jobs = int(sys.argv[2])
+net_type = sys.argv[3]
+internal_dim = int(sys.argv[4])
+fname_prefix = 'transfer_foraging4x4eps50'
 fname_suffix = ''
 epochs = 30
-source_prefix = 'foraging4x4'
+source_prefix = 'foraging4x4eps50'
 source_suffix = ''
 source_epoch = 30
-policy_eps = 1.
+policy_eps = 0.5
 encoder_only = True
 higher_dim_obs = True
-size_maze = 6 #8
+size_maze = 6
 
 # Make directories
 nn_yaml = f'network_{net_type}.yaml'
@@ -40,7 +42,8 @@ for d in ['pickles/', 'nnets/', 'scores/', 'figs/', 'params/']:
     os.makedirs(f'{engram_dir}{d}{exp_dir}', exist_ok=True)
 
 def gpu_parallel(job_idx):
-    results_dir = f'{engram_dir}pickles/{exp_dir}'
+    results_dir = f'pickles/{exp_dir}'
+    os.makedirs(results_dir, exist_ok=True)
     results = {}
     results['dimensionality_tracking'] = []
     results['dimensionality_variance_ratio'] = []
@@ -62,6 +65,7 @@ def gpu_parallel(job_idx):
 
 def cpu_parallel():
     results_dir = f'{engram_dir}pickles/{exp_dir}'
+    os.makedirs(results_dir, exist_ok=True)
     results = {}
     results['dimensionality_tracking'] = []
     results['dimensionality_variance_ratio'] = []
@@ -167,7 +171,7 @@ def run_env(arg):
     agent.attach(best_controller)
     agent.attach(bc.InterleavedTestEpochController(
         id=simple_maze_env.VALIDATION_MODE, epoch_length=parameters['steps_per_test'],
-        periodicity=1, show_score=True, summarize_every=1, unique_fname=fname))
+        periodicity=1, show_score=True, summarize_every=5, unique_fname=fname))
     if set_network is not None:
         agent.setNetwork(
             f'{set_network[0]}/fname', nEpoch=set_network[1],
@@ -195,15 +199,12 @@ def run_env(arg):
     return _fname, loss_weights, result
 
 # load user-defined parameters
-job_idx = int(sys.argv[1])
-n_jobs = int(sys.argv[2])
 
-fname_grid = ['entro', 'mb', 'mb_only', 'mf', 'clean']
+fname_grid = ['entro', 'mb', 'mf', 'clean']
 network_files = [
-    f'{source_prefix}_entro', f'{source_prefix}_mb', f'{source_prefix}_mb_only',
+    f'{source_prefix}_entro', f'{source_prefix}_mb', 
     f'{source_prefix}_mf', None]
 loss_weights_grid = [
-    [0., 0., 0., 1., 0.],
     [0., 0., 0., 1., 0.],
     [0., 0., 0., 1., 0.],
     [0., 0., 0., 1., 0.],
@@ -212,7 +213,7 @@ loss_weights_grid = [
 fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
 
 freeze_encoder = False
-iters = np.arange(50)
+iters = np.arange(70)
 args = []
 for i in iters:
     for j in range(len(fname_grid)):
