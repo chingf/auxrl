@@ -61,29 +61,20 @@ class NN():
     input_dimensions :
     n_actions :
     random_state : numpy random number generator
-    high_int_dim : Boolean
-        Whether the abstract state should be high dimensional in the form of frames/vectors or whether it should 
-        be low-dimensional
     """
     def __init__(
             self, batch_size, input_dimensions, n_actions,
-            random_state, device, yaml='network.yaml', **kwargs):
+            random_state, device, yaml='network.yaml', nstep=1, **kwargs):
         self._input_dimensions=input_dimensions
         self._batch_size=batch_size
         self._random_state=random_state
         self._n_actions=n_actions
-        self._high_int_dim = kwargs.get('high_int_dim', False)
         self.device = device
         self.ddqn_only = kwargs.get('ddqn_only', False)
         self._yaml = yaml
-        self._nstep = kwargs.get('nstep', 1)
+        self._nstep = nstep
         self._encoder_type = kwargs.get('encoder_type', None)
-        if self._high_int_dim:
-            self.n_channels_internal_dim = kwargs["internal_dim"] #dim[-3]
-            raise ValueError("Not implemented")
-        else:
-            self.internal_dim=kwargs["internal_dim"]    #2 for laby
-                                                        #3 for catcher
+        self.internal_dim=kwargs["internal_dim"]
         self.encoder = self.encoder_model().to(self.device)
         self.Q = self.Q_model().to(self.device)
         self.transition = self.transition_model().to(self.device)
@@ -112,20 +103,28 @@ class NN():
 
         class Encoder(nn.Module):
             def __init__(
-                self, input_shape, fc, convs=None, abstract_dim=2,
+                self, input_shape, fc, convs=None, abstract_dim=2, nstep=1
                 ):
                 super().__init__()
                 self.input_shape = input_shape
                 self.convs = convs
                 self.fc = fc
                 self.abstract_dim = abstract_dim
+                self.nstep = nstep
 
             def forward(self, x):
                 if self.convs is not None:
+                    if self.nstep > 1:
+                        N, T, H, W = x.shape
+                        x = x.reshape((-1, H, W))
                     x = x.unsqueeze(1) # Add singular channel
                     x = self.convs(x)
                     x = x.view(x.size(0), -1)
+                    if self.nstep > 1:
+                        x = x.reshape((N, -1))
                 else:
+                    if self.nstep > 1:
+                        raise ValueError('Not implemented for no conv, nstep>1')
                     x = x.reshape((x.shape[0], -1))
                 x = self.fc(x.float())
                 return x
@@ -184,6 +183,9 @@ class NN():
             convs = None
             feature_size = np.prod(input_shape)
 
+        if self._nstep > 1:
+            feature_size *= self._nstep
+
         # Variational, or regular encoder
         if self._encoder_type == 'variational':
             fc_mu = make_fc(feature_size, abstract_dim, encoder_config["fc"])
@@ -194,6 +196,7 @@ class NN():
             fc = make_fc(feature_size, abstract_dim, encoder_config["fc"])
             encoder = Encoder(
                 input_shape, fc, convs, abstract_dim=abstract_dim,
+                nstep=self._nstep
                 )
         return encoder
 
