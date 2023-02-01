@@ -42,8 +42,8 @@ class MyEnv(Environment):
         self._maze_width = 5*self._arm_spacing + 6
         self._maze_length = self._arm_len + 1
         self._higher_dim_obs = kwargs.get("higher_dim_obs", True)
-        self._reward = kwargs.get("reward", False)
-        self._contingency = kwargs.get("contingency", [2,3,4])
+        self._reward = kwargs.get("reward", True)
+        self._contingency = kwargs.get("contingency", [2,3]) #[2,3,4])
         self._dimensionality_tracking = []
         self._dimensionality_variance_ratio = None
         self._reward_location = 0 # Just a placeholder
@@ -66,11 +66,15 @@ class MyEnv(Environment):
         for wall in range(2, self._maze_width, self._arm_spacing+1):
             self._map[wall,2:] = 1
         self._pos_agent = [int(self._maze_width//2), 1]
-        self._arm_visits = [np.nan, np.nan, np.nan] # TODO replace with length-3 queue
+        self._goal_arm = self._contingency[0]
+        self._goal_idx = 0
+        self._arm_visits = [np.nan] * len(self._contingency)
         self._x_coord_to_arm = {}
+        self._arm_to_x_coord = {}
         for arm, arm_x_coord in enumerate(
             range(1, self._maze_width+1, self._arm_spacing+1)):
             self._x_coord_to_arm[arm_x_coord] = arm
+            self._arm_to_x_coord[arm] = arm_x_coord
 
     def set_new_contingency(self, sequence):
         self._contingency = sequence
@@ -99,6 +103,7 @@ class MyEnv(Environment):
         """
 
         self._cur_action = action
+        reward = 0
         if action == 0:
             if self._map[self._pos_agent[0]-1,self._pos_agent[1]] != 1:
                 self._pos_agent[0] = self._pos_agent[0] - 1
@@ -118,12 +123,22 @@ class MyEnv(Environment):
             if self._arm_visits[-1] != curr_arm:
                 self._arm_visits[:-1] = self._arm_visits[1:]
                 self._arm_visits[-1] = curr_arm
+                if curr_arm == self._goal_arm:
+                    reward = 1
+                    self._goal_idx += 1
+                else:
+                    self._goal_idx = 0 
 
-        if (self._reward) and np.array_equal(self._arm_visits, self._contingency):
-            reward = 1
-        else:
-            reward = 0
+        if self._reward:
+            if np.array_equal(self._arm_visits, self._contingency):
+                #reward = 1
+                self._arm_visits = [np.nan]*len(self._arm_visits)
+                self._goal_idx = 0
+            else:
+                pass
+                #reward = 0
         self._mode_score += reward
+        self._goal_arm = self._contingency[self._goal_idx]
         return reward
 
     def summarizePerformance(
@@ -141,21 +156,25 @@ class MyEnv(Environment):
             if not os.path.isdir(fig_dir):
                 os.makedirs(fig_dir)
 
-        all_possib_inp = [] 
+        # Only seen states
         labels = [] # which quadrant
-        self.create_map()
         intern_dim = learning_algo._internal_dim
-        for y_a in range(self._maze_length):
-            for x_a in range(self._maze_width):                
-                if self._map[x_a, y_a] != 1:
-                    if self._higher_dim_obs:
-                        all_possib_inp.append(self.get_higher_dim_obs([x_a, y_a]))
-                    else:
-                        all_possib_inp.append(self.get_low_dim_obs([x_a, y_a]))
-                    label = 0 if x_a < self._maze_width//2 else 2
-                    label += (0 if y_a < self._maze_length//2 else 1)
-                    labels.append(label)
+        observations = test_data_set.observations()[0]
+        observations_tcm = []
+        nstep = learning_algo._nstep
+        for t in np.arange(nstep, observations.shape[0]):
+            tcm_obs = np.swapaxes(observations[t-nstep:t], 0, 1)
+            tcm_obs = learning_algo.make_state_with_history(tcm_obs)
+            observations_tcm.append(tcm_obs.detach().numpy().squeeze())
+            labels.append(0)
+        hlen = 500
+        observations_tcm = np.array(observations_tcm, dtype='float')[-hlen:]
+        unique_observations_tcm, unique_idxs = np.unique(
+            observations_tcm, axis=0, return_index=True)
+        labels = np.array(labels)[unique_idxs]
         device = learning_algo.device
+        n = unique_observations_tcm.shape[0]
+        all_possib_inp = torch.tensor(unique_observations_tcm).float().to(device)
         with torch.no_grad():
             abs_states = learning_algo.crar.encoder(
                 torch.tensor(all_possib_inp).float().to(device)
@@ -179,12 +198,16 @@ class MyEnv(Environment):
             y = np.array(abs_states_np)[:,1]
             z = np.array(abs_states_np)[:,2]
         else:
-            pca = PCA()
-            reduced_states = pca.fit_transform(abs_states_np)
-            x = np.array(reduced_states)[:,0]
-            y = np.array(reduced_states)[:,1]
-            z = np.array(reduced_states)[:,2]
-                    
+            if abs_states_np.shape[0] > 2:
+                pca = PCA()
+                reduced_states = pca.fit_transform(abs_states_np)
+                x = np.array(reduced_states)[:,0]
+                y = np.array(reduced_states)[:,1]
+                z = np.array(reduced_states)[:,2]
+            else:
+                x = np.array(abs_states_np)[:,0]
+                y = np.array(abs_states_np)[:,1]
+                z = np.array(abs_states_np)[:,2]
         fig = plt.figure()
         if intern_dim == 2:
             ax = fig.add_subplot(111)
@@ -198,9 +221,9 @@ class MyEnv(Environment):
                     
         # Plot the estimated transitions
         n = abs_states.shape[0]
+        action_colors = ["0.9", "0.65", "0.4", "0.15"]
         for i in range(n-1):
             n_actions = 4
-            action_colors = ["0.9", "0.65", "0.4", "0.15"]
             for action in range(n_actions):
                 action_encoding = np.zeros(n_actions)
                 action_encoding[action] = 1
@@ -321,6 +344,8 @@ class MyEnv(Environment):
 
         obs = copy.deepcopy(self._map)
         obs[pos_agent[0], pos_agent[1]] = 0.5
+        pos_goal = [self._arm_to_x_coord[self._goal_arm], self._maze_length]
+        obs[pos_goal[0], pos_goal[1]] = 10.
         return obs[1:-1, 1:-1]
 
         obs = copy.deepcopy(self._map)
