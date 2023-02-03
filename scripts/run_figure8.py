@@ -11,8 +11,8 @@ import os
 from deer.default_parser import process_args
 from deer.agent import NeuralAgent
 from deer.learning_algos.CRAR_torch import CRAR
-from figure8_env import MyEnv as figure8_env
-import deer.experiment.base_controllers as bc
+import deer.controllers as bc
+from deer.environments.Figure8 import MyEnv as Env
 
 from deer.policies import EpsilonGreedyPolicy, FixedFigure8Policy
 

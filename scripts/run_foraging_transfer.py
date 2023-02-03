@@ -12,8 +12,8 @@ import os
 from deer.default_parser import process_args
 from deer.agent import NeuralAgent
 from deer.learning_algos.CRAR_torch import CRAR
-from simple_maze_env import MyEnv as simple_maze_env
-import deer.experiment.base_controllers as bc
+import deer.controllers as bc
+from deer.environments.Foraging import MyEnv as Env
 
 from deer.policies import EpsilonGreedyPolicy
 
