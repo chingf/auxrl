@@ -14,7 +14,6 @@ import joblib
 from warnings import warn
 
 from .experiment import base_controllers as controllers
-from .helper import tree 
 from deer.policies import EpsilonGreedyPolicy
 
 class NeuralAgent(object):
@@ -37,9 +36,6 @@ class NeuralAgent(object):
         Number of tuples taken into account for each iteration of gradient descent. Default : 32
     random_state : numpy random number generator
         Default : random seed.
-    exp_priority : float
-        The exponent that determines how much prioritization is used, default is 0 (uniform priority).
-        One may check out Schaul et al. (2016) - Prioritized Experience Replay.
     train_policy : object from class Policy
         Policy followed when in training mode (mode -1)
     test_policy : object from class Policy
@@ -52,7 +48,7 @@ class NeuralAgent(object):
     def __init__(
         self, environment, learning_algo,
         replay_memory_size=1000000, replay_start_size=None, batch_size=32,
-        random_state=np.random.RandomState(), exp_priority=0,
+        random_state=np.random.RandomState(),
         train_policy=None, test_policy=None, only_full_history=True,
         save_dir='./'
         ):
@@ -72,11 +68,10 @@ class NeuralAgent(object):
         self._replay_start_size = replay_start_size
         self._batch_size = batch_size
         self._random_state = random_state
-        self._exp_priority = exp_priority
         self._only_full_history = only_full_history
         self._dataset = DataSet(
             environment, max_size=replay_memory_size, random_state=random_state,
-            use_priority=self._exp_priority, only_full_history=self._only_full_history,
+            only_full_history=self._only_full_history,
             nstep=self._nstep, encoder_type=self._encoder_type
             )
         self._tmp_dataset = None # Will be created by startTesting() when necessary
@@ -205,9 +200,7 @@ class NeuralAgent(object):
         try:
             if self._nstep > 1:
                 observations, actions, rewards, terminals, rndValidIndices, hidden_states =\
-                    self._dataset.randomBatch_nstep(
-                        self._batch_size, self._exp_priority
-                        )
+                    self._dataset.randomBatch_nstep(self._batch_size)
                 if self._encoder_type == 'recurrent':
                     loss, loss_ind = self._learning_algo.recurrent_train( #TODO
                         observations, actions, rewards, terminals, hidden_states
@@ -223,16 +216,12 @@ class NeuralAgent(object):
                         )
             else:
                 states, actions, rewards, next_states, terminals, rndValidIndices =\
-                    self._dataset.randomBatch(
-                        self._batch_size, self._exp_priority
-                        )
+                    self._dataset.randomBatch(self._batch_size)
                 loss, loss_ind = self._learning_algo.train(
                     states, actions, rewards, next_states, terminals
                     )
 
             self._training_loss_averages.append(loss)
-            if (self._exp_priority):
-                self._dataset.updatePriorities(pow(loss_ind,self._exp_priority)+0.0001, rndValidIndices[1])
 
         except SliceError as e:
             warn("Training not done - " + str(e), AgentWarning)
@@ -509,7 +498,7 @@ class DataSet(object):
     """A replay memory consisting of circular buffers for observations, actions, rewards and terminals."""
 
     def __init__(
-        self, env, random_state=None, max_size=1000000, use_priority=False,
+        self, env, random_state=None, max_size=1000000,
         only_full_history=True, nstep=1, encoder_type=None
         ):
         """Initializer.
@@ -528,7 +517,6 @@ class DataSet(object):
         self._batch_dimensions = env.inputDimensions()
         self._max_history_size = 1 #np.max([self._batch_dimensions[i][0] for i in range (len(self._batch_dimensions))])
         self._size = max_size
-        self._use_priority = use_priority
         self._only_full_history = only_full_history
         self._nstep = nstep
         self._encoder_type = encoder_type
@@ -539,9 +527,6 @@ class DataSet(object):
         self._rewards = CircularBuffer(max_size)
         self._reward_locs = CircularBuffer(max_size)
         self._terminals = CircularBuffer(max_size, dtype="bool")
-        if (self._use_priority):
-            self._prioritiy_tree = tree.SumTree(max_size) 
-            self._translation_array = np.zeros(max_size)
 
         self._observations = np.zeros(len(self._batch_dimensions), dtype='object')
         # Initialize the observations container if necessary
@@ -599,7 +584,7 @@ class DataSet(object):
         for i in range( len(rndValidIndices) ):
             self._prioritiy_tree.update(rndValidIndices[i], priorities[i])
 
-    def randomBatch(self, batch_size, use_priority):
+    def randomBatch(self, batch_size):
         """Returns a batch of states, actions, rewards, terminal status, and next_states for a number batch_size of randomly
         chosen transitions. Note that if terminal[i] == True, then next_states[s][i] == np.zeros_like(states[s][i]) for
         each s.
@@ -608,8 +593,6 @@ class DataSet(object):
         -----------
         batch_size : int
             Number of transitions to return.
-        use_priority : Boolean
-            Whether to use prioritized replay or not
 
         Returns
         -------
@@ -641,23 +624,17 @@ class DataSet(object):
                 "complete state. {} elements in dataset; requires {}"
                 .format(self.n_elems, self._max_history_size))
 
-        if (self._use_priority):
-            #FIXME : take into account the case where self._only_full_history is false
-            rndValidIndices, rndValidIndices_tree = self._randomPrioritizedBatch(batch_size)
-            if (rndValidIndices.size == 0):
-                raise SliceError("Could not find a state with full histories")
+        rndValidIndices = np.zeros(batch_size, dtype='int32')
+        if (self._only_full_history):
+            for i in range(batch_size):
+                rndValidIndices[i] = self._randomValidStateIndex(
+                    self._max_history_size
+                    )
         else:
-            rndValidIndices = np.zeros(batch_size, dtype='int32')
-            if (self._only_full_history):
-                for i in range(batch_size):
-                    rndValidIndices[i] = self._randomValidStateIndex(
-                        self._max_history_size
-                        )
-            else:
-                for i in range(batch_size):
-                    rndValidIndices[i] = self._randomValidStateIndex(
-                        minimum_without_terminal=1
-                        )
+            for i in range(batch_size):
+                rndValidIndices[i] = self._randomValidStateIndex(
+                    minimum_without_terminal=1
+                    )
                 
         actions   = self._actions.getSliceBySeq(rndValidIndices)
         rewards   = self._rewards.getSliceBySeq(rndValidIndices)
@@ -698,12 +675,9 @@ class DataSet(object):
                             next_states[input][i][-j-1]=slice[-j-1]
                     #next_states[input][i] = self._observations[input].getSlice(rndValidIndices[i]+2-min(self._batch_dimensions[input][0],first_terminal), rndValidIndices[i]+2)
         
-        if (self._use_priority):
-            return states, actions, rewards, next_states, terminals, [rndValidIndices, rndValidIndices_tree]
-        else:
-            return states, actions, rewards, next_states, terminals, rndValidIndices
+        return states, actions, rewards, next_states, terminals, rndValidIndices
 
-    def randomBatch_nstep(self, batch_size, use_priority):
+    def randomBatch_nstep(self, batch_size):
         """Return corresponding states, actions, rewards, terminal status, and next_states for a number batch_size of randomly
         chosen transitions. Note that if terminal[i] == True, then next_states[s][i] == np.zeros_like(states[s][i]) for
         each s.
@@ -714,8 +688,6 @@ class DataSet(object):
             Number of transitions to return.
         nstep : int
             Number of transitions to be considered for each element
-        use_priority : Boolean
-            Whether to use prioritized replay or not
 
         Returns
         -------
@@ -748,20 +720,14 @@ class DataSet(object):
                 "complete state. {} elements in dataset; requires {}"
                 .format(self.n_elems, self._max_history_size))
 
-        if (self._use_priority):
-            #FIXME : take into account the case where self._only_full_history is false
-            rndValidIndices, rndValidIndices_tree = self._randomPrioritizedBatch(batch_size)
-            if (rndValidIndices.size == 0):
-                raise SliceError("Could not find a state with full histories")
+        rndValidIndices = np.zeros(batch_size, dtype='int32')
+        if (self._only_full_history):
+            for i in range(batch_size):
+                rndValidIndices[i] = self._randomValidStateIndex(self._max_history_size+nstep-1)
         else:
-            rndValidIndices = np.zeros(batch_size, dtype='int32')
-            if (self._only_full_history):
-                for i in range(batch_size):
-                    rndValidIndices[i] = self._randomValidStateIndex(self._max_history_size+nstep-1)
-            else:
-                for i in range(batch_size):
-                    rndValidIndices[i] = self._randomValidStateIndex(minimum_without_terminal=nstep)
-                
+            for i in range(batch_size):
+                rndValidIndices[i] = self._randomValidStateIndex(minimum_without_terminal=nstep)
+            
 
         actions=np.zeros((batch_size,(nstep)), dtype=int)
         rewards=np.zeros((batch_size,(nstep)))
@@ -816,12 +782,8 @@ class DataSet(object):
             _slice = _slice.squeeze()
             hidden_states.append(_slice)
         
-        if (self._use_priority):
-            return observations, actions, rewards, terminals,\
-                [rndValidIndices, rndValidIndices_tree], hidden_states
-        else:
-            return observations, actions, rewards, terminals,\
-                rndValidIndices, hidden_states
+        return observations, actions, rewards, terminals,\
+            rndValidIndices, hidden_states
 
 
     def _randomValidStateIndex(self, minimum_without_terminal):
@@ -888,27 +850,6 @@ class DataSet(object):
             self._observations[i].append(obs[i])
             if self._encoder_type == 'recurrent':
                 self._hiddens.append(hidden)
-
-        # Update tree and translation table
-        if (self._use_priority):
-            index = self._actions.getIndex()
-            if (index >= self._size):
-                ub = self._actions.getUpperBound()
-                true_size = self._actions.getTrueSize()
-                tree_ind = index%self._size
-                if (ub == true_size):
-                    size_extension = true_size - self._size
-                    # New index
-                    index = self._size - 1
-                    tree_ind = -1
-                    # Shift translation array
-                    self._translation_array -= size_extension + 1
-                tree_ind = np.where(self._translation_array==tree_ind)[0][0]
-            else:
-                tree_ind = index
-
-            self._prioritiy_tree.update(tree_ind)
-            self._translation_array[tree_ind] = index
 
         # Store rest of sample
         self._actions.append(action)
