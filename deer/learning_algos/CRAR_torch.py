@@ -33,7 +33,7 @@ class CRAR(LearningAlgo):
             self, environment, 
             freeze_interval=1000, batch_size=32,
             random_state=np.random.RandomState(),
-            double_Q=False, neural_network=NN, lr=1E-4, nn_yaml='network.yaml',
+            double_Q=False, neural_network=NN, lr=1E-4, nn_yaml='basic',
             loss_weights=[1, 1, 1, 1, 1], # T, entropy, entropy, Q, VAE
             **kwargs
             ):

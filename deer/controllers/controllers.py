@@ -12,6 +12,7 @@ import numpy as np
 import joblib
 import os
 import matplotlib.pyplot as plt
+from ..base_classes import Controller
 
 class LearningRateController(Controller):
     """A controller that modifies the learning rate periodically upon epochs end (only in training mode, i.e., agent.mode() == -1).

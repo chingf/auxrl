@@ -13,7 +13,7 @@ import sys
 import joblib
 from warnings import warn
 
-from .experiment import base_controllers as controllers
+from deer.controllers import *
 from deer.policies import EpsilonGreedyPolicy
 
 class NeuralAgent(object):

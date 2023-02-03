@@ -64,7 +64,7 @@ class NN():
     """
     def __init__(
             self, batch_size, input_dimensions, n_actions,
-            random_state, device, yaml='network.yaml', nstep=1, **kwargs):
+            random_state, device, yaml='basic', nstep=1, **kwargs):
         self._input_dimensions=input_dimensions
         self._batch_size=batch_size
         self._random_state=random_state
@@ -171,7 +171,7 @@ class NN():
         abstract_dim = self.internal_dim
 
         # Load yaml file
-        with open(HERE / self._yaml) as f:
+        with open(HERE / f'{self._yaml}.yaml') as f:
             config = yaml.load(f, Loader=yaml.FullLoader)
 
         # Add convolutional layers if needed
