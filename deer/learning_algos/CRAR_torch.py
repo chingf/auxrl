@@ -30,13 +30,12 @@ class CRAR(LearningAlgo):
     """
 
     def __init__(
-            self, environment, 
-            freeze_interval=1000, batch_size=32,
-            random_state=np.random.RandomState(),
-            double_Q=False, neural_network=NN, lr=1E-4, nn_yaml='basic',
-            loss_weights=[1, 1, 1, 1, 1], # T, entropy, entropy, Q, VAE
-            **kwargs
-            ):
+        self, environment, freeze_interval=1000, batch_size=32,
+        random_state=np.random.RandomState(), double_Q=False,
+        neural_network=NN, lr=1E-4, nn_yaml='basic', yaml_mods=None,
+        loss_weights=[1, 1, 1, 1, 1], # T, entropy, entropy, Q, VAE
+        **kwargs
+        ):
         """ Initialize the environment. """
 
         LearningAlgo.__init__(self,environment, batch_size)
@@ -68,18 +67,19 @@ class CRAR(LearningAlgo):
 
         self.crar = neural_network(
             self._batch_size, self._input_dimensions, self._n_actions,
-            self._random_state, high_int_dim=self._high_int_dim,
-            internal_dim=self._internal_dim, device=self.device,
-            yaml=nn_yaml, nstep=self._nstep, encoder_type=self._encoder_type
+            self._random_state, internal_dim=self._internal_dim,
+            device=self.device, yaml=nn_yaml, nstep=self._nstep,
+            encoder_type=self._encoder_type
             )
         self.optimizer = torch.optim.Adam(self.crar.params, lr=lr)
-        self.scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=0.9)
+        self.scheduler = torch.optim.lr_scheduler.ExponentialLR(
+            self.optimizer, gamma=0.9)
 
         self.crar_target = neural_network(
             self._batch_size, self._input_dimensions, self._n_actions,
-            self._random_state, high_int_dim=self._high_int_dim,
-            internal_dim=self._internal_dim, device=self.device,
-            yaml=nn_yaml, nstep=self._nstep, encoder_type=self._encoder_type
+            self._random_state, internal_dim=self._internal_dim,
+            device=self.device, yaml=nn_yaml, nstep=self._nstep,
+            encoder_type=self._encoder_type
             )
         self.optimizer_target = torch.optim.Adam(
             self.crar_target.Q.parameters(), lr=lr

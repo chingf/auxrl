@@ -63,8 +63,10 @@ class NN():
     random_state : numpy random number generator
     """
     def __init__(
-            self, batch_size, input_dimensions, n_actions,
-            random_state, device, yaml='basic', nstep=1, **kwargs):
+        self, batch_size, input_dimensions, n_actions,
+        random_state, device, yaml='basic', yaml_mods=None, nstep=1, **kwargs
+        ):
+
         self._input_dimensions=input_dimensions
         self._batch_size=batch_size
         self._random_state=random_state
@@ -72,9 +74,10 @@ class NN():
         self.device = device
         self.ddqn_only = kwargs.get('ddqn_only', False)
         self._yaml = yaml
+        self._yaml_mods = yaml_mods
         self._nstep = nstep
         self._encoder_type = kwargs.get('encoder_type', None)
-        self.internal_dim=kwargs["internal_dim"]
+        self.internal_dim = kwargs["internal_dim"]
         self.encoder = self.encoder_model().to(self.device)
         self.Q = self.Q_model().to(self.device)
         self.transition = self.transition_model().to(self.device)
@@ -171,7 +174,7 @@ class NN():
         abstract_dim = self.internal_dim
 
         # Load yaml file
-        with open(HERE / f'{self._yaml}.yaml') as f:
+        with open(HERE / f'yamls/{self._yaml}.yaml') as f:
             config = yaml.load(f, Loader=yaml.FullLoader)
 
         # Add convolutional layers if needed
@@ -232,7 +235,7 @@ class NN():
                 else:
                     return x[:, :self.abstract_state_dim] + tr
 
-        with open(HERE / self._yaml) as f:
+        with open(HERE / f'yamls/{self._yaml}.yaml') as f:
             config = yaml.load(f, Loader=yaml.FullLoader)
         num_actions = self._n_actions
         abstract_dim = self.internal_dim
@@ -274,8 +277,8 @@ class NN():
                 q_values = self(state)
                 action = torch.argmax(q_value).item()
                 return action
-                
-        with open(HERE / self._yaml) as f:
+
+        with open(HERE / f'yamls/{self._yaml}.yaml') as f:
             config = yaml.load(f, Loader=yaml.FullLoader)
         qnet_config = config['qnet']
         if self.ddqn_only:
