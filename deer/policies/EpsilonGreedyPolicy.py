@@ -1,4 +1,5 @@
 import numpy as np
+import torch
 from ..base_classes import Policy
 
 
@@ -44,7 +45,20 @@ class EpsilonGreedyPolicy(Policy):
         """ Select random action, weighting actions by how far they take
         you in encoding space """
 
-        Es, TEs = self.learning_algo.getPossibleTransitions(state)
+        # Get possible transition states over all actions
+        state = torch.as_tensor(state, device=self.device).float()
+        Es = self.crar.encoder(state)
+        Es = [torch.clone(Es) for _ in range(self.n_actions)]
+        Es = torch.stack(Es)
+        onehot_actions = np.zeros((self.n_actions, self.n_actions))
+        onehot_actions[np.arange(self.n_actions), np.arange(self.n_actions)] = 1
+        onehot_actions = torch.as_tensor(
+            onehot_actions, device=learning_algo.device).float()
+        Es_and_actions = torch.cat([Es, onehot_actions], dim=1)
+        with torch.no_grad():
+            TEs = self.learning_algo.crar.transition(Es_and_actions)
+
+        # Weight actions by predicted distance in encoding space
         actions = np.arange(TEs.shape[0])
         p = np.linalg.norm((TEs - Es).cpu().numpy(), axis=1)
         p = softmax(p, tau=10)

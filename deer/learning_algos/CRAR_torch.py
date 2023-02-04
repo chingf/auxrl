@@ -34,7 +34,8 @@ class CRAR(LearningAlgo):
         random_state=np.random.RandomState(), double_Q=False,
         neural_network=NN, lr=1E-4, nn_yaml='basic', yaml_mods=None,
         loss_weights=[1, 1, 1, 1, 1], # T, entropy, entropy, Q, VAE
-        **kwargs
+        internal_dim=5, entropy_temp=5, mem_len=1, encoder_type=None,
+        pred_len=1
         ):
         """ Initialize the environment. """
 
@@ -44,13 +45,12 @@ class CRAR(LearningAlgo):
         self._double_Q = double_Q
         self._random_state = random_state
         self._loss_weights = loss_weights
-        self.update_counter = 0    
-        self._high_int_dim = kwargs.get('high_int_dim', False)
-        self._internal_dim = kwargs.get('internal_dim', 2)
-        self._entropy_temp = kwargs.get('entropy_temp', 5.)
-        self._nstep = kwargs.get('nstep', 1)
-        self._expand_tcm = kwargs.get('expand_tcm', False)
-        self._encoder_type = kwargs.get('encoder_type', None)
+        self._internal_dim = internal_dim
+        self._entropy_temp = entropy_temp
+        self._mem_len = mem_len
+        self._encoder_type = encoder_type
+        self._pred_len = pred_len
+        self.update_counter = 0
         self.loss_T = [0]
         self.loss_Q = [0]
         self.loss_VAE = [0]
@@ -59,26 +59,25 @@ class CRAR(LearningAlgo):
         self.loss_total = [0]
         self.device = torch.device(
             "cuda:0" if torch.cuda.is_available() else "cpu")
-        #if self._expand_tcm:
-        #    for i in range(len(self._input_dimensions)):
-        #        dim_tuple = list(self._input_dimensions[i])
-        #        dim_tuple[-1] *= self._nstep
-        #        self._input_dimensions[i] = tuple(dim_tuple)
+        if self._mem_len < self._pred_len:
+            raise ValueError("Buffer not implemented for mem < pred")
 
+        # Base network
         self.crar = neural_network(
             self._batch_size, self._input_dimensions, self._n_actions,
             self._random_state, internal_dim=self._internal_dim,
-            device=self.device, yaml=nn_yaml, nstep=self._nstep,
+            device=self.device, yaml=nn_yaml, mem_len=self._mem_len,
             encoder_type=self._encoder_type
             )
         self.optimizer = torch.optim.Adam(self.crar.params, lr=lr)
         self.scheduler = torch.optim.lr_scheduler.ExponentialLR(
             self.optimizer, gamma=0.9)
 
+        # Target network
         self.crar_target = neural_network(
             self._batch_size, self._input_dimensions, self._n_actions,
             self._random_state, internal_dim=self._internal_dim,
-            device=self.device, yaml=nn_yaml, nstep=self._nstep,
+            device=self.device, yaml=nn_yaml, mem_len=self._mem_len,
             encoder_type=self._encoder_type
             )
         self.optimizer_target = torch.optim.Adam(
@@ -132,7 +131,7 @@ class CRAR(LearningAlgo):
             if encoder_only:
                 if type(model) == type(self.crar.Q):
                     continue
-            model.load_state_dict(p_to_load) # TODO: set for tau
+            model.load_state_dict(p_to_load)
 
     def train(self, states_val, actions_val, rewards_val, next_states_val, terminals_val):
         """
@@ -252,13 +251,9 @@ class CRAR(LearningAlgo):
         return loss_Q.item(), loss_Q_unreduced
 
     def make_state_with_history(self, states_buffer):
-        if self._nstep <= 1:
+        if self._mem_len <= 1:
             return np.squeeze(states_buffer, axis=1)
         states_buffer = torch.tensor(states_buffer) # (N, T, H, W)
-        #history = []
-        #for t in range(self._nstep):
-        #    n_batches = states_buffer.shape[0]
-        #    history.append(states_buffer[:, t, :, :]) # (N, H, W)
         return states_buffer
 
     def step_scheduler(self):
@@ -315,8 +310,8 @@ class CRAR(LearningAlgo):
         The best action : int
         """
     
-        if(mode==None):
-            mode=0
+        if mode == None:
+            mode = 0
         depths = [0,1,3,6,10] # Mode defines the planning depth di
         depth = depths[mode]
         with torch.no_grad():
@@ -326,38 +321,12 @@ class CRAR(LearningAlgo):
         q_vals = self.qValues(xs, d=depth)
         return torch.argmax(q_vals), torch.max(q_vals)
 
-    def getPossibleTransitions(self, state):
-        """
-        From a single state, return the possible transition states.
-        """
-        with torch.no_grad():
-            state = torch.as_tensor(state, device=self.device).float()
-            Es = self.crar.encoder(state)
-            Es = [torch.clone(Es) for _ in range(self._n_actions)]
-            Es = torch.stack(Es)
-            onehot_actions = np.zeros((self._n_actions, self._n_actions))
-            onehot_actions[np.arange(self._n_actions), np.arange(self._n_actions)] = 1
-            onehot_actions = torch.as_tensor(onehot_actions, device=self.device).float()
-            Es_and_actions = torch.cat([Es, onehot_actions], dim=1)
-            TEs = self.crar.transition(Es_and_actions)
-        return Es, TEs
-
     def resetQHat(self):
         """ Set the target Q-network weights equal to the main Q-network weights
         """
 
         for target_model, model in zip(self.crar_target.models, self.crar.models):
             target_model.load_state_dict(model.state_dict())
-
-    def transfer(self, original, transfer, epochs=1):
-        raise ValueError("Not implemented.")
-
-    def reset_rnn(self, vec=None):
-        self.crar.encoder.reset_hidden(vec)
-
-    def get_rnn_hidden(self):
-        hidden = self.crar.encoder.get_hidden()
-        return hidden
 
     def get_losses(self):
         losses = [

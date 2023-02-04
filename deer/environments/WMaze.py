@@ -161,9 +161,9 @@ class MyEnv(Environment):
         intern_dim = learning_algo._internal_dim
         observations = test_data_set.observations()[0]
         observations_tcm = []
-        nstep = learning_algo._nstep
-        for t in np.arange(nstep, observations.shape[0]):
-            tcm_obs = np.swapaxes(observations[t-nstep:t], 0, 1)
+        mem_len = learning_algo._mem_len
+        for t in np.arange(mem_len, observations.shape[0]):
+            tcm_obs = np.swapaxes(observations[t-mem_len:t], 0, 1)
             tcm_obs = learning_algo.make_state_with_history(tcm_obs)
             observations_tcm.append(tcm_obs.detach().numpy().squeeze())
             labels.append(0)

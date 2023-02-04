@@ -64,7 +64,7 @@ class NN():
     """
     def __init__(
         self, batch_size, input_dimensions, n_actions,
-        random_state, device, yaml='basic', yaml_mods=None, nstep=1, **kwargs
+        random_state, device, yaml='basic', yaml_mods=None, mem_len=1, **kwargs
         ):
 
         self._input_dimensions=input_dimensions
@@ -75,7 +75,7 @@ class NN():
         self.ddqn_only = kwargs.get('ddqn_only', False)
         self._yaml = yaml
         self._yaml_mods = yaml_mods
-        self._nstep = nstep
+        self._mem_len = mem_len
         self._encoder_type = kwargs.get('encoder_type', None)
         self.internal_dim = kwargs["internal_dim"]
         self.encoder = self.encoder_model().to(self.device)
@@ -106,28 +106,28 @@ class NN():
 
         class Encoder(nn.Module):
             def __init__(
-                self, input_shape, fc, convs=None, abstract_dim=2, nstep=1
+                self, input_shape, fc, convs=None, abstract_dim=2, mem_len=1
                 ):
                 super().__init__()
                 self.input_shape = input_shape
                 self.convs = convs
                 self.fc = fc
                 self.abstract_dim = abstract_dim
-                self.nstep = nstep
+                self.mem_len = mem_len
 
             def forward(self, x):
                 if self.convs is not None:
-                    if self.nstep > 1:
+                    if self.mem_len > 1:
                         N, T, H, W = x.shape
                         x = x.reshape((-1, H, W))
                     x = x.unsqueeze(1) # Add singular channel
                     x = self.convs(x)
                     x = x.view(x.size(0), -1)
-                    if self.nstep > 1:
+                    if self.mem_len > 1:
                         x = x.reshape((N, -1))
                 else:
-                    if self.nstep > 1:
-                        raise ValueError('Not implemented for no conv, nstep>1')
+                    if self.mem_len > 1:
+                        raise ValueError('Not implemented for no conv, mem_len>1')
                     x = x.reshape((x.shape[0], -1))
                 x = self.fc(x.float())
                 return x
@@ -186,8 +186,8 @@ class NN():
             convs = None
             feature_size = np.prod(input_shape)
 
-        if self._nstep > 1:
-            feature_size *= self._nstep
+        if self._mem_len > 1:
+            feature_size *= self._mem_len
 
         # Variational, or regular encoder
         if self._encoder_type == 'variational':
@@ -199,7 +199,7 @@ class NN():
             fc = make_fc(feature_size, abstract_dim, encoder_config["fc"])
             encoder = Encoder(
                 input_shape, fc, convs, abstract_dim=abstract_dim,
-                nstep=self._nstep
+                mem_len=self._mem_len
                 )
         return encoder
 
