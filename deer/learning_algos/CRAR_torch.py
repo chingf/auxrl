@@ -66,8 +66,8 @@ class CRAR(LearningAlgo):
         self.crar = neural_network(
             self._batch_size, self._input_dimensions, self._n_actions,
             self._random_state, internal_dim=self._internal_dim,
-            device=self.device, yaml=nn_yaml, mem_len=self._mem_len,
-            encoder_type=self._encoder_type
+            device=self.device, yaml=nn_yaml, yaml_mods=yaml_mods,
+            mem_len=self._mem_len, encoder_type=self._encoder_type
             )
         self.optimizer = torch.optim.Adam(self.crar.params, lr=lr)
         self.scheduler = torch.optim.lr_scheduler.ExponentialLR(
@@ -77,8 +77,8 @@ class CRAR(LearningAlgo):
         self.crar_target = neural_network(
             self._batch_size, self._input_dimensions, self._n_actions,
             self._random_state, internal_dim=self._internal_dim,
-            device=self.device, yaml=nn_yaml, mem_len=self._mem_len,
-            encoder_type=self._encoder_type
+            device=self.device, yaml=nn_yaml, yaml_mods=yaml_mods,
+            mem_len=self._mem_len, encoder_type=self._encoder_type
             )
         self.optimizer_target = torch.optim.Adam(
             self.crar_target.Q.parameters(), lr=lr

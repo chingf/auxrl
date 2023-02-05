@@ -20,7 +20,7 @@ from deer.policies import EpsilonGreedyPolicy
 # Experiment Parameters
 job_idx = int(sys.argv[1])
 n_jobs = int(sys.argv[2])
-net_type = sys.argv[3]
+nn_yaml = sys.argv[3]
 internal_dim = int(sys.argv[4])
 device_num = sys.argv[5]
 if int(device_num) >= 0:
@@ -38,11 +38,10 @@ higher_dim_obs = True
 size_maze = 6
 
 # Make directories
-nn_yaml = f'network_{net_type}.yaml'
 engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
 engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
-exp_dir = f'{fname_prefix}_{net_type}_dim{internal_dim}{fname_suffix}/'
-source_dir = f'{source_prefix}_{net_type}_dim{internal_dim}{source_suffix}/'
+exp_dir = f'{fname_prefix}_{nn_yaml}_dim{internal_dim}{fname_suffix}/'
+source_dir = f'{source_prefix}_{nn_yaml}_dim{internal_dim}{source_suffix}/'
 for d in ['pickles/', 'nnets/', 'scores/', 'figs/', 'params/']:
     os.makedirs(f'{engram_dir}{d}{exp_dir}', exist_ok=True)
 
@@ -133,14 +132,14 @@ def run_env(arg):
     with open(f'params/{_fname}.yaml', 'w') as outfile:
         yaml.dump(parameters, outfile, default_flow_style=False)
     rng = np.random.RandomState()
-    env = simple_maze_env(
+    env = Env(
         rng, reward=parameters['foraging_give_rewards'],
         higher_dim_obs=parameters['higher_dim_obs'], plotfig=False,
         size_maze=parameters['size_maze']
         )
     learning_algo = CRAR(
         env, parameters['freeze_interval'], parameters['batch_size'], rng,
-        high_int_dim=False, internal_dim=parameters['internal_dim'],
+        internal_dim=parameters['internal_dim'],
         lr=parameters['learning_rate'], nn_yaml=parameters['nn_yaml'],
         double_Q=True, loss_weights=parameters['loss_weights'],
         encoder_type=parameters['encoder_type']
@@ -170,11 +169,11 @@ def run_env(arg):
         evaluate_on='action', periodicity=parameters['update_frequency'],
         show_episode_avg_V_value=True, show_avg_Bellman_residual=True))
     best_controller = bc.FindBestController(
-        validationID=simple_maze_env.VALIDATION_MODE, testID=None,
+        validationID=Env.VALIDATION_MODE, testID=None,
         unique_fname=fname)
     agent.attach(best_controller)
     agent.attach(bc.InterleavedTestEpochController(
-        id=simple_maze_env.VALIDATION_MODE, epoch_length=parameters['steps_per_test'],
+        id=Env.VALIDATION_MODE, epoch_length=parameters['steps_per_test'],
         periodicity=1, show_score=True, summarize_every=5, unique_fname=fname))
     if set_network is not None:
         agent.setNetwork(

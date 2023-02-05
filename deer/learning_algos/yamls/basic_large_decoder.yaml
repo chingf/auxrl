@@ -17,7 +17,9 @@ crar-fc: &crar-fc
   - *act
   - [Linear, auto, 32]
   - *act
-  - [Linear, 32, auto]
+  - [Linear, 32, 16]
+  - *act
+  - [Linear, 16, auto]
 
 crar-float-fc: &crar-float-fc
   - [Linear, auto, 10]

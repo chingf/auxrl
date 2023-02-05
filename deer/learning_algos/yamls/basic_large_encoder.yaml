@@ -2,9 +2,9 @@ act: &act ReLU
 none: !!python/none &none None
 
 encoder-convs: &encoder-convs
-  - [Conv2d, auto, 8, { kernel_size: 2 }]
+  - [Conv2d, auto, 16, { kernel_size: 2 }]
   - *act
-  - [Conv2d, 8, 16, { kernel_size: 2 }]
+  - [Conv2d, 16, 32, { kernel_size: 2 }]
   - *act
   - [MaxPool2d, { kernel_size: 2 }]
 

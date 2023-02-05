@@ -176,6 +176,8 @@ class NN():
         # Load yaml file
         with open(HERE / f'yamls/{self._yaml}.yaml') as f:
             config = yaml.load(f, Loader=yaml.FullLoader)
+        if self._yaml_mods is not None:
+            pass # TODO
 
         # Add convolutional layers if needed
         encoder_config = config["encoder"]
@@ -237,6 +239,9 @@ class NN():
 
         with open(HERE / f'yamls/{self._yaml}.yaml') as f:
             config = yaml.load(f, Loader=yaml.FullLoader)
+        if self._yaml_mods is not None:
+            pass # TODO
+
         num_actions = self._n_actions
         abstract_dim = self.internal_dim
         tp_config = config["trans-pred"]
@@ -280,6 +285,9 @@ class NN():
 
         with open(HERE / f'yamls/{self._yaml}.yaml') as f:
             config = yaml.load(f, Loader=yaml.FullLoader)
+        if self._yaml_mods is not None:
+            pass # TODO
+
         qnet_config = config['qnet']
         if self.ddqn_only:
             print('q model')
