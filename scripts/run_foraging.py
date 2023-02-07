@@ -25,7 +25,7 @@ device_num = sys.argv[5]
 if int(device_num) >= 0:
     my_env = os.environ
     my_env["CUDA_VISIBLE_DEVICES"] = device_num
-fname_prefix = 'sr'
+fname_prefix = 'test'
 fname_suffix = ''
 epochs = 30
 policy_eps = 1.
@@ -113,7 +113,8 @@ def run_env(arg):
         'foraging_give_rewards': foraging_give_rewards,
         'size_maze': size_maze,
         'pred_len': 1,
-        'pred_gamma': 0.
+        'pred_gamma': 0., 
+        'yaml_mods': {}
         }
     parameters.update(param_update)
     with open(f'{engram_dir}params/{_fname}.yaml', 'w') as outfile:
@@ -126,8 +127,8 @@ def run_env(arg):
         )
     learning_algo = CRAR(
         env, parameters['freeze_interval'], parameters['batch_size'], rng,
-        internal_dim=parameters['internal_dim'],
-        lr=parameters['learning_rate'], nn_yaml=parameters['nn_yaml'],
+        internal_dim=parameters['internal_dim'], lr=parameters['learning_rate'],
+        nn_yaml=parameters['nn_yaml'], yaml_mods=parameters['yaml_mods'],
         double_Q=True, loss_weights=parameters['loss_weights'],
         encoder_type=parameters['encoder_type'],
         pred_len=parameters['pred_len'], pred_gamma=parameters['pred_gamma']
@@ -169,23 +170,16 @@ def run_env(arg):
 
 # load user-defined parameters
 fname_grid = [
-    'entro', 'mb',
-    'sr_5_0.7', 'sr_5_0.9', 'sr_10_0.7', 'sr_10_0.9',
-    'mf']
+    'entro', 'mb_obs', 'mb', 'mf']
 loss_weights_grid = [
-    [0, 1E-1, 1E-1, 1, 0], [1E-2, 1E-1, 1E-1, 1, 0],
-    [1E-2, 1E-1, 1E-1, 1, 0], [1E-2, 1E-1, 1E-1, 1, 0],
-    [1E-2, 1E-1, 1E-1, 1, 0], [1E-2, 1E-1, 1E-1, 1, 0],
+    [0, 1E-1, 1E-1, 1, 0],
+    [1E-2, 1E-1, 1E-1, 1, 0],
+    [1E-2, 1E-1, 1E-1, 1, 0],
     [0, 0, 0, 1, 0],
     ]
-param_updates = [
-    {}, {},
-    {'pred_len': 5, 'pred_gamma': 0.7},
-    {'pred_len': 5, 'pred_gamma': 0.9},
-    {'pred_len': 10, 'pred_gamma': 0.7},
-    {'pred_len': 10, 'pred_gamma': 0.9},
-    {}
-    ]
+param_updates = [{},
+    {'yaml_mods': {'trans-pred': {'predict_z': False}}},
+    {}, {}]
 
 fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
 iters = np.arange(50)

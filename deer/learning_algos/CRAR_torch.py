@@ -191,12 +191,16 @@ class CRAR(LearningAlgo):
         TEs = self.crar.transition(Es_and_actions)
 
         # Transition loss
-        T_target = Esp
+        predict_z = self.crar.transition.predict_z
+        T_target = Esp if predict_z else \
+            next_states_val.reshape((self._batch_size, -1))
         sr_gamma = self._pred_gamma
         for t in np.arange(1, self._pred_len):
             s = self.make_state_with_history(T_next_states_val[0][:,t:t+1])
             s = torch.as_tensor(s, device=self.device).float()
-            T_target = T_target + (sr_gamma**t) * self.crar.encoder(s)
+            next_step_pred = self.crar.encoder(s) if predict_z else \
+                s.reshape((self._batch_size, -1))
+            T_target = T_target + (sr_gamma**t) * next_step_pred
         loss_T = torch.nn.functional.mse_loss(TEs, T_target, reduction='none')
         terminals_mask = torch.tensor(1-terminals_val).float().to(self.device)
         loss_T = loss_T * terminals_mask[:, None]
