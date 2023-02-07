@@ -186,15 +186,22 @@ class NeuralAgent(object):
         if self._dataset.n_elems <= self._replay_start_size:
             return
 
-        T = max(self._mem_len, self._pred_len)
-        if T > 1:
+        if self._mem_len > 1:
             observations, actions, rewards, terminals, rndValidIndices =\
-                self._dataset.randomBatchSeq(self._batch_size, T)
-            states = [obs[:,:-1,:] for obs in observations]
-            next_states = [obs[:,1:,:] for obs in observations]
-            actions = actions[:, -1]
-            rewards = rewards[:, -1]
-            terminals = terminals[:, -1]
+                self._dataset.randomBatchSeq(self._batch_size, self._mem_len)
+            states = [obs[:,:-1] for obs in observations]
+            next_states = [obs[:,1:] for obs in observations]
+        elif self._pred_len > 1:
+            observations, actions, rewards, terminals, rndValidIndices =\
+                self._dataset.randomBatchSeq(self._batch_size, self._pred_len, False)
+            for batch_idx in range(terminals.shape[0]):
+                t = np.argwhere(terminals[batch_idx])
+                if t.size == 0: continue
+                t = int(t[0,0])
+                if t+2 >= self._pred_len: continue
+                observations[0][:, t+2:] = 0
+            states = [obs[:,:-1] for obs in observations]
+            next_states = [obs[:,1:] for obs in observations]
         else:
             states, actions, rewards, next_states, terminals, rndValidIndices =\
                 self._dataset.randomBatch(self._batch_size)
@@ -411,12 +418,10 @@ class NeuralAgent(object):
     def _addSample(self, ponctualObs, action, reward, is_terminal, reward_loc):
         if self._mode != -1:
             self._tmp_dataset.addSample(
-                ponctualObs, action, reward, is_terminal, priority=1,
-                reward_loc=reward_loc)
+                ponctualObs, action, reward, is_terminal, reward_loc)
         else:
             self._dataset.addSample(
-                ponctualObs, action, reward, is_terminal, priority=1,
-                reward_loc=reward_loc)
+                ponctualObs, action, reward, is_terminal, reward_loc)
 
     def _chooseAction(self):
         if self._mode != -1:
@@ -472,7 +477,6 @@ class DataSet(object):
         """
 
         self._batch_dimensions = env.inputDimensions()
-        self._max_history_size = 1 #np.max([self._batch_dimensions[i][0] for i in range (len(self._batch_dimensions))])
         self._size = max_size
         self._only_full_history = only_full_history
         if ( isinstance(env.nActions(),int) ):
@@ -565,23 +569,16 @@ class DataSet(object):
                 trajectories are too short).
         """
 
-        if self._max_history_size >= self.n_elems:
-            raise SliceError(
-                "Not enough elements in the dataset to create a "
-                "complete state. {} elements in dataset; requires {}"
-                .format(self.n_elems, self._max_history_size))
+        if self.n_elems < 2:
+            raise SliceError("Not enough elements in the dataset to sample from.")
 
         rndValidIndices = np.zeros(batch_size, dtype='int32')
         if (self._only_full_history):
             for i in range(batch_size):
-                rndValidIndices[i] = self._randomValidStateIndex(
-                    self._max_history_size
-                    )
+                rndValidIndices[i] = self._randomValidStateIndex(1)
         else:
             for i in range(batch_size):
-                rndValidIndices[i] = self._randomValidStateIndex(
-                    minimum_without_terminal=1
-                    )
+                rndValidIndices[i] = self._randomValidStateIndex(1)
                 
         actions   = self._actions.getSliceBySeq(rndValidIndices)
         rewards   = self._rewards.getSliceBySeq(rndValidIndices)
@@ -590,11 +587,11 @@ class DataSet(object):
         states = np.zeros(len(self._batch_dimensions), dtype='object')
         next_states = np.zeros_like(states)
         # We calculate the first terminal index backward in time and set it 
-        # at maximum to the value self._max_history_size
+        # at maximum to the value max_history_size=1
         first_terminals=[]
         for rndValidIndex in rndValidIndices:
-            first_terminal=1
-            while first_terminal < self._max_history_size:
+            first_terminal = 1
+            while first_terminal < 1:
                 if (self._terminals[rndValidIndex-first_terminal]==True or first_terminal>rndValidIndex):
                     break 
                 first_terminal+=1
@@ -624,35 +621,31 @@ class DataSet(object):
         
         return states, actions, rewards, next_states, terminals, rndValidIndices
 
-    def randomBatchSeq(self, batch_size, seq_len):
-        """ As in randomBatch but for a sequence of seq_len steps. """
+    def randomBatchSeq(self, batch_size, seq_len, backwards=True):
+        """
+        As in randomBatch but for a sequence of seq_len steps.
+        Sequence may be defined backwards (for memory) or defined forwards
+        (for prediction). This choice affects _randomValidStateIndex and which
+        edge of the sample sequence is allowed to contain terminal states.
+        """
 
-        if self._max_history_size >= self.n_elems:
-            raise SliceError(
-                "Not enough elements in the dataset to create a "
-                "complete state. {} elements in dataset; requires {}"
-                .format(self.n_elems, self._max_history_size))
+        if self.n_elems < seq_len:
+            raise SliceError("Not enough elements in the dataset to sample from.")
 
         rndValidIndices = np.zeros(batch_size, dtype='int32')
-        if (self._only_full_history):
-            for i in range(batch_size):
-                rndValidIndices[i] = self._randomValidStateIndex(
-                    self._max_history_size + seq_len - 1)
-        else:
-            for i in range(batch_size):
-                rndValidIndices[i] = self._randomValidStateIndex(
-                    minimum_without_terminal=seq_len)
+        for i in range(batch_size):
+            rndValidIndices[i] = self._randomValidStateIndex(seq_len+1, backwards)
             
-        actions=np.zeros((batch_size,(seq_len)), dtype=int)
-        rewards=np.zeros((batch_size,(seq_len)))
-        terminals=np.zeros((batch_size,(seq_len)))
+        actions = np.zeros((batch_size,(seq_len)), dtype=int)
+        rewards = np.zeros((batch_size,(seq_len)))
+        terminals = np.zeros((batch_size,(seq_len)))
         for i in range(batch_size):
             actions[i] = self._actions.getSlice(
-                rndValidIndices[i] - seq_len + 1, rndValidIndices[i] + 1)
+                rndValidIndices[i] - seq_len+1, rndValidIndices[i] + 1)
             rewards[i] = self._rewards.getSlice(
-                rndValidIndices[i] - seq_len + 1, rndValidIndices[i] + 1)
+                rndValidIndices[i] - seq_len+1, rndValidIndices[i] + 1)
             terminals[i] = self._terminals.getSlice(
-                rndValidIndices[i] - seq_len + 1, rndValidIndices[i] + 1)
+                rndValidIndices[i] - seq_len+1, rndValidIndices[i] + 1)
         
         observations = np.zeros(len(self._batch_dimensions), dtype='object')
         # We calculate the first terminal index backward in time and set it 
@@ -660,7 +653,7 @@ class DataSet(object):
         first_terminals = []
         for rndValidIndex in rndValidIndices:
             first_terminal = 1
-            while first_terminal < (self._max_history_size + seq_len - 1):
+            while first_terminal < seq_len:
                 if (self._terminals[rndValidIndex-first_terminal]==True or first_terminal>rndValidIndex):
                     break 
                 first_terminal+=1
@@ -676,46 +669,38 @@ class DataSet(object):
             for batch_i in range(batch_size):
                 self._observations[obs_i].triggered = True
                 _slice = self._observations[obs_i].getSlice(
-                    rndValidIndices[batch_i]-seq_len+2-min(self._batch_dimensions[obs_i][0],first_terminals[batch_i]-seq_len+1),
-                    rndValidIndices[batch_i]+2
-                    )
-                _slice = _slice.squeeze()
-
-                if (len(_slice)==len(observations[obs_i][batch_i])):
-                    observations[obs_i][batch_i] = _slice
-                else:
-                    for j in range(len(_slice)):
-                        observations[obs_i][batch_i][-j-1] = _slice[-j-1]
-                # If transition leads to terminal, we don't care about next state
-                if terminals[i][-1]: #rndValidIndices[i] >= self.n_elems - 1 or terminals[i]:
-                    observations[obs_i][rndValidIndices[batch_i]:rndValidIndices[batch_i]+2] = 0
-
-        for batch_i in range(batch_size):
-            _slice = _slice.squeeze()
-        
+                    rndValidIndices[batch_i] - seq_len + 1,
+                    rndValidIndices[batch_i] + 2)
+                observations[obs_i][batch_i] = _slice.squeeze()
         return observations, actions, rewards, terminals, rndValidIndices
 
-    def _randomValidStateIndex(self, minimum_without_terminal):
-        """ Returns the index corresponding to a timestep that is valid. """
+    def _randomValidStateIndex(self, seq_len, backwards=True):
+        """
+        Returns the index corresponding to a timestep that is valid. From index
+        i, you can go backwards at least SEQLEN steps before
+        you hit a terminal state from a previous trajectory.
+        """
 
-        index_lowerBound = minimum_without_terminal - 1
-        # We try out an index in the acceptable range of the replay memory
-        index = self._random_state.randint(index_lowerBound, self.n_elems-1) 
+        index_lowerBound = seq_len - 1
+        index_upperBound = self.n_elems - 1
+        index = self._random_state.randint(index_lowerBound, index_upperBound)
+        if not backwards:
+            return index
 
         # Check if slice is valid wrt terminals
         # The selected index may correspond to a terminal transition but not 
-        # the previous minimum_without_terminal-1 transition
+        # the previous seq_len-1 transition
         firstTry = index
         startWrapped = False
         while True:
             i = index-1
             processed = 0
-            for _ in range(minimum_without_terminal-1):
+            for _ in range(seq_len - 1):
                 if (i < 0 or self._terminals[i]):
                     break;
                 i -= 1
                 processed += 1
-            if (processed < minimum_without_terminal - 1):
+            if processed < seq_len - 1:
                 # if we stopped prematurely, shift slice to the left and try again
                 index = i
                 if (index < index_lowerBound):
@@ -728,9 +713,9 @@ class DataSet(object):
                 return index
     
     def addSample(
-        self, obs, action, reward, is_terminal, priority, reward_loc
+        self, obs, action, reward, is_terminal, reward_loc
         ):
-        """Store the punctual observations, action, reward, is_terminal and priority in the dataset. 
+        """Store the punctual observations, action, reward, is_terminal. 
         Parameters
         -----------
         obs : ndarray
@@ -742,8 +727,6 @@ class DataSet(object):
             The reward associated to taking this [action].
         is_terminal : bool
             Tells whether [action] lead to a terminal state (i.e. corresponded to a terminal transition).
-        priority : float
-            The priority to be associated with the sample
         """        
         # Store observations
         for i in range(len(self._batch_dimensions)):

@@ -25,7 +25,7 @@ device_num = sys.argv[5]
 if int(device_num) >= 0:
     my_env = os.environ
     my_env["CUDA_VISIBLE_DEVICES"] = device_num
-fname_prefix = 'foraging4x4'
+fname_prefix = 'sr'
 fname_suffix = ''
 epochs = 30
 policy_eps = 1.
@@ -35,7 +35,7 @@ size_maze = 6
 
 # Make directories
 engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
-engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
+#engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
 exp_dir = f'{fname_prefix}_{nn_yaml}_dim{internal_dim}{fname_suffix}/'
 for d in ['pickles/', 'nnets/', 'figs/', 'params/']:
     os.makedirs(f'{engram_dir}{d}{exp_dir}', exist_ok=True)
@@ -84,7 +84,7 @@ def cpu_parallel():
         pickle.dump(results, f)
 
 def run_env(arg):
-    _fname, loss_weights, i = arg
+    _fname, loss_weights, param_update, i = arg
     fname = f'{exp_dir}{_fname}_{i}'
     encoder_type = 'variational' if loss_weights[-1] > 0 else 'regular'
     parameters = {
@@ -111,9 +111,12 @@ def run_env(arg):
         'deterministic': False,
         'loss_weights': loss_weights,
         'foraging_give_rewards': foraging_give_rewards,
-        'size_maze': size_maze
+        'size_maze': size_maze,
+        'pred_len': 1,
+        'pred_gamma': 0.
         }
-    with open(f'params/{_fname}.yaml', 'w') as outfile:
+    parameters.update(param_update)
+    with open(f'{engram_dir}params/{_fname}.yaml', 'w') as outfile:
         yaml.dump(parameters, outfile, default_flow_style=False)
     rng = np.random.RandomState()
     env = Env(
@@ -126,7 +129,8 @@ def run_env(arg):
         internal_dim=parameters['internal_dim'],
         lr=parameters['learning_rate'], nn_yaml=parameters['nn_yaml'],
         double_Q=True, loss_weights=parameters['loss_weights'],
-        encoder_type=parameters['encoder_type']
+        encoder_type=parameters['encoder_type'],
+        pred_len=parameters['pred_len'], pred_gamma=parameters['pred_gamma']
         )
     train_policy = EpsilonGreedyPolicy(
         learning_algo, env.nActions(), rng, policy_eps)
@@ -163,20 +167,35 @@ def run_env(arg):
         }
     return _fname, loss_weights, result
 
-
 # load user-defined parameters
-fname_grid = ['entro', 'mb', 'mf']
+fname_grid = [
+    'entro', 'mb',
+    'sr_5_0.7', 'sr_5_0.9', 'sr_10_0.7', 'sr_10_0.9',
+    'mf']
 loss_weights_grid = [
-    [0, 1E-1, 1E-1, 1, 0],
-    [1E-2, 1E-1, 1E-1, 1, 0],
+    [0, 1E-1, 1E-1, 1, 0], [1E-2, 1E-1, 1E-1, 1, 0],
+    [1E-2, 1E-1, 1E-1, 1, 0], [1E-2, 1E-1, 1E-1, 1, 0],
+    [1E-2, 1E-1, 1E-1, 1, 0], [1E-2, 1E-1, 1E-1, 1, 0],
     [0, 0, 0, 1, 0],
     ]
+param_updates = [
+    {}, {},
+    {'pred_len': 5, 'pred_gamma': 0.7},
+    {'pred_len': 5, 'pred_gamma': 0.9},
+    {'pred_len': 10, 'pred_gamma': 0.7},
+    {'pred_len': 10, 'pred_gamma': 0.9},
+    {}
+    ]
+
 fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
 iters = np.arange(50)
 args = []
-for fname, loss_weights in zip(fname_grid, loss_weights_grid):
+for arg_idx in range(len(fname_grid)):
     for i in iters:
-        args.append([fname, loss_weights, i])
+        fname = fname_grid[arg_idx]
+        loss_weights = loss_weights_grid[arg_idx]
+        param_update = param_updates[arg_idx]
+        args.append([fname, loss_weights, param_update, i])
 split_args = np.array_split(args, n_jobs)
 
 import time

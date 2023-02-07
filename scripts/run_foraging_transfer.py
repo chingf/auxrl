@@ -26,10 +26,10 @@ device_num = sys.argv[5]
 if int(device_num) >= 0:
     my_env = os.environ
     my_env["CUDA_VISIBLE_DEVICES"] = device_num
-fname_prefix = 'transfer_foraging4x4'
+fname_prefix = 'transfer_sr'
 fname_suffix = ''
 epochs = 30
-source_prefix = 'foraging4x4'
+source_prefix = 'sr'
 source_suffix = ''
 source_epoch = 30
 policy_eps = 1. 
@@ -39,7 +39,7 @@ size_maze = 6
 
 # Make directories
 engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
-engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
+#engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
 exp_dir = f'{fname_prefix}_{nn_yaml}_dim{internal_dim}{fname_suffix}/'
 source_dir = f'{source_prefix}_{nn_yaml}_dim{internal_dim}{source_suffix}/'
 for d in ['pickles/', 'nnets/', 'scores/', 'figs/', 'params/']:
@@ -127,9 +127,11 @@ def run_env(arg):
         'deterministic': False,
         'loss_weights': loss_weights,
         'foraging_give_rewards': True,
-        'size_maze': size_maze
+        'size_maze': size_maze,
+        'pred_len': 1,
+        'pred_gamma': 0.
         }
-    with open(f'params/{_fname}.yaml', 'w') as outfile:
+    with open(f'{engram_dir}params/{_fname}.yaml', 'w') as outfile:
         yaml.dump(parameters, outfile, default_flow_style=False)
     rng = np.random.RandomState()
     env = Env(
@@ -142,7 +144,8 @@ def run_env(arg):
         internal_dim=parameters['internal_dim'],
         lr=parameters['learning_rate'], nn_yaml=parameters['nn_yaml'],
         double_Q=True, loss_weights=parameters['loss_weights'],
-        encoder_type=parameters['encoder_type']
+        encoder_type=parameters['encoder_type'],
+        pred_len=parameters['pred_len'], pred_gamma=parameters['pred_gamma']
         )
     print(f'DEVICE USED: {learning_algo.device}')
     train_policy = EpsilonGreedyPolicy(
@@ -203,20 +206,17 @@ def run_env(arg):
 
 # load user-defined parameters
 
-fname_grid = ['entro', 'mb', 'mf', 'clean']
-network_files = [
-    f'{source_prefix}_entro', f'{source_prefix}_mb', 
-    f'{source_prefix}_mf', None]
-loss_weights_grid = [
-    [0., 0., 0., 1., 0.],
-    [0., 0., 0., 1., 0.],
-    [0., 0., 0., 1., 0.],
-    [0., 0., 0., 1., 0.]
-    ]
+fname_grid = [
+    'entro', 'mb',
+    'sr_5_0.7', 'sr_5_0.9', 'sr_10_0.7', 'sr_10_0.9',
+    'mf']
+network_files = [f'{source_prefix}_{f}' for f in fname_grid]
+fname_grid.append('clean')
+network_files.append(None)
+loss_weights_grid = [[0., 0., 0., 1., 0.]] * len(fname_grid)
 fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
-
 freeze_encoder = False
-iters = np.arange(70)
+iters = np.arange(60)
 args = []
 for i in iters:
     for j in range(len(fname_grid)):

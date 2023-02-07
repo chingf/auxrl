@@ -35,7 +35,7 @@ class CRAR(LearningAlgo):
         neural_network=NN, lr=1E-4, nn_yaml='basic', yaml_mods=None,
         loss_weights=[1, 1, 1, 1, 1], # T, entropy, entropy, Q, VAE
         internal_dim=5, entropy_temp=5, mem_len=1, encoder_type=None,
-        pred_len=1
+        pred_len=1, pred_gamma=0.
         ):
         """ Initialize the environment. """
 
@@ -50,6 +50,7 @@ class CRAR(LearningAlgo):
         self._mem_len = mem_len
         self._encoder_type = encoder_type
         self._pred_len = pred_len
+        self._pred_gamma = pred_gamma
         self.update_counter = 0
         self.loss_T = [0]
         self.loss_Q = [0]
@@ -59,8 +60,8 @@ class CRAR(LearningAlgo):
         self.loss_total = [0]
         self.device = torch.device(
             "cuda:0" if torch.cuda.is_available() else "cpu")
-        if self._mem_len < self._pred_len:
-            raise ValueError("Buffer not implemented for mem < pred")
+        if pred_len > 1 and mem_len > 1:
+            raise ValueError("Not implemented for pred_len and mem_len > 1")
 
         # Base network
         self.crar = neural_network(
@@ -139,12 +140,12 @@ class CRAR(LearningAlgo):
 
         Parameters
         -----------
-        states_val : numpy array of objects
+        states_val : numpy array of objects [(N, T, 4, 4)]
             Each object is a numpy array that relates to one of the observations
             with size [batch_size * history size * size of punctual observation (which is 2D,1D or scalar)]).
-        actions_val : numpy array of integers with size [self._batch_size]
+        actions_val : numpy array of integers with size [self._batch_size] [(5,)]*N
             actions[i] is the action taken after having observed states[:][i].
-        rewards_val : numpy array of floats with size [self._batch_size]
+        rewards_val : numpy array of floats with size [self._batch_size] (64,)
             rewards[i] is the reward obtained for taking actions[i-1].
         next_states_val : numpy array of objects
             Each object is a numpy array that relates to one of the observations
@@ -157,6 +158,14 @@ class CRAR(LearningAlgo):
         Average loss of the batch training for the Q-values (RMSE)
         Individual (square) losses for the Q-values for each tuple
         """
+
+        if self._pred_len > 1:
+            actions_val = actions_val[:, 0]
+            rewards_val = rewards_val[:, 0]
+            terminals_val = terminals_val[:, 0]
+            T_states_val = states_val; T_next_states_val = next_states_val
+            states_val = [states_val[0][:,:1]]
+            next_states_val = [next_states_val[0][:,:1]]
         self.optimizer.zero_grad()
 
         onehot_actions = np.zeros((self._batch_size, self._n_actions))
@@ -182,7 +191,13 @@ class CRAR(LearningAlgo):
         TEs = self.crar.transition(Es_and_actions)
 
         # Transition loss
-        loss_T = torch.nn.functional.mse_loss(TEs, Esp, reduction='none')
+        T_target = Esp
+        sr_gamma = self._pred_gamma
+        for t in np.arange(1, self._pred_len):
+            s = self.make_state_with_history(T_next_states_val[0][:,t:t+1])
+            s = torch.as_tensor(s, device=self.device).float()
+            T_target = T_target + (sr_gamma**t) * self.crar.encoder(s)
+        loss_T = torch.nn.functional.mse_loss(TEs, T_target, reduction='none')
         terminals_mask = torch.tensor(1-terminals_val).float().to(self.device)
         loss_T = loss_T * terminals_mask[:, None]
         loss_T = torch.mean(loss_T)
