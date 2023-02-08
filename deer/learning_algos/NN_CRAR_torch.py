@@ -73,7 +73,7 @@ class NN():
     """
     def __init__(
         self, batch_size, input_dimensions, n_actions,
-        random_state, device, yaml='basic', yaml_mods=None, mem_len=1, **kwargs
+        random_state, device, yaml='basic', yaml_mods={}, mem_len=1, **kwargs
         ):
 
         self._input_dimensions=input_dimensions

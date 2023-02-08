@@ -26,10 +26,10 @@ device_num = sys.argv[5]
 if int(device_num) >= 0:
     my_env = os.environ
     my_env["CUDA_VISIBLE_DEVICES"] = device_num
-fname_prefix = 'transfer_sr'
+fname_prefix = 'transfer_test'
 fname_suffix = ''
 epochs = 30
-source_prefix = 'sr'
+source_prefix = 'test'
 source_suffix = ''
 source_epoch = 30
 policy_eps = 1. 
@@ -38,8 +38,8 @@ higher_dim_obs = True
 size_maze = 6
 
 # Make directories
-engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
-#engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
+#engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
+engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
 exp_dir = f'{fname_prefix}_{nn_yaml}_dim{internal_dim}{fname_suffix}/'
 source_dir = f'{source_prefix}_{nn_yaml}_dim{internal_dim}{source_suffix}/'
 for d in ['pickles/', 'nnets/', 'scores/', 'figs/', 'params/']:
@@ -90,7 +90,7 @@ def cpu_parallel():
         pickle.dump(results, f)
 
 def run_env(arg):
-    _fname, network_file, loss_weights, i = arg
+    _fname, network_file, loss_weights, param_update, i = arg
     nnet_dir = f'{engram_dir}nnets/{source_dir}'
     if network_file is None:
         set_network = None
@@ -98,6 +98,8 @@ def run_env(arg):
         network_file_options = [
             s for s in os.listdir(nnet_dir) if \
             (re.search(f"^({network_file})_\\d+", s) != None)]
+        print(network_file)
+        print(network_file_options)
         network_file_idx = np.random.choice(len(network_file_options))
         network_file_path = f'{source_dir}{network_file_options[network_file_idx]}'
         set_network = [f'{network_file_path}', source_epoch, encoder_only]
@@ -129,8 +131,10 @@ def run_env(arg):
         'foraging_give_rewards': True,
         'size_maze': size_maze,
         'pred_len': 1,
-        'pred_gamma': 0.
+        'pred_gamma': 0.,
+        'yaml_mods': {}
         }
+    parameters.update(param_update)
     with open(f'{engram_dir}params/{_fname}.yaml', 'w') as outfile:
         yaml.dump(parameters, outfile, default_flow_style=False)
     rng = np.random.RandomState()
@@ -142,7 +146,8 @@ def run_env(arg):
     learning_algo = CRAR(
         env, parameters['freeze_interval'], parameters['batch_size'], rng,
         internal_dim=parameters['internal_dim'],
-        lr=parameters['learning_rate'], nn_yaml=parameters['nn_yaml'],
+        lr=parameters['learning_rate'],
+        nn_yaml=parameters['nn_yaml'], yaml_mods=parameters['yaml_mods'],
         double_Q=True, loss_weights=parameters['loss_weights'],
         encoder_type=parameters['encoder_type'],
         pred_len=parameters['pred_len'], pred_gamma=parameters['pred_gamma']
@@ -205,25 +210,26 @@ def run_env(arg):
     return _fname, loss_weights, result
 
 # load user-defined parameters
-
 fname_grid = [
-    'entro', 'mb',
-    'sr_5_0.7', 'sr_5_0.9', 'sr_10_0.7', 'sr_10_0.9',
-    'mf']
+    'entro', 'mb_obs', 'mb', 'mf']
 network_files = [f'{source_prefix}_{f}' for f in fname_grid]
 fname_grid.append('clean')
 network_files.append(None)
 loss_weights_grid = [[0., 0., 0., 1., 0.]] * len(fname_grid)
 fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
-freeze_encoder = False
+param_updates = [{},
+    {'yaml_mods': {'trans-pred': {'predict_z': False}}},
+    {}, {}, {}]
+freeze_encoder = True
 iters = np.arange(60)
 args = []
-for i in iters:
-    for j in range(len(fname_grid)):
-        fname = fname_grid[j]
-        network_file = network_files[j]
-        loss_weights = loss_weights_grid[j]
-        args.append([fname, network_file, loss_weights, i])
+for arg_idx in range(len(fname_grid)):
+    for i in iters:
+        fname = fname_grid[arg_idx]
+        network_file = network_files[arg_idx]
+        loss_weights = loss_weights_grid[arg_idx]
+        param_update = param_updates[arg_idx]
+        args.append([fname, network_file, loss_weights, param_update, i])
 split_args = np.array_split(args, n_jobs)
 
 import time
@@ -232,7 +238,10 @@ start = time.time()
 if job_idx == -1:
     cpu_parallel()
 else:
-    gpu_parallel(job_idx)
+    job_args = split_args[job_idx]
+    contains_mb_obs = [((a[1] != None) and ('mb_obs' in a[1])) for a in job_args]
+    if np.any(contains_mb_obs):
+        gpu_parallel(job_idx)
 end = time.time()
 
 print(f'ELAPSED TIME: {end-start} seconds')

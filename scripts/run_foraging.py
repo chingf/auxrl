@@ -34,8 +34,8 @@ foraging_give_rewards = True
 size_maze = 6
 
 # Make directories
-engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
-#engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
+#engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
+engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
 exp_dir = f'{fname_prefix}_{nn_yaml}_dim{internal_dim}{fname_suffix}/'
 for d in ['pickles/', 'nnets/', 'figs/', 'params/']:
     os.makedirs(f'{engram_dir}{d}{exp_dir}', exist_ok=True)
@@ -179,7 +179,8 @@ loss_weights_grid = [
     ]
 param_updates = [{},
     {'yaml_mods': {'trans-pred': {'predict_z': False}}},
-    {}, {}]
+    {}, {}
+    ]
 
 fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
 iters = np.arange(50)
