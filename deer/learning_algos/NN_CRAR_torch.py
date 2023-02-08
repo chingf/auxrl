@@ -244,7 +244,7 @@ class NN():
         
             def forward(self, x):
                 tr = self.fc(x.float())
-                if self.encode_new_state:
+                if self.encode_new_state or (not self.predict_z):
                     return tr
                 else:
                     return x[:, :self.abstract_state_dim] + tr

@@ -175,28 +175,29 @@ class MyEnv(Environment):
                     
         # Plot the estimated transitions
         n = abs_states.shape[0]
-        for i in range(n-1):
-            n_actions = 4
-            action_colors = ["0.9", "0.65", "0.4", "0.15"]
-            for action in range(n_actions):
-                action_encoding = np.zeros(n_actions)
-                action_encoding[action] = 1
-                with torch.no_grad():
-                    pred = learning_algo.crar.transition(torch.cat([
-                        abs_states[i:i+1].to(device),
-                        torch.as_tensor([action_encoding]).to(device)
-                        ], dim=1).float()).cpu().numpy()
-                if (intern_dim > 3) and (abs_states_np.shape[0] > 2):
-                    pred = pca.transform(pred)
-                x_transitions = np.concatenate([x[i:i+1], pred[0,:1]])
-                y_transitions = np.concatenate([y[i:i+1], pred[0,1:2]])
-                if intern_dim == 2:
-                    z_transitions = np.zeros(y_transitions.shape)
-                else:
-                    z_transitions = np.concatenate([z[i:i+1],pred[0,2:3]])
-                ax.plot(
-                    x_transitions, y_transitions, z_transitions,
-                    color=action_colors[action], alpha=0.75)
+        n_actions = 4
+        action_colors = ["0.9", "0.65", "0.4", "0.15"]
+        if learning_algo.crar.transition.predict_z:
+            for i in range(n-1):
+                for action in range(n_actions):
+                    action_encoding = np.zeros(n_actions)
+                    action_encoding[action] = 1
+                    with torch.no_grad():
+                        pred = learning_algo.crar.transition(torch.cat([
+                            abs_states[i:i+1].to(device),
+                            torch.as_tensor([action_encoding]).to(device)
+                            ], dim=1).float()).cpu().numpy()
+                    if (intern_dim > 3) and (abs_states_np.shape[0] > 2):
+                        pred = pca.transform(pred)
+                    x_transitions = np.concatenate([x[i:i+1], pred[0,:1]])
+                    y_transitions = np.concatenate([y[i:i+1], pred[0,1:2]])
+                    if intern_dim == 2:
+                        z_transitions = np.zeros(y_transitions.shape)
+                    else:
+                        z_transitions = np.concatenate([z[i:i+1],pred[0,2:3]])
+                    ax.plot(
+                        x_transitions, y_transitions, z_transitions,
+                        color=action_colors[action], alpha=0.75)
         
         # Plot the dots at each time step depending on the action taken
         colors=['blue', 'orange', 'green', 'red']
