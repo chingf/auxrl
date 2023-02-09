@@ -5,11 +5,20 @@ from itertools import accumulate
 import inspect
 import yaml
 from pathlib import Path
+import collections.abc
 
 NN_MAP = {
     k: v for k, v in inspect.getmembers(nn) # if nonthrowing_issubclass(v, nn.Module)
 }
 HERE = Path(__file__).parent
+
+def update(d, u):
+    for k, v in u.items():
+        if isinstance(v, collections.abc.Mapping):
+            d[k] = update(d.get(k, {}), v)
+        else:
+            d[k] = v
+    return d
 
 def compute_feature_size(input_shape, convs):
     conv_output = convs(torch.zeros(1, *input_shape))
@@ -64,7 +73,7 @@ class NN():
     """
     def __init__(
         self, batch_size, input_dimensions, n_actions,
-        random_state, device, yaml='basic', yaml_mods=None, mem_len=1, **kwargs
+        random_state, device, yaml='basic', yaml_mods={}, mem_len=1, **kwargs
         ):
 
         self._input_dimensions=input_dimensions
@@ -176,8 +185,7 @@ class NN():
         # Load yaml file
         with open(HERE / f'yamls/{self._yaml}.yaml') as f:
             config = yaml.load(f, Loader=yaml.FullLoader)
-        if self._yaml_mods is not None:
-            pass # TODO
+            update(config, self._yaml_mods)
 
         # Add convolutional layers if needed
         encoder_config = config["encoder"]
@@ -223,32 +231,38 @@ class NN():
         """
 
         class TransitionPredictor(nn.Module):
-            def __init__(self, abstract_state_dim, num_actions, fc, encode_new_state):
+            def __init__(
+                self, abstract_state_dim, num_actions, fc,
+                encode_new_state, predict_z
+                ):
                 super().__init__()
                 self.abstract_state_dim = abstract_state_dim
                 self.num_actions = num_actions
                 self.fc = fc
                 self.encode_new_state = encode_new_state
+                self.predict_z = predict_z
         
             def forward(self, x):
                 tr = self.fc(x.float())
-                if self.encode_new_state:
+                if self.encode_new_state or (not self.predict_z):
                     return tr
                 else:
                     return x[:, :self.abstract_state_dim] + tr
 
         with open(HERE / f'yamls/{self._yaml}.yaml') as f:
             config = yaml.load(f, Loader=yaml.FullLoader)
-        if self._yaml_mods is not None:
-            pass # TODO
+            update(config, self._yaml_mods)
 
-        num_actions = self._n_actions
+        obs_shape = self._input_dimensions[0]
         abstract_dim = self.internal_dim
+        num_actions = self._n_actions
         tp_config = config["trans-pred"]
-        fc = make_fc(abstract_dim + num_actions, abstract_dim, tp_config["fc"])
+        encode_new_state = tp_config["encode_new_state"]
+        predict_z = tp_config["predict_z"]
+        output_dim = abstract_dim if predict_z else np.prod(obs_shape)
+        fc = make_fc(abstract_dim + num_actions, output_dim, tp_config["fc"])
         transition_predictor = TransitionPredictor(
-            abstract_dim, num_actions, fc,
-            encode_new_state=tp_config["encode_new_state"])
+            abstract_dim, num_actions, fc, encode_new_state, predict_z)
         return transition_predictor
 
     def Q_model(self):
@@ -285,8 +299,7 @@ class NN():
 
         with open(HERE / f'yamls/{self._yaml}.yaml') as f:
             config = yaml.load(f, Loader=yaml.FullLoader)
-        if self._yaml_mods is not None:
-            pass # TODO
+            update(config, self._yaml_mods)
 
         qnet_config = config['qnet']
         if self.ddqn_only:

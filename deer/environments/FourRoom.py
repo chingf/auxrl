@@ -27,13 +27,15 @@ class MyEnv(Environment):
         self._mode = -1
         self._mode_score = 0.0
         self._mode_episode_count = 0
-        self._size_maze = kwargs.get("size_maze", 8)
+        self._size_maze = kwargs.get("size_maze", 9)
         self._higher_dim_obs = kwargs.get("higher_dim_obs", False)
         self._reward = kwargs.get("reward", False)
         self._plotfig = kwargs.get("plotfig", True)
         self._dimensionality_tracking = []
         self._dimensionality_variance_ratio = None
         self._reward_location = 0 # Just a placeholder
+        if (self._size_maze%2 ==0) or (self._size_maze < 9):
+            raise ValueError('Maze size must be odd and >= 9')
         self.create_map()
         if not self._higher_dim_obs:
             self._expansion = np.random.normal(size=(32, 2))
@@ -46,17 +48,53 @@ class MyEnv(Environment):
                     obs[obs < 0] = 0
                     self._obs_map[x][y] = obs
 
-    def create_map(self, reset_goal=True):
+    def create_map(self, reset_goal=True, quadrant_goal=None):
+        """
+        Quadrants are divided as the following:
+            ------>  [X]
+         |   0 | 2 
+         |  -------
+         v   1 | 3
+        [Y]
+  
+        """
+
         self._map = np.zeros((self._size_maze, self._size_maze))
+        halfpoint = self._size_maze//2
+        quarterpoint = halfpoint//2
+
+        # Make walls
         self._map[-1,:] = 1; self._map[0,:] = 1
         self._map[:,0] = 1; self._map[:,-1] = 1
-        #midpoint = self._size_maze//2
-        #self._map[:, midpoint] = 1
-        #self._map[midpoint-2:midpoint+2, midpoint] = 0
+        self._map[:, halfpoint] = 1
+        self._map[halfpoint, :] = 1
+
+        # Set positions
         valid_pos = np.argwhere(self._map != 1)
         self._pos_agent = valid_pos[np.random.choice(len(valid_pos))]
         if reset_goal:
-            self._pos_goal = valid_pos[np.random.choice(len(valid_pos))]
+            if quadrant_goal is None:
+                self._pos_goal = valid_pos[np.random.choice(len(valid_pos))]
+                x, y = self._pos_goal
+                self._quadrant_goal = 0 if x < self._size_maze//2 else 2
+                self._quadrant_goal += (0 if y < self._size_maze//2 else 1)
+            else:
+                self._quadrant_goal = quadrant_goal
+                x_range = np.arange(1, halfpoint)
+                y_range = np.arange(1, halfpoint)
+                if quadrant_goal > 1:
+                    x_range += halfpoint
+                if quadrant_goal%2 != 0:
+                    y_range += halfpoint
+                x = np.random.choice(x_range)
+                y = np.random.choice(y_range)
+                self._pos_goal = np.array([x, y])
+
+        # Add passageway between rooms
+        self._map[quarterpoint, halfpoint] = 0
+        self._map[-quarterpoint-1, halfpoint] = 0
+        self._map[halfpoint, quarterpoint] = 0
+        self._map[halfpoint, -quarterpoint-1] = 0
                 
     def reset(self, mode):
         self.create_map(reset_goal=False)
@@ -175,29 +213,28 @@ class MyEnv(Environment):
                     
         # Plot the estimated transitions
         n = abs_states.shape[0]
-        n_actions = 4
-        action_colors = ["0.9", "0.65", "0.4", "0.15"]
-        if learning_algo.crar.transition.predict_z:
-            for i in range(n-1):
-                for action in range(n_actions):
-                    action_encoding = np.zeros(n_actions)
-                    action_encoding[action] = 1
-                    with torch.no_grad():
-                        pred = learning_algo.crar.transition(torch.cat([
-                            abs_states[i:i+1].to(device),
-                            torch.as_tensor([action_encoding]).to(device)
-                            ], dim=1).float()).cpu().numpy()
-                    if (intern_dim > 3) and (abs_states_np.shape[0] > 2):
-                        pred = pca.transform(pred)
-                    x_transitions = np.concatenate([x[i:i+1], pred[0,:1]])
-                    y_transitions = np.concatenate([y[i:i+1], pred[0,1:2]])
-                    if intern_dim == 2:
-                        z_transitions = np.zeros(y_transitions.shape)
-                    else:
-                        z_transitions = np.concatenate([z[i:i+1],pred[0,2:3]])
-                    ax.plot(
-                        x_transitions, y_transitions, z_transitions,
-                        color=action_colors[action], alpha=0.75)
+        for i in range(n-1):
+            n_actions = 4
+            action_colors = ["0.9", "0.65", "0.4", "0.15"]
+            for action in range(n_actions):
+                action_encoding = np.zeros(n_actions)
+                action_encoding[action] = 1
+                with torch.no_grad():
+                    pred = learning_algo.crar.transition(torch.cat([
+                        abs_states[i:i+1].to(device),
+                        torch.as_tensor([action_encoding]).to(device)
+                        ], dim=1).float()).cpu().numpy()
+                if (intern_dim > 3) and (abs_states_np.shape[0] > 2):
+                    pred = pca.transform(pred)
+                x_transitions = np.concatenate([x[i:i+1], pred[0,:1]])
+                y_transitions = np.concatenate([y[i:i+1], pred[0,1:2]])
+                if intern_dim == 2:
+                    z_transitions = np.zeros(y_transitions.shape)
+                else:
+                    z_transitions = np.concatenate([z[i:i+1],pred[0,2:3]])
+                ax.plot(
+                    x_transitions, y_transitions, z_transitions,
+                    color=action_colors[action], alpha=0.75)
         
         # Plot the dots at each time step depending on the action taken
         colors=['blue', 'orange', 'green', 'red']

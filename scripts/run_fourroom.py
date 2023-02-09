@@ -1,7 +1,6 @@
 import sys
 import logging
 import pickle
-import re
 import yaml
 from joblib import Parallel, delayed
 import numpy as np
@@ -26,23 +25,17 @@ device_num = sys.argv[5]
 if int(device_num) >= 0:
     my_env = os.environ
     my_env["CUDA_VISIBLE_DEVICES"] = device_num
-fname_prefix = 'transfer_test'
+fname_prefix = 'fourroom'
 fname_suffix = ''
 epochs = 30
-source_prefix = 'test'
-source_suffix = ''
-source_epoch = 30
-policy_eps = 1. 
-encoder_only = True
+policy_eps = 1.
 higher_dim_obs = True
-size_maze = 6
 
 # Make directories
-engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
-#engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
+#engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
+engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
 exp_dir = f'{fname_prefix}_{nn_yaml}_dim{internal_dim}{fname_suffix}/'
-source_dir = f'{source_prefix}_{nn_yaml}_dim{internal_dim}{source_suffix}/'
-for d in ['pickles/', 'nnets/', 'scores/', 'figs/', 'params/']:
+for d in ['pickles/', 'nnets/', 'figs/', 'params/']:
     os.makedirs(f'{engram_dir}{d}{exp_dir}', exist_ok=True)
 
 def gpu_parallel(job_idx):
@@ -51,7 +44,6 @@ def gpu_parallel(job_idx):
     results['dimensionality_tracking'] = []
     results['dimensionality_variance_ratio'] = []
     results['valid_scores'] = []
-    results['valid_steps'] = []
     results['iteration'] = []
     results['valid_eps'] = []
     results['training_eps'] = []
@@ -62,19 +54,17 @@ def gpu_parallel(job_idx):
         fname, loss_weights, result = run_env(_arg)
         for key in result.keys():
             results[key].append(result[key])
-            results['fname'].append(fname)
-            results['loss_weights'].append(loss_weights)
+        results['fname'].append(fname)
+        results['loss_weights'].append(loss_weights)
     with open(f'{results_dir}results_{job_idx}.p', 'wb') as f:
         pickle.dump(results, f)
 
 def cpu_parallel():
     results_dir = f'{engram_dir}pickles/{exp_dir}'
-    os.makedirs(results_dir, exist_ok=True)
     results = {}
     results['dimensionality_tracking'] = []
     results['dimensionality_variance_ratio'] = []
     results['valid_scores'] = []
-    results['valid_steps'] = []
     results['iteration'] = []
     results['valid_eps'] = []
     results['training_eps'] = []
@@ -92,19 +82,7 @@ def cpu_parallel():
         pickle.dump(results, f)
 
 def run_env(arg):
-    _fname, network_file, loss_weights, param_update, i = arg
-    nnet_dir = f'{engram_dir}nnets/{source_dir}'
-    if network_file is None:
-        set_network = None
-    else:
-        network_file_options = [
-            s for s in os.listdir(nnet_dir) if \
-            (re.search(f"^({network_file})_\\d+", s) != None)]
-        print(network_file)
-        print(network_file_options)
-        network_file_idx = np.random.choice(len(network_file_options))
-        network_file_path = f'{source_dir}{network_file_options[network_file_idx]}'
-        set_network = [f'{network_file_path}', source_epoch, encoder_only]
+    _fname, loss_weights, param_update, i = arg
     fname = f'{exp_dir}{_fname}_{i}'
     encoder_type = 'variational' if loss_weights[-1] > 0 else 'regular'
     parameters = {
@@ -126,14 +104,12 @@ def run_env(arg):
         'epsilon_decay': 1000,
         'update_frequency': 1,
         'replay_memory_size': 100000, #50000
-        'batch_size': 64,
+        'batch_size': 64, #256,
         'freeze_interval': 1000,
         'deterministic': False,
         'loss_weights': loss_weights,
-        'foraging_give_rewards': True,
-        'size_maze': size_maze,
         'pred_len': 1,
-        'pred_gamma': 0.,
+        'pred_gamma': 0., 
         'yaml_mods': {}
         }
     parameters.update(param_update)
@@ -141,20 +117,17 @@ def run_env(arg):
         yaml.dump(parameters, outfile, default_flow_style=False)
     rng = np.random.RandomState()
     env = Env(
-        rng, reward=parameters['foraging_give_rewards'],
+        rng, reward=True,
         higher_dim_obs=parameters['higher_dim_obs'], plotfig=False,
-        size_maze=parameters['size_maze']
         )
     learning_algo = CRAR(
         env, parameters['freeze_interval'], parameters['batch_size'], rng,
-        internal_dim=parameters['internal_dim'],
-        lr=parameters['learning_rate'],
+        internal_dim=parameters['internal_dim'], lr=parameters['learning_rate'],
         nn_yaml=parameters['nn_yaml'], yaml_mods=parameters['yaml_mods'],
         double_Q=True, loss_weights=parameters['loss_weights'],
         encoder_type=parameters['encoder_type'],
         pred_len=parameters['pred_len'], pred_gamma=parameters['pred_gamma']
         )
-    print(f'DEVICE USED: {learning_algo.device}')
     train_policy = EpsilonGreedyPolicy(
         learning_algo, env.nActions(), rng, policy_eps)
     test_policy = EpsilonGreedyPolicy(learning_algo, env.nActions(), rng, 0.)
@@ -164,13 +137,7 @@ def run_env(arg):
         train_policy=train_policy, test_policy=test_policy,
         save_dir=engram_dir
         )
-    if set_network is not None:
-        agent.setNetwork(
-            f'{set_network[0]}/fname', nEpoch=set_network[1],
-            encoder_only=set_network[2]
-            )
     agent.run(10, 500)
-    agent.attach(bc.VerboseController( evaluate_on='epoch', periodicity=1))
     agent.attach(bc.LearningRateController(
         initial_learning_rate=parameters['learning_rate'],
         learning_rate_decay=parameters['learning_rate_decay'],
@@ -185,28 +152,12 @@ def run_env(arg):
     agent.attach(bc.InterleavedTestEpochController(
         id=Env.VALIDATION_MODE, epoch_length=parameters['steps_per_test'],
         periodicity=1, show_score=True, summarize_every=5, unique_fname=fname))
-    if set_network is not None:
-        agent.setNetwork(
-            f'{set_network[0]}/fname', nEpoch=set_network[1],
-            encoder_only=set_network[2]
-            )
-    if freeze_encoder:
-        parameter_lists = [
-            agent._learning_algo.crar.encoder.parameters(),
-            agent._learning_algo.crar_target.encoder.parameters(),
-            agent._learning_algo.crar.transition.parameters(),
-            agent._learning_algo.crar_target.transition.parameters(),
-            ]
-        for parameter_list in parameter_lists:
-            for p in parameter_list:
-                p.requires_grad = False
     agent.run(parameters['epochs'], parameters['steps_per_epoch'])
 
     result = {
         'dimensionality_tracking': env._dimensionality_tracking[-1],
         'dimensionality_variance_ratio': env._dimensionality_variance_ratio,
-        'valid_scores':  best_controller._validationScores,
-        'valid_steps':  best_controller._validationSteps, 'iteration': i,
+        'valid_scores':  best_controller._validationScores, 'iteration': i,
         'valid_eps': best_controller._validationEps,
         'epochs': best_controller._epochNumbers, 'training_eps': agent.n_eps
         }
@@ -214,27 +165,25 @@ def run_env(arg):
 
 # load user-defined parameters
 fname_grid = [
-    'entro', 'mb',
-    'sr_5_0.9', 'sr_10_0.9',
-    'mf']
-network_files = [f'{source_prefix}_{f}' for f in fname_grid]
-fname_grid.append('clean')
-network_files.append(None)
-loss_weights_grid = [[0., 0., 0., 1., 0.]] * len(fname_grid)
-fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
+    'entro', 'mb', 'mf']
+loss_weights_grid = [
+    [0, 1E-1, 1E-1, 1, 0],
+    [1E-2, 1E-1, 1E-1, 1, 0],
+    [0, 0, 0, 1, 0],
+    ]
 param_updates = [{},
-    {'yaml_mods': {'trans-pred': {'predict_z': False}}},
-    {}, {}, {}]
-freeze_encoder = True
-iters = np.arange(60)
+    {}, {}
+    ]
+
+fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
+iters = np.arange(20)
 args = []
 for arg_idx in range(len(fname_grid)):
     for i in iters:
         fname = fname_grid[arg_idx]
-        network_file = network_files[arg_idx]
         loss_weights = loss_weights_grid[arg_idx]
         param_update = param_updates[arg_idx]
-        args.append([fname, network_file, loss_weights, param_update, i])
+        args.append([fname, loss_weights, param_update, i])
 split_args = np.array_split(args, n_jobs)
 
 import time
@@ -243,10 +192,7 @@ start = time.time()
 if job_idx == -1:
     cpu_parallel()
 else:
-    job_args = split_args[job_idx]
-    contains_mb_obs = [((a[1] != None) and ('mb_obs' in a[1])) for a in job_args]
-    if np.any(contains_mb_obs):
-        gpu_parallel(job_idx)
+    gpu_parallel(job_idx)
 end = time.time()
 
 print(f'ELAPSED TIME: {end-start} seconds')
