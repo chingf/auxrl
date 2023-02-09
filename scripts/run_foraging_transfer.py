@@ -51,6 +51,7 @@ def gpu_parallel(job_idx):
     results['dimensionality_tracking'] = []
     results['dimensionality_variance_ratio'] = []
     results['valid_scores'] = []
+    results['valid_steps'] = []
     results['iteration'] = []
     results['valid_eps'] = []
     results['training_eps'] = []
@@ -73,6 +74,7 @@ def cpu_parallel():
     results['dimensionality_tracking'] = []
     results['dimensionality_variance_ratio'] = []
     results['valid_scores'] = []
+    results['valid_steps'] = []
     results['iteration'] = []
     results['valid_eps'] = []
     results['training_eps'] = []
@@ -198,7 +200,8 @@ def run_env(arg):
     result = {
         'dimensionality_tracking': env._dimensionality_tracking[-1],
         'dimensionality_variance_ratio': env._dimensionality_variance_ratio,
-        'valid_scores':  best_controller._validationScores, 'iteration': i,
+        'valid_scores':  best_controller._validationScores,
+        'valid_steps':  best_controller._validationSteps, 'iteration': i,
         'valid_eps': best_controller._validationEps,
         'epochs': best_controller._epochNumbers, 'training_eps': agent.n_eps
         }
@@ -208,7 +211,7 @@ def run_env(arg):
 
 fname_grid = [
     'entro', 'mb',
-    'sr_5_0.7', 'sr_5_0.9', 'sr_10_0.7', 'sr_10_0.9',
+    'sr_5_0.9', 'sr_10_0.9',
     'mf']
 network_files = [f'{source_prefix}_{f}' for f in fname_grid]
 fname_grid.append('clean')

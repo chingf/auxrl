@@ -46,6 +46,7 @@ def gpu_parallel(job_idx):
     results['dimensionality_tracking'] = []
     results['dimensionality_variance_ratio'] = []
     results['valid_scores'] = []
+    results['valid_steps'] = []
     results['iteration'] = []
     results['valid_eps'] = []
     results['training_eps'] = []
@@ -67,6 +68,7 @@ def cpu_parallel():
     results['dimensionality_tracking'] = []
     results['dimensionality_variance_ratio'] = []
     results['valid_scores'] = []
+    results['valid_steps'] = []
     results['iteration'] = []
     results['valid_eps'] = []
     results['training_eps'] = []
@@ -161,7 +163,8 @@ def run_env(arg):
     result = {
         'dimensionality_tracking': env._dimensionality_tracking[-1],
         'dimensionality_variance_ratio': env._dimensionality_variance_ratio,
-        'valid_scores':  best_controller._validationScores, 'iteration': i,
+        'valid_scores':  best_controller._validationScores,
+        'valid_steps':  best_controller._validationSteps, 'iteration': i,
         'valid_eps': best_controller._validationEps,
         'epochs': best_controller._epochNumbers, 'training_eps': agent.n_eps
         }
@@ -170,19 +173,16 @@ def run_env(arg):
 # load user-defined parameters
 fname_grid = [
     'entro', 'mb',
-    'sr_5_0.7', 'sr_5_0.9', 'sr_10_0.7', 'sr_10_0.9',
+    'sr_5_0.9', 'sr_10_0.9',
     'mf']
 loss_weights_grid = [
     [0, 1E-1, 1E-1, 1, 0], [1E-2, 1E-1, 1E-1, 1, 0],
-    [1E-2, 1E-1, 1E-1, 1, 0], [1E-2, 1E-1, 1E-1, 1, 0],
     [1E-2, 1E-1, 1E-1, 1, 0], [1E-2, 1E-1, 1E-1, 1, 0],
     [0, 0, 0, 1, 0],
     ]
 param_updates = [
     {}, {},
-    {'pred_len': 5, 'pred_gamma': 0.7},
     {'pred_len': 5, 'pred_gamma': 0.9},
-    {'pred_len': 10, 'pred_gamma': 0.7},
     {'pred_len': 10, 'pred_gamma': 0.9},
     {}
     ]

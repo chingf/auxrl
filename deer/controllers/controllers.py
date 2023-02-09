@@ -248,7 +248,7 @@ class InterleavedTestEpochController(Controller):
             self._summary_counter += 1
 
             if self._show_score:
-                score, nbr_episodes = agent.totalRewardOverLastTest()
+                score, _, nbr_episodes = agent.totalRewardOverLastTest()
                 self.scores.append(score)
                 self.episodes.append(nbr_episodes)
             if (self._summary_periodicity > 0) and (self._summary_counter % self._summary_periodicity == 0):
@@ -433,6 +433,7 @@ class FindBestController(Controller):
         super(self.__class__, self).__init__()
 
         self._validationScores = []
+        self._validationSteps = []
         self._validationEps = []
         self._testScores = []
         self._epochNumbers = []
@@ -451,8 +452,9 @@ class FindBestController(Controller):
 
         mode = agent.mode()
         if mode == self._validationID:
-            score, nbr_eps = agent.totalRewardOverLastTest()
+            score, steps, nbr_eps = agent.totalRewardOverLastTest()
             self._validationScores.append(score)
+            self._validationSteps.append(steps)
             self._validationEps.append(nbr_eps)
             self._epochNumbers.append(self._trainingEpochCount)
             if score > self._bestValidationScoreSoFar:
@@ -462,7 +464,7 @@ class FindBestController(Controller):
             if (self._savefrequency > 0) and (self._trainingEpochCount%self._savefrequency == 0):
                 agent.dumpNetwork(self._filename, self._trainingEpochCount)
         elif mode == self._testID:
-            score, _ = agent.totalRewardOverLastTest()
+            score, _, _ = agent.totalRewardOverLastTest()
             self._testScores.append(score)
         else:
             self._trainingEpochCount += 1

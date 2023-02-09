@@ -75,6 +75,7 @@ class NeuralAgent(object):
         self._mode = -1
         self._totalModeNbrEpisode = 0
         self._total_mode_reward = 0
+        self._total_mode_steps = 0
         self._training_loss_averages = []
         self._Vs_on_last_episode = []
         self._in_episode = False
@@ -137,7 +138,10 @@ class NeuralAgent(object):
     def totalRewardOverLastTest(self):
         """ Returns the average sum of rewards per episode and the number of episode
         """
-        return self._total_mode_reward/self._totalModeNbrEpisode, self._totalModeNbrEpisode
+
+        avg_rewards = self._total_mode_reward/self._totalModeNbrEpisode
+        avg_steps = self._total_mode_steps/self._totalModeNbrEpisode
+        return avg_rewards, avg_steps, self._totalModeNbrEpisode
 
     def attach(self, controller):
         if (isinstance(controller, controllers.Controller)):
@@ -160,6 +164,7 @@ class NeuralAgent(object):
         else:
             self._mode = mode
             self._total_mode_reward = 0.
+            self._total_mode_steps = 0.
             del self._tmp_dataset
             self._tmp_dataset = DataSet(
                 self._environment, self._random_state,
@@ -383,6 +388,7 @@ class NeuralAgent(object):
                 self._Vs_on_last_episode.append(V)
                 if self._mode != -1:
                     self._total_mode_reward += reward
+                    self._total_mode_steps += 1
                 
                 is_terminal = self._environment.inTerminalState()
                 if maxSteps > 0:
