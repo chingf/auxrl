@@ -230,9 +230,9 @@ class NeuralAgent(object):
         all_params = self._learning_algo.getAllParams()
 
         if (nEpoch>=0):
-            joblib.dump(all_params, basename + ".epoch={}".format(nEpoch))
+            torch.save(all_params, basename + ".epoch={}".format(nEpoch))
         else:
-            joblib.dump(all_params, basename, compress=True)
+            torch.save(all_params, basename, compress=True)
 
     def setNetwork(self, fname, nEpoch=-1, encoder_only=False):
         """ Set values into the network
@@ -248,9 +248,9 @@ class NeuralAgent(object):
         basename = f'{self._save_dir}nnets/{fname}'
 
         if (nEpoch>=0):
-            all_params = joblib.load(basename + ".epoch={}".format(nEpoch))
+            all_params = torch.load(basename + ".epoch={}".format(nEpoch))
         else:
-            all_params = joblib.load(basename)
+            all_params = torch.load(basename)
 
         self._learning_algo.setAllParams(all_params, encoder_only)
 
