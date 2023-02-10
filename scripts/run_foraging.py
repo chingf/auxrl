@@ -82,7 +82,7 @@ def cpu_parallel():
             results[key].append(result[key])
         results['fname'].append(fname)
         results['loss_weights'].append(loss_weights)
-    with open(f'{results_dir}results_1.p', 'wb') as f:
+    with open(f'{results_dir}results_0.p', 'wb') as f:
         pickle.dump(results, f)
 
 def run_env(arg):
@@ -161,7 +161,7 @@ def run_env(arg):
     agent.attach(best_controller)
     agent.attach(bc.InterleavedTestEpochController(
         id=Env.VALIDATION_MODE, epoch_length=parameters['steps_per_test'],
-        periodicity=5, show_score=True, summarize_every=5, unique_fname=fname)) #TODO: TEST PERIODICITY
+        periodicity=1, show_score=True, summarize_every=5, unique_fname=fname))
     agent.run(parameters['epochs'], parameters['steps_per_epoch'])
 
     result = {
@@ -177,30 +177,33 @@ def run_env(arg):
 # load user-defined parameters
 fname_grid = [
     'entro',
-#    'mb',
-    'sr_5_0.9',
+    'mb',
+    'sr_10_0.4',
+    'sr_10_0.6',
     'sr_10_0.9',
-#    'mf'
+    'mf'
     ]
 loss_weights_grid = [
     [0, 1E-1, 1E-1, 1, 0],
-#    [1E-2, 1E-1, 1E-1, 1, 0],
     [1E-2, 1E-1, 1E-1, 1, 0],
     [1E-2, 1E-1, 1E-1, 1, 0],
-#    [0, 0, 0, 1, 0],
+    [1E-2, 1E-1, 1E-1, 1, 0],
+    [1E-2, 1E-1, 1E-1, 1, 0],
+    [0, 0, 0, 1, 0],
     ]
 param_updates = [
     {},
-#    {},
-    {'pred_len': 5, 'pred_gamma': 0.9},
+    {},
+    {'pred_len': 10, 'pred_gamma': 0.4},
+    {'pred_len': 10, 'pred_gamma': 0.6},
     {'pred_len': 10, 'pred_gamma': 0.9},
-#    {}
+    {}
     ]
 # If you wanted latents to predict observations:
 # {'yaml_mods': {'trans-pred': {'predict_z': False}}}
 
 fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
-iters = np.arange(28)
+iters = np.arange(50)
 args = []
 for arg_idx in range(len(fname_grid)):
     for i in iters:

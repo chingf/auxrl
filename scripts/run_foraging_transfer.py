@@ -88,7 +88,7 @@ def cpu_parallel():
             results[key].append(result[key])
         results['fname'].append(fname)
         results['loss_weights'].append(loss_weights)
-    with open(f'{results_dir}results_1.p', 'wb') as f:
+    with open(f'{results_dir}results_0.p', 'wb') as f:
         pickle.dump(results, f)
 
 def run_env(arg):
@@ -186,7 +186,7 @@ def run_env(arg):
     agent.attach(best_controller)
     agent.attach(bc.InterleavedTestEpochController(
         id=Env.VALIDATION_MODE, epoch_length=parameters['steps_per_test'],
-        periodicity=5, show_score=True, summarize_every=5, unique_fname=fname))
+        periodicity=1, show_score=True, summarize_every=5, unique_fname=fname))
     if set_network is not None:
         agent.setNetwork(
             f'{set_network[0]}/fname', nEpoch=set_network[1],
@@ -217,18 +217,20 @@ def run_env(arg):
 # load user-defined parameters
 fname_grid = [
     'entro',
-#    'mb',
-    'sr_5_0.9',
+    'mb',
+    'sr_10_0.4',
+    'sr_10_0.6',
     'sr_10_0.9',
-#    'mf']
+    'mf'
+    ]
 network_files = [f'{source_prefix}_{f}' for f in fname_grid]
-#fname_grid.append('clean')
-#network_files.append(None)
+fname_grid.append('clean')
+network_files.append(None)
 loss_weights_grid = [[0., 0., 0., 1., 0.]] * len(fname_grid)
 fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
 param_updates = [{}]*len(fname_grid)
 freeze_encoder = False
-iters = np.arange(28)
+iters = np.arange(50)
 args = []
 for arg_idx in range(len(fname_grid)):
     for i in iters:
