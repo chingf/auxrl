@@ -26,12 +26,12 @@ device_num = sys.argv[5]
 if int(device_num) >= 0:
     my_env = os.environ
     my_env["CUDA_VISIBLE_DEVICES"] = device_num
-fname_prefix = 'transfer_test'
+fname_prefix = 'transfer_sr'
 fname_suffix = ''
-epochs = 30
-source_prefix = 'test'
+epochs = 40
+source_prefix = 'sr'
 source_suffix = ''
-source_epoch = 30
+source_epoch = 40
 policy_eps = 1. 
 encoder_only = True
 higher_dim_obs = True
@@ -88,7 +88,7 @@ def cpu_parallel():
             results[key].append(result[key])
         results['fname'].append(fname)
         results['loss_weights'].append(loss_weights)
-    with open(f'{results_dir}results_0.p', 'wb') as f:
+    with open(f'{results_dir}results_1.p', 'wb') as f:
         pickle.dump(results, f)
 
 def run_env(arg):
@@ -96,15 +96,17 @@ def run_env(arg):
     nnet_dir = f'{engram_dir}nnets/{source_dir}'
     if network_file is None:
         set_network = None
+        prev_pos_goal = None
     else:
         network_file_options = [
             s for s in os.listdir(nnet_dir) if \
             (re.search(f"^({network_file})_\\d+", s) != None)]
-        print(network_file)
-        print(network_file_options)
         network_file_idx = np.random.choice(len(network_file_options))
         network_file_path = f'{source_dir}{network_file_options[network_file_idx]}'
         set_network = [f'{network_file_path}', source_epoch, encoder_only]
+        with open(f'{engram_dir}nnets/{network_file_path}/goal.txt', 'r') as goalfile:
+            prev_pos_goal = str(goalfile.read())
+            prev_pos_goal = [int(prev_pos_goal[1]), int(prev_pos_goal[3])]
     fname = f'{exp_dir}{_fname}_{i}'
     encoder_type = 'variational' if loss_weights[-1] > 0 else 'regular'
     parameters = {
@@ -112,7 +114,7 @@ def run_env(arg):
         'higher_dim_obs': higher_dim_obs,
         'internal_dim': internal_dim,
         'fname': fname,
-        'steps_per_epoch': 1000,
+        'steps_per_epoch': 500,
         'epochs': epochs,
         'steps_per_test': 1000,
         'period_btw_summary_perfs': 1,
@@ -143,7 +145,7 @@ def run_env(arg):
     env = Env(
         rng, reward=parameters['foraging_give_rewards'],
         higher_dim_obs=parameters['higher_dim_obs'], plotfig=False,
-        size_maze=parameters['size_maze']
+        size_maze=parameters['size_maze'], prev_pos_goal=prev_pos_goal
         )
     learning_algo = CRAR(
         env, parameters['freeze_interval'], parameters['batch_size'], rng,
@@ -184,7 +186,7 @@ def run_env(arg):
     agent.attach(best_controller)
     agent.attach(bc.InterleavedTestEpochController(
         id=Env.VALIDATION_MODE, epoch_length=parameters['steps_per_test'],
-        periodicity=1, show_score=True, summarize_every=5, unique_fname=fname))
+        periodicity=5, show_score=True, summarize_every=5, unique_fname=fname))
     if set_network is not None:
         agent.setNetwork(
             f'{set_network[0]}/fname', nEpoch=set_network[1],
@@ -214,19 +216,19 @@ def run_env(arg):
 
 # load user-defined parameters
 fname_grid = [
-    'entro', 'mb',
-    'sr_5_0.9', 'sr_10_0.9',
-    'mf']
+    'entro',
+#    'mb',
+    'sr_5_0.9',
+    'sr_10_0.9',
+#    'mf']
 network_files = [f'{source_prefix}_{f}' for f in fname_grid]
-fname_grid.append('clean')
-network_files.append(None)
+#fname_grid.append('clean')
+#network_files.append(None)
 loss_weights_grid = [[0., 0., 0., 1., 0.]] * len(fname_grid)
 fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
-param_updates = [{},
-    {'yaml_mods': {'trans-pred': {'predict_z': False}}},
-    {}, {}, {}]
-freeze_encoder = True
-iters = np.arange(60)
+param_updates = [{}]*len(fname_grid)
+freeze_encoder = False
+iters = np.arange(28)
 args = []
 for arg_idx in range(len(fname_grid)):
     for i in iters:
@@ -244,9 +246,7 @@ if job_idx == -1:
     cpu_parallel()
 else:
     job_args = split_args[job_idx]
-    contains_mb_obs = [((a[1] != None) and ('mb_obs' in a[1])) for a in job_args]
-    if np.any(contains_mb_obs):
-        gpu_parallel(job_idx)
+    gpu_parallel(job_idx)
 end = time.time()
 
 print(f'ELAPSED TIME: {end-start} seconds')

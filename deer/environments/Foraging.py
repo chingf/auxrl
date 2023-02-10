@@ -31,6 +31,7 @@ class MyEnv(Environment):
         self._higher_dim_obs = kwargs.get("higher_dim_obs", False)
         self._reward = kwargs.get("reward", False)
         self._plotfig = kwargs.get("plotfig", True)
+        self._prev_pos_goal = kwargs.get("prev_pos_goal", None)
         self._dimensionality_tracking = []
         self._dimensionality_variance_ratio = None
         self._reward_location = 0 # Just a placeholder
@@ -56,6 +57,11 @@ class MyEnv(Environment):
         valid_pos = np.argwhere(self._map != 1)
         self._pos_agent = valid_pos[np.random.choice(len(valid_pos))]
         if reset_goal:
+            if self._prev_pos_goal != None:
+                prev_x, prev_y = self._prev_pos_goal
+                valid_pos = [
+                    v for v in valid_pos if abs(v[0] - prev_x) > 1 or abs(v[1] - prev_y) > 1
+                    ]
             self._pos_goal = valid_pos[np.random.choice(len(valid_pos))]
                 
     def reset(self, mode):
