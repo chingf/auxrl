@@ -20,10 +20,10 @@ class MyEnv(Environment):
     VALIDATION_MODE = 0
     RIGHT_REWARD = 1; LEFT_REWARD = 0; RESET_REWARD = 2
     HEIGHT = 5
-    WIDTH = 7 #Must be odd
+    WIDTH = 5 #Must be odd
     LEFT_STEM = 0; CENTRAL_STEM = WIDTH//2; RIGHT_STEM = WIDTH-1
 
-    def __init__(self, give_rewards=False, plotfig=True, **kwargs):
+    def __init__(self, give_rewards=False, **kwargs):
         self._give_rewards = give_rewards
         self._mode = -1
         self._mode_score = 0.0
@@ -33,11 +33,10 @@ class MyEnv(Environment):
         self._width = MyEnv.WIDTH # Must be odd!
         self._high_dim_obs = kwargs.get('high_dim_obs', False)
         self._show_rewards = kwargs.get('show_rewards', True)
-        self.x = 3
+        self.x = MyEnv.CENTRAL_STEM
         self.y = 0
         self._reward_location = MyEnv.LEFT_REWARD
         self._last_reward_location = MyEnv.RIGHT_REWARD
-        self._plotfig = plotfig
         self._space_label = self.make_space_labels()
         self._dimensionality_tracking = []
         self._separability_tracking = [[] for _ in range(3)]
@@ -162,14 +161,16 @@ class MyEnv(Environment):
         self._mode_score += self.reward
         return self.reward
 
-    def summarizePerformance(self, test_data_set, learning_algo, fname):
+    def summarizePerformance(
+        self, test_data_set, learning_algo, fname, fig_dir_root='./'
+        ):
         """ Plot of the low-dimensional representation of the environment built by the model
         """
 
         if fname is None:
             fig_dir = './'
         else:
-            fig_dir = f'figs/{fname}/'
+            fig_dir = f'{fig_dir_root}figs/{fname}/'
             if not os.path.isdir(fig_dir):
                 os.makedirs(fig_dir)
 
@@ -181,13 +182,14 @@ class MyEnv(Environment):
         color_labels = []
         y_locations = []
         x_locations = []
-        nstep = learning_algo._nstep
-        for t in np.arange(nstep, observations.shape[0]):
-            tcm_obs = np.swapaxes(observations[t-nstep:t], 0, 1)
+        mem_len = learning_algo._mem_len
+        for t in np.arange(mem_len, observations.shape[0]):
+            tcm_obs = np.swapaxes(observations[t-mem_len:t], 0, 1)
             tcm_obs = learning_algo.make_state_with_history(tcm_obs)
             observations_tcm.append(tcm_obs.detach().numpy().squeeze())
             reward_locs_tcm.append(reward_locs[t-1])
             agent_location = np.argwhere(observations[t-1]==10)[0,1:].tolist()
+            agent_location[0] -= 1; agent_location[1] -= 1;
             if self._high_dim_obs:
                 agent_location = self._agent_loc_map[str(agent_location)]
             x_locations.append(agent_location[0])
@@ -196,16 +198,17 @@ class MyEnv(Environment):
             color_labels.append(color_label)
         hlen = 500
         observations_tcm = np.array(observations_tcm, dtype='float')[-hlen:]
-        reward_locs = np.array(reward_locs, dtype='int')[-hlen:]
+        reward_locs = np.array(reward_locs_tcm, dtype='int')[-hlen:]
         color_labels = np.array(color_labels, dtype=int)[-hlen:]
         x_locations = np.array(x_locations)[-hlen:]
         y_locations = np.array(y_locations)[-hlen:]
-        unique_observations_tcm, unique_idxs = np.unique(
-            observations_tcm, axis=0, return_index=True)
-        reward_locs = reward_locs[unique_idxs].astype(int)
-        color_labels = color_labels[unique_idxs]
-        x_locations = x_locations[unique_idxs]
-        y_locations = y_locations[unique_idxs]
+        #unique_observations_tcm, unique_idxs = np.unique(
+        #    observations_tcm, axis=0, return_index=True)
+        unique_observations_tcm = observations_tcm
+        #reward_locs = reward_locs[unique_idxs].astype(int)
+        #color_labels = color_labels[unique_idxs]
+        #x_locations = x_locations[unique_idxs]
+        #y_locations = y_locations[unique_idxs]
         device = learning_algo.device
         n = unique_observations_tcm.shape[0]
         with torch.no_grad():
@@ -318,8 +321,7 @@ class MyEnv(Environment):
             )        
         ax.add_artist(anchored_box)
         plt.show()
-        if self._plotfig:
-            plt.savefig(f'{fig_dir}latents_{learning_algo.update_counter}.pdf')
+        plt.savefig(f'{fig_dir}latents.pdf')
 
         # Plot continuous measure of dimensionality
         if (intern_dim > 3) and (abs_states_np.shape[0] > 2):
@@ -330,8 +332,7 @@ class MyEnv(Environment):
             plt.plot(self._dimensionality_tracking)
             plt.ylabel('AUC of PCA Explained Variance Ratio')
             plt.xlabel('Epochs')
-            if self._plotfig:
-                plt.savefig(f'{fig_dir}dimensionality.pdf')
+            plt.savefig(f'{fig_dir}dimensionality.pdf')
 
         # Plot pairwise z-score distances
         dist_matrix = np.ones((MyEnv.HEIGHT*4, MyEnv.HEIGHT*4))*np.nan
@@ -376,8 +377,7 @@ class MyEnv(Environment):
             np.linspace(0, dist_matrix.shape[0]-0.5, num=9, endpoint=True)[1::2],
             ['Left', 'Central-L', 'Central-R', 'Right'])
         plt.title('Pairwise distances of column states')
-        if self._plotfig:
-            plt.savefig(f'{fig_dir}pairwise_dist_{learning_algo.update_counter}.pdf')
+        plt.savefig(f'{fig_dir}pairwise_dist.pdf')
 
         # Plot separability metric over epochs
         self._separability_tracking[0].append(
@@ -403,49 +403,44 @@ class MyEnv(Environment):
             ylim_max = np.nanmax(self._separability_tracking)*1.1
             if not np.isnan(ylim_max): ax.set_ylim(0, ylim_max)
         plt.tight_layout()
-        if self._plotfig:
-            plt.savefig(f'{fig_dir}dist_summary.pdf')
+        plt.savefig(f'{fig_dir}dist_summary.pdf')
         plt.figure()
         plt.plot(self._separability_slope)
         plt.xlabel('Epochs')
         plt.ylabel('Slope of Central Stem Splitting')
         plt.tight_layout()
-        if self._plotfig:
-            plt.savefig(f'{fig_dir}dist_slope.pdf')
+        plt.savefig(f'{fig_dir}dist_slope.pdf')
 
         # Plot losses over epochs
         losses, loss_names = learning_algo.get_losses()
         loss_weights = learning_algo._loss_weights
-        _, axs = plt.subplots(4, 2, figsize=(7, 10))
-        for i in range(8):
+        _, axs = plt.subplots(3, 2, figsize=(7, 10))
+        for i in range(5):
             loss = losses[i]; loss_name = loss_names[i]
-            ax = axs[i%4][i//4]
+            ax = axs[i%3][i//3]
             ax.plot(loss)
             ax.set_ylabel(loss_name)
         plt.tight_layout()
-        if self._plotfig:
-            plt.savefig(f'{fig_dir}losses.pdf', dpi=300)
-        _, axs = plt.subplots(4, 2, figsize=(7, 10))
-        for i in range(8):
+        plt.savefig(f'{fig_dir}losses.pdf', dpi=300)
+        _, axs = plt.subplots(3, 2, figsize=(7, 10))
+        for i in range(5):
             loss = losses[i]; loss_name = loss_names[i]
-            ax = axs[i%4][i//4]
+            ax = axs[i%3][i//3]
             ax.plot(np.array(loss)*loss_weights[i])
             ax.set_ylabel(loss_name)
         plt.tight_layout()
-        if self._plotfig:
-            plt.savefig(f'{fig_dir}scaled_losses.pdf', dpi=300)
+        plt.savefig(f'{fig_dir}scaled_losses.pdf', dpi=300)
         plt.figure()
         plt.plot(losses[-1])
         plt.title('Total Loss')
-        if self._plotfig:
-            plt.savefig(f'{fig_dir}total_losses.pdf', dpi=300)
+        plt.savefig(f'{fig_dir}total_losses.pdf', dpi=300)
         matplotlib.pyplot.close("all") # avoid memory leaks
 
     def inputDimensions(self):
         if self._high_dim_obs:
             return [(1, self._width*6, self._height*6)]
         else:
-            return [(1, self._width, self._height)]
+            return [(1, self._width+2, self._height+2)]
 
     def observationType(self, subject):
         return np.float32
@@ -477,7 +472,9 @@ class MyEnv(Environment):
         obs[x, y] = 10
         if self._high_dim_obs:
             obs = self.get_higher_dim_obs((x,y), obs)
-        return obs
+        pad_obs = np.ones((self._width+2, self._height+2))*2
+        pad_obs[1:-1, 1:-1] = obs
+        return pad_obs
 
     def get_higher_dim_obs(self, agent_loc, obs):
         """

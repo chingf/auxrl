@@ -196,6 +196,9 @@ class NeuralAgent(object):
                 self._dataset.randomBatchSeq(self._batch_size, self._mem_len)
             states = [obs[:,:-1] for obs in observations]
             next_states = [obs[:,1:] for obs in observations]
+            actions = actions[:, -1]
+            rewards = rewards[:, -1]
+            terminals = terminals[:, -1]
         elif self._pred_len > 1:
             observations, actions, rewards, terminals, rndValidIndices =\
                 self._dataset.randomBatchSeq(self._batch_size, self._pred_len, False)

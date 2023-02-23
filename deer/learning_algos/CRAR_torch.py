@@ -167,7 +167,6 @@ class CRAR(LearningAlgo):
             states_val = [states_val[0][:,:1]]
             next_states_val = [next_states_val[0][:,:1]]
         self.optimizer.zero_grad()
-
         onehot_actions = np.zeros((self._batch_size, self._n_actions))
         onehot_actions[np.arange(self._batch_size), actions_val] = 1
         onehot_actions = torch.as_tensor(onehot_actions, device=self.device).float()
