@@ -92,11 +92,12 @@ def run_env(arg):
         'steps_per_epoch': 2000,
         'epochs': epochs,
         'steps_per_test': 1000,
-        'mem_len': 3,
+        'mem_len': 1,
+        'train_len': 2,
         'encoder_type': encoder_type,
         'frame_skip': 2,
-        'show_rewards': False,
-        'learning_rate': 1*1E-4,
+        'show_rewards': True,
+        'learning_rate': 1*1E-4, #1*1E-4,
         'learning_rate_decay': 1.0,
         'discount': 0.9,
         'epsilon_start': 1.0,
@@ -124,7 +125,8 @@ def run_env(arg):
         internal_dim=parameters['internal_dim'], lr=parameters['learning_rate'],
         nn_yaml=parameters['nn_yaml'], yaml_mods=parameters['yaml_mods'],
         double_Q=True, loss_weights=parameters['loss_weights'],
-        encoder_type=parameters['encoder_type'], mem_len=parameters['mem_len']
+        encoder_type=parameters['encoder_type'], mem_len=parameters['mem_len'],
+        train_len=parameters['train_len']
         )
     if parameters['figure8_give_rewards']:
         train_policy = EpsilonGreedyPolicy(
@@ -170,9 +172,8 @@ def run_env(arg):
 
 job_idx = int(sys.argv[1])
 n_jobs = int(sys.argv[2])
-fname_grid = ['mb', 'mf']
+fname_grid = ['mf']
 loss_weights_grid = [
-    [1E-2, 1E-1, 1E-1, 1, 0],
     [0, 0, 0, 1, 0],
     ]
 param_updates = [{}]*len(fname_grid)
@@ -187,14 +188,16 @@ for arg_idx in range(len(fname_grid)):
         args.append([fname, loss_weights, param_update, i])
 split_args = np.array_split(args, n_jobs)
 
-import time
-start = time.time()
-# Run relevant parallelization script
-if job_idx == -1:
-    cpu_parallel()
-else:
-    gpu_parallel(job_idx)
-end = time.time()
+run_env(args[0])
+
+#import time
+#start = time.time()
+## Run relevant parallelization script
+#if job_idx == -1:
+#    cpu_parallel()
+#else:
+#    gpu_parallel(job_idx)
+#end = time.time()
 
 print(f'ELAPSED TIME: {end-start} seconds')
 
