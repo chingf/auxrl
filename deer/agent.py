@@ -60,6 +60,7 @@ class NeuralAgent(object):
         self._environment = environment
         self._learning_algo = learning_algo
         self._mem_len = learning_algo._mem_len
+        self._train_len = learning_algo._train_len
         self._pred_len = learning_algo._pred_len
         self._encoder_type = learning_algo._encoder_type
         self._replay_memory_size = replay_memory_size
@@ -68,7 +69,8 @@ class NeuralAgent(object):
         self._random_state = random_state
         self._only_full_history = only_full_history
         self._dataset = DataSet(
-            environment, max_size=replay_memory_size, random_state=random_state,
+            environment, learning_algo._internal_dim,
+            max_size=replay_memory_size, random_state=random_state,
             only_full_history=self._only_full_history
             )
         self._tmp_dataset = None # Will be created by startTesting() when necessary
@@ -80,14 +82,16 @@ class NeuralAgent(object):
         self._Vs_on_last_episode = []
         self._in_episode = False
         self._save_dir = save_dir
-        curr_state_dims = (1,) + (inputDims[0][0]*self._mem_len,) + inputDims[0][1:]
-        self._state = np.zeros(curr_state_dims)
-        if (train_policy==None):
-            self._train_policy = EpsilonGreedyPolicy(learning_algo, environment.nActions(), random_state, 0.1)
+        self._state = np.zeros(inputDims[0])
+        self._latent = np.zeros((1, self._mem_len, learning_algo._internal_dim))
+        if train_policy == None:
+            self._train_policy = EpsilonGreedyPolicy(
+                learning_algo, environment.nActions(), random_state, 0.1)
         else:
             self._train_policy = train_policy
-        if (test_policy==None):
-            self._test_policy = EpsilonGreedyPolicy(learning_algo, environment.nActions(), random_state, 0.)
+        if test_policy == None:
+            self._test_policy = EpsilonGreedyPolicy(
+                learning_algo, environment.nActions(), random_state, 0.)
         else:
             self._test_policy = test_policy
         self.gathering_data=True    # Whether the agent is gathering data or not
@@ -167,8 +171,8 @@ class NeuralAgent(object):
             self._total_mode_steps = 0.
             del self._tmp_dataset
             self._tmp_dataset = DataSet(
-                self._environment, self._random_state,
-                max_size=self._replay_memory_size,
+                self._environment, self._learning_algo._internal_dim,
+                self._random_state, max_size=self._replay_memory_size,
                 only_full_history=self._only_full_history)
 
     def resumeTrainingMode(self):
@@ -191,16 +195,18 @@ class NeuralAgent(object):
         if self._dataset.n_elems <= self._replay_start_size:
             return
 
-        if self._mem_len > 1:
-            observations, actions, rewards, terminals, rndValidIndices =\
-                self._dataset.randomBatchSeq(self._batch_size, self._mem_len)
-            states = [obs[:,:-1] for obs in observations]
-            next_states = [obs[:,1:] for obs in observations]
+        if self._mem_len > 0:
+            observations, latents, actions, rewards, terminals, rndValidIndices =\
+                self._dataset.randomBatchSeq(self._batch_size, self._train_len)
+            states = observations[0][:,:-1]
+            next_states = observations[0][:,1:]
+            zs = latents[0][:,:-1]
+            next_zs = latents[0][:,1:]
             actions = actions[:, -1]
             rewards = rewards[:, -1]
             terminals = terminals[:, -1]
         elif self._pred_len > 1:
-            observations, actions, rewards, terminals, rndValidIndices =\
+            observations, latents, actions, rewards, terminals, rndValidIndices =\
                 self._dataset.randomBatchSeq(self._batch_size, self._pred_len, False)
             for batch_idx in range(terminals.shape[0]):
                 t = np.argwhere(terminals[batch_idx])
@@ -208,13 +214,18 @@ class NeuralAgent(object):
                 t = int(t[0,0])
                 if t+2 >= self._pred_len: continue
                 observations[0][:, t+2:] = 0
-            states = [obs[:,:-1] for obs in observations]
-            next_states = [obs[:,1:] for obs in observations]
+            states = observations[0][:,:-1]
+            next_states = observations[0][:,1:]
+            zs = next_zs = None
         else:
-            states, actions, rewards, next_states, terminals, rndValidIndices =\
+            observations, actions, rewards, next_states, terminals, rndValidIndices =\
                 self._dataset.randomBatch(self._batch_size)
+            states = observations[0].squeeze()
+            next_states = next_states[0].squeeze()
+            zs = next_zs = None
         loss, loss_ind = self._learning_algo.train(
-            states, actions, rewards, next_states, terminals)
+            states, actions, rewards, next_states, terminals,
+            zs=zs, next_zs=next_zs)
         self._training_loss_averages.append(loss)
 
     def dumpNetwork(self, fname, nEpoch=-1):
@@ -251,7 +262,10 @@ class NeuralAgent(object):
         basename = f'{self._save_dir}nnets/{fname}'
 
         if (nEpoch>=0):
-            all_params = torch.load(basename + ".epoch={}".format(nEpoch))
+            all_params = torch.load(
+                basename + ".epoch={}".format(nEpoch),
+                map_location=torch.device('cpu')
+                )
         else:
             all_params = torch.load(basename)
 
@@ -342,8 +356,9 @@ class NeuralAgent(object):
 
     def _runEpisode(self, maxSteps):
         """
-        This function runs an episode of learning. An episode ends up when the environment method "inTerminalState" 
-        returns True (or when the number of steps reaches the argument "maxSteps")
+        This function runs an episode of learning. An episode ends when the
+        environment method "inTerminalState" returns True
+        (or when the number of steps reaches the argument "maxSteps")
         
         Parameters
         -----------
@@ -354,10 +369,12 @@ class NeuralAgent(object):
         initState = self._environment.reset(self._mode)
         inputDims = self._environment.inputDimensions()
         self._state = np.zeros(self._state.shape)
+        self._latent = np.zeros(self._latent.shape)
+        device = self._learning_algo.device
         
         self._Vs_on_last_episode = []
         is_terminal = False
-        reward=0
+        reward = 0
         obs_history = None
         history_n = 0
         while maxSteps > 0:
@@ -372,20 +389,21 @@ class NeuralAgent(object):
                     obs_history += obs[0].copy()
                     history_n += 1
                 
-                if len(inputDims[-1]) > 1:
-                    for i in range(len(obs)):
-                        self._state[i][0:-1] = self._state[i][1:]
-                        self._state[i][-1] = obs[i]
-                else:
-                    if self._mem_len > 1:
-                        self._state[0, 0:self._mem_len-1] = self._state[0, 1:]
-                        self._state[0,-1] = obs[0]
-                    else:
-                        self._state[0] = obs[0]
+                self._state[-1] = obs[0]
                 
                 V, action, reward = self._step()
 
-                if (torch.is_tensor(V)) and (self._learning_algo.device.type == 'cuda'):
+                if self._mem_len > 0:
+                    state = torch.as_tensor(self._state, device=device).float()
+                    zs = torch.as_tensor(self._latent, device=device).float()
+                    latent = self._learning_algo.crar.encoder(state, zs=zs)
+                    latent = latent.detach().numpy()
+                    self._latent[0, 0:-1] = self._latent[0, 1:]
+                    self._latent[0, -1] = latent
+                else:
+                    latent = None
+
+                if (torch.is_tensor(V)) and (device.type == 'cuda'):
                     V = V.item()
                 
                 self._Vs_on_last_episode.append(V)
@@ -394,10 +412,9 @@ class NeuralAgent(object):
                     self._total_mode_steps += 1
                 
                 is_terminal = self._environment.inTerminalState()
-                if maxSteps > 0:
-                    self._addSample(obs, action, reward, is_terminal, reward_loc)
-                else:
-                    self._addSample(obs, action, reward, True, reward_loc)
+                if maxSteps <= 0:
+                    is_terminal = True
+                self._addSample(obs, latent, action, reward, is_terminal, reward_loc)
             
             for c in self._controllers: c.onActionTaken(self)
             if is_terminal:
@@ -424,22 +441,28 @@ class NeuralAgent(object):
         reward = self._environment.act(action)
         return V, action, reward
 
-    def _addSample(self, ponctualObs, action, reward, is_terminal, reward_loc):
+    def _addSample(self, obs, latent, action, reward, is_terminal, reward_loc):
         if self._mode != -1:
             self._tmp_dataset.addSample(
-                ponctualObs, action, reward, is_terminal, reward_loc)
+                obs, latent, action, reward, is_terminal, reward_loc)
         else:
             self._dataset.addSample(
-                ponctualObs, action, reward, is_terminal, reward_loc)
+                obs, latent, action, reward, is_terminal, reward_loc)
 
     def _chooseAction(self):
+        device = self._learning_algo.device
+        state = torch.as_tensor(self._state, device=device).float()
+        if self._mem_len > 0:
+            zs = torch.as_tensor(self._latent, device=device).float()
+        else:
+            zs = None
         if self._mode != -1:
             # Act according to the test policy if not in training mode
-            action, V = self._test_policy.action(self._state, mode=self._mode, dataset=self._dataset)
+            action, V = self._test_policy.action(state, self._mode, zs=zs)
         else:
             if self._dataset.n_elems > self._replay_start_size:
                 # follow the train policy
-                action, V = self._train_policy.action(self._state, mode=None, dataset=self._dataset)
+                action, V = self._train_policy.action(state, None, zs=zs)
             else:
                 # Still gathering initial data: choose dummy action
                 action, V = self._train_policy.randomAction()
@@ -470,7 +493,8 @@ class DataSet(object):
     """A replay memory consisting of circular buffers for observations, actions, rewards and terminals."""
 
     def __init__(
-        self, env, random_state=None, max_size=1000000, only_full_history=True
+        self, env, latent_size,
+        random_state=None, max_size=1000000, only_full_history=True
         ):
         """Initializer.
         Parameters
@@ -485,6 +509,7 @@ class DataSet(object):
             The replay memory maximum size. Default : 1000000
         """
 
+        self._latent_size = latent_size
         self._batch_dimensions = env.inputDimensions()
         self._size = max_size
         self._only_full_history = only_full_history
@@ -497,10 +522,15 @@ class DataSet(object):
         self._terminals = CircularBuffer(max_size, dtype="bool")
 
         self._observations = np.zeros(len(self._batch_dimensions), dtype='object')
+        self._latents = np.zeros(len(self._batch_dimensions), dtype='object')
         # Initialize the observations container if necessary
         for i in range(len(self._batch_dimensions)):
             self._observations[i] = CircularBuffer(
                 max_size, elemShape=env.inputDimensions()[i],
+                dtype=env.observationType(i)
+                )
+            self._latents[i] = CircularBuffer(
+                max_size, elemShape=(latent_size,),
                 dtype=env.observationType(i)
                 )
 
@@ -657,6 +687,7 @@ class DataSet(object):
                 rndValidIndices[i] - seq_len+1, rndValidIndices[i] + 1)
         
         observations = np.zeros(len(self._batch_dimensions), dtype='object')
+        latents = np.zeros(len(self._batch_dimensions), dtype='object')
         # We calculate the first terminal index backward in time and set it 
         # at maximum to the value self._max_history_size
         first_terminals = []
@@ -673,15 +704,22 @@ class DataSet(object):
             new_obs_size[0] += seq_len
             observations[obs_i] = np.zeros(
                 [batch_size,] + new_obs_size,
-                dtype=self._observations[obs_i].dtype
-                )
+                dtype=self._observations[obs_i].dtype)
+            latents[obs_i] = np.zeros(
+                (batch_size, 1 + seq_len, self._latent_size),
+                dtype=self._observations[obs_i].dtype)
             for batch_i in range(batch_size):
                 self._observations[obs_i].triggered = True
                 _slice = self._observations[obs_i].getSlice(
                     rndValidIndices[batch_i] - seq_len + 1,
                     rndValidIndices[batch_i] + 2)
                 observations[obs_i][batch_i] = _slice.squeeze()
-        return observations, actions, rewards, terminals, rndValidIndices
+                _slice = self._latents[obs_i].getSlice(
+                    rndValidIndices[batch_i] - seq_len + 1,
+                    rndValidIndices[batch_i] + 2)
+                latents[obs_i][batch_i] = _slice.squeeze()
+
+        return observations, latents, actions, rewards, terminals, rndValidIndices
 
     def _randomValidStateIndex(self, seq_len, backwards=True):
         """
@@ -722,7 +760,7 @@ class DataSet(object):
                 return index
     
     def addSample(
-        self, obs, action, reward, is_terminal, reward_loc
+        self, obs, latent, action, reward, is_terminal, reward_loc
         ):
         """Store the punctual observations, action, reward, is_terminal. 
         Parameters
@@ -737,9 +775,12 @@ class DataSet(object):
         is_terminal : bool
             Tells whether [action] lead to a terminal state (i.e. corresponded to a terminal transition).
         """        
-        # Store observations
+        # Store observations and latents
         for i in range(len(self._batch_dimensions)):
             self._observations[i].append(obs[i])
+        if latent is not None:
+            for i in range(len(self._batch_dimensions)):
+                self._latents[i].append(latent[i])
 
         # Store rest of sample
         self._actions.append(action)

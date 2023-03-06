@@ -1,5 +1,3 @@
-import sys
-import logging
 import pickle
 import yaml
 from joblib import Parallel, delayed
@@ -7,12 +5,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 from joblib import hash, dump, load
 import os
+import sys
 
 from deer.default_parser import process_args
 from deer.agent import NeuralAgent
 from deer.learning_algos.CRAR_torch import CRAR
 import deer.controllers as bc
-from deer.environments.Foraging import MyEnv as Env
+from deer.environments.TwoRoom import MyEnv as Env
 
 from deer.policies import EpsilonGreedyPolicy
 
@@ -25,15 +24,15 @@ device_num = sys.argv[5]
 if int(device_num) >= 0:
     my_env = os.environ
     my_env["CUDA_VISIBLE_DEVICES"] = device_num
-fname_prefix = 'fourroom'
+fname_prefix = 'tworoom'
 fname_suffix = ''
-epochs = 30
-policy_eps = 1.
+epochs = 40
+policy_eps = 0.5
 higher_dim_obs = True
 
 # Make directories
-#engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
-engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
+engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
+#engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
 exp_dir = f'{fname_prefix}_{nn_yaml}_dim{internal_dim}{fname_suffix}/'
 for d in ['pickles/', 'nnets/', 'figs/', 'params/']:
     os.makedirs(f'{engram_dir}{d}{exp_dir}', exist_ok=True)
@@ -44,6 +43,7 @@ def gpu_parallel(job_idx):
     results['dimensionality_tracking'] = []
     results['dimensionality_variance_ratio'] = []
     results['valid_scores'] = []
+    results['valid_steps'] = []
     results['iteration'] = []
     results['valid_eps'] = []
     results['training_eps'] = []
@@ -65,6 +65,7 @@ def cpu_parallel():
     results['dimensionality_tracking'] = []
     results['dimensionality_variance_ratio'] = []
     results['valid_scores'] = []
+    results['valid_steps'] = []
     results['iteration'] = []
     results['valid_eps'] = []
     results['training_eps'] = []
@@ -90,10 +91,9 @@ def run_env(arg):
         'higher_dim_obs': higher_dim_obs,
         'internal_dim': internal_dim,
         'fname': fname,
-        'steps_per_epoch': 1000,
+        'steps_per_epoch': 500,
         'epochs': epochs,
         'steps_per_test': 1000,
-        'period_btw_summary_perfs': 1,
         'encoder_type': encoder_type,
         'frame_skip': 2,
         'learning_rate': 1*1E-4,
@@ -116,10 +116,10 @@ def run_env(arg):
     with open(f'{engram_dir}params/{_fname}.yaml', 'w') as outfile:
         yaml.dump(parameters, outfile, default_flow_style=False)
     rng = np.random.RandomState()
-    env = Env(
-        rng, reward=True,
-        higher_dim_obs=parameters['higher_dim_obs'], plotfig=False,
-        )
+    env = Env(rng, higher_dim_obs=parameters['higher_dim_obs'])
+    os.makedirs(f'{engram_dir}nnets/{fname}', exist_ok=True)
+    with open(f'{engram_dir}nnets/{fname}/goal.txt', 'w') as goalfile:
+        goalfile.write(str(env._quadrant_goal))
     learning_algo = CRAR(
         env, parameters['freeze_interval'], parameters['batch_size'], rng,
         internal_dim=parameters['internal_dim'], lr=parameters['learning_rate'],
@@ -151,13 +151,14 @@ def run_env(arg):
     agent.attach(best_controller)
     agent.attach(bc.InterleavedTestEpochController(
         id=Env.VALIDATION_MODE, epoch_length=parameters['steps_per_test'],
-        periodicity=1, show_score=True, summarize_every=5, unique_fname=fname))
+        periodicity=5, show_score=True, summarize_every=5, unique_fname=fname))
     agent.run(parameters['epochs'], parameters['steps_per_epoch'])
 
     result = {
         'dimensionality_tracking': env._dimensionality_tracking[-1],
         'dimensionality_variance_ratio': env._dimensionality_variance_ratio,
-        'valid_scores':  best_controller._validationScores, 'iteration': i,
+        'valid_scores':  best_controller._validationScores,
+        'valid_steps':  best_controller._validationSteps, 'iteration': i,
         'valid_eps': best_controller._validationEps,
         'epochs': best_controller._epochNumbers, 'training_eps': agent.n_eps
         }
@@ -165,18 +166,28 @@ def run_env(arg):
 
 # load user-defined parameters
 fname_grid = [
-    'entro', 'mb', 'mf']
+    'entro',
+#    'mb',
+    'sr_15_0.95',
+#    'mf'
+    ]
 loss_weights_grid = [
     [0, 1E-1, 1E-1, 1, 0],
+#    [1E-2, 1E-1, 1E-1, 1, 0],
     [1E-2, 1E-1, 1E-1, 1, 0],
-    [0, 0, 0, 1, 0],
+#    [0, 0, 0, 1, 0],
     ]
-param_updates = [{},
-    {}, {}
+param_updates = [
+    {},
+#    {},
+    {'pred_len': 15, 'pred_gamma': 0.95},
+#    {}
     ]
+# If you wanted latents to predict observations:
+# {'yaml_mods': {'trans-pred': {'predict_z': False}}}
 
 fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
-iters = np.arange(20)
+iters = np.arange(28)
 args = []
 for arg_idx in range(len(fname_grid)):
     for i in iters:

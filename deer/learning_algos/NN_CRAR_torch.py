@@ -115,7 +115,7 @@ class NN():
 
         class Encoder(nn.Module):
             def __init__(
-                self, input_shape, fc, convs=None, abstract_dim=2, mem_len=1
+                self, input_shape, fc, convs=None, abstract_dim=2, mem_len=0
                 ):
                 super().__init__()
                 self.input_shape = input_shape
@@ -124,21 +124,18 @@ class NN():
                 self.abstract_dim = abstract_dim
                 self.mem_len = mem_len
 
-            def forward(self, x):
+            def forward(self, x, zs=None):
+                n_batches, h, w = x.shape
                 if self.convs is not None:
-                    if self.mem_len > 1:
-                        N, T, H, W = x.shape
-                        x = x.reshape((-1, H, W))
                     x = x.unsqueeze(1) # Add singular channel
                     x = self.convs(x)
-                    x = x.view(x.size(0), -1)
-                    if self.mem_len > 1:
-                        x = x.reshape((N, -1))
-                else:
-                    if self.mem_len > 1:
-                        raise ValueError('Not implemented for no conv, mem_len>1')
-                    x = x.reshape((x.shape[0], -1))
-                x = self.fc(x.float())
+                x = x.view(n_batches, -1)
+                x = x.float()
+                #if self.mem_len > 0: # TODO
+                #    zs = zs.view(n_batches, -1)
+                #    zs = zs *0
+                #    x = torch.hstack((x, zs))
+                x = self.fc(x)
                 return x
 
         class EncoderVariational(nn.Module):
@@ -196,8 +193,8 @@ class NN():
             convs = None
             feature_size = np.prod(input_shape)
 
-        if self._mem_len > 1:
-            feature_size *= self._mem_len
+        #if self._mem_len > 0: # TODO
+        #    feature_size += self._mem_len*abstract_dim
 
         # Variational, or regular encoder
         if self._encoder_type == 'variational':

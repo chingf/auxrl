@@ -19,7 +19,7 @@ from matplotlib.offsetbox import AnchoredOffsetbox, TextArea, DrawingArea, HPack
 class MyEnv(Environment):
     VALIDATION_MODE = 0
     RIGHT_REWARD = 1; LEFT_REWARD = 0; RESET_REWARD = 2
-    HEIGHT = 5
+    HEIGHT = 4
     WIDTH = 5 #Must be odd
     LEFT_STEM = 0; CENTRAL_STEM = WIDTH//2; RIGHT_STEM = WIDTH-1
 
@@ -166,6 +166,13 @@ class MyEnv(Environment):
         ):
         """ Plot of the low-dimensional representation of the environment built by the model
         """
+
+        if not self.inTerminalState():
+            self._mode_episode_count += 1
+        print("== Mean score per episode is {} over {} episodes ==".format(
+            self._mode_score/(self._mode_episode_count+0.0001), self._mode_episode_count
+            ))
+        return
 
         if fname is None:
             fig_dir = './'
