@@ -177,14 +177,12 @@ class CRAR(LearningAlgo):
         if self._encoder_type == 'variational':
             Esp = self.crar.encoder(next_states_val, zs=next_zs)
             Es = self.crar.encoder(states_val, save_kls=True)
-        elif self._mem_len > 0: # TODO
-            _zs = torch.tensor(zs[:,:self._mem_len])
-            Es = self.crar.encoder(states_val[:, -1], zs=_zs)
-            Esp = self.crar.encoder(next_states_val[:, -1], zs=_zs)
-            #for t in range(self._mem_len, states_val.shape[1]):
-            #    Es = self.crar.encoder(states_val[:, t], zs=_zs)
-            #    _zs = torch.hstack((_zs[:,1:], Es.unsqueeze(1)))
-            #Esp = self.crar.encoder(next_states_val[:,-1], zs=_zs)
+        elif self._mem_len > 0:
+            _zs = torch.tensor(zs[:,:self._mem_len]).to(self.device)
+            for t in range(self._mem_len, states_val.shape[1]):
+                Es = self.crar.encoder(states_val[:, t], zs=_zs)
+                _zs = torch.hstack((_zs[:,1:], Es.unsqueeze(1)))
+            Esp = self.crar.encoder(next_states_val[:,-1], zs=_zs)
         else:
             Esp = self.crar.encoder(next_states_val, zs=next_zs)
             Es = self.crar.encoder(states_val, zs=zs)
@@ -201,7 +199,7 @@ class CRAR(LearningAlgo):
             if predict_z and self.mem_len==0:
                 next_step_pred = self.crar.encoder(s)
             elif predict_z and self.mem_len>0: # TODO
-                next_step_pred = next_zs[:, t:t+1]
+                raise ValueError('Something went wrong.')
             else:
                 s.reshape((self._batch_size, -1))
             T_target = T_target + (sr_gamma**t) * next_step_pred
@@ -212,7 +210,6 @@ class CRAR(LearningAlgo):
         self.loss_T[-1] += loss_T.item()
 
         # Increase entropy of randomly sampled states
-        # This works only when states_val is made up of only one observation
         rolled = torch.roll(Es, 1, dims=0)
         loss_entropy_random = torch.exp(
             -self._entropy_temp * torch.norm(Es - rolled, dim=1)
@@ -233,14 +230,13 @@ class CRAR(LearningAlgo):
         if self._mem_len == 0:
             next_q_target = self.crar_target.Q(
                 self.crar_target.encoder(next_states_val))
-        else: # TODO
-            _zs = torch.tensor(zs[:,:self._mem_len])
-            next_q_target = self.crar_target.encoder(
-                next_states_val[:,-1], zs=_zs)
-            #for t in range(self._mem_len, states_val.shape[1]):
-            #    q_target = self.crar_target.encoder(states_val[:, t], zs=_zs)
-            #    _zs = torch.hstack((_zs[:,1:], q_target.unsqueeze(1)))
-            #next_q_target = self.crar_target.encoder(next_states_val[:,-1], zs=_zs)
+        else:
+            _zs = torch.tensor(zs[:,:self._mem_len]).to(self.device)
+            for t in range(self._mem_len, states_val.shape[1]):
+                Esp_target = self.crar_target.encoder(states_val[:, t], zs=_zs)
+                _zs = torch.hstack((_zs[:,1:], Esp_target.unsqueeze(1)))
+            Esp_target = self.crar_target.encoder(next_states_val[:,-1], zs=_zs)
+            next_q_target = self.crar_target.Q(Esp_target)
         if self._double_Q: # Action selection by Q and evaluation by Q'
             next_q = self.crar.Q(Esp)
             argmax_next_q = torch.argmax(next_q, axis=1)

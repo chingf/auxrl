@@ -131,10 +131,9 @@ class NN():
                     x = self.convs(x)
                 x = x.view(n_batches, -1)
                 x = x.float()
-                #if self.mem_len > 0: # TODO
-                #    zs = zs.view(n_batches, -1)
-                #    zs = zs *0
-                #    x = torch.hstack((x, zs))
+                if self.mem_len > 0:
+                    zs = zs.view(n_batches, -1)
+                    x = torch.hstack((x, zs))
                 x = self.fc(x)
                 return x
 
@@ -193,8 +192,8 @@ class NN():
             convs = None
             feature_size = np.prod(input_shape)
 
-        #if self._mem_len > 0: # TODO
-        #    feature_size += self._mem_len*abstract_dim
+        if self._mem_len > 0:
+            feature_size += self._mem_len*abstract_dim
 
         # Variational, or regular encoder
         if self._encoder_type == 'variational':

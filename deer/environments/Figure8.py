@@ -167,13 +167,6 @@ class MyEnv(Environment):
         """ Plot of the low-dimensional representation of the environment built by the model
         """
 
-        if not self.inTerminalState():
-            self._mode_episode_count += 1
-        print("== Mean score per episode is {} over {} episodes ==".format(
-            self._mode_score/(self._mode_episode_count+0.0001), self._mode_episode_count
-            ))
-        return
-
         if fname is None:
             fig_dir = './'
         else:
@@ -184,17 +177,12 @@ class MyEnv(Environment):
         # Only seen states
         observations = test_data_set.observations()[0]
         reward_locs = test_data_set.reward_locs()
-        observations_tcm = []
-        reward_locs_tcm = []
+        latents = test_data_set.latents()[0]
         color_labels = []
         y_locations = []
         x_locations = []
         mem_len = learning_algo._mem_len
-        for t in np.arange(mem_len, observations.shape[0]):
-            tcm_obs = np.swapaxes(observations[t-mem_len:t], 0, 1)
-            tcm_obs = learning_algo.make_state_with_history(tcm_obs)
-            observations_tcm.append(tcm_obs.detach().numpy().squeeze())
-            reward_locs_tcm.append(reward_locs[t-1])
+        for t in np.arange(observations.shape[0]):
             agent_location = np.argwhere(observations[t-1]==10)[0,1:].tolist()
             agent_location[0] -= 1; agent_location[1] -= 1;
             if self._high_dim_obs:
@@ -204,26 +192,21 @@ class MyEnv(Environment):
             color_label = self._space_label[agent_location[0], agent_location[1]]
             color_labels.append(color_label)
         hlen = 500
-        observations_tcm = np.array(observations_tcm, dtype='float')[-hlen:]
-        reward_locs = np.array(reward_locs_tcm, dtype='int')[-hlen:]
+        observations = observations[-hlen:]
+        reward_locs = reward_locs[-hlen:]
+        latents = latents[-hlen:]
         color_labels = np.array(color_labels, dtype=int)[-hlen:]
         x_locations = np.array(x_locations)[-hlen:]
         y_locations = np.array(y_locations)[-hlen:]
-        #unique_observations_tcm, unique_idxs = np.unique(
-        #    observations_tcm, axis=0, return_index=True)
-        unique_observations_tcm = observations_tcm
-        #reward_locs = reward_locs[unique_idxs].astype(int)
-        #color_labels = color_labels[unique_idxs]
-        #x_locations = x_locations[unique_idxs]
-        #y_locations = y_locations[unique_idxs]
+        latents, unique_idxs = np.unique(
+            latents, axis=0, return_index=True)
+        observations = observations[unique_idxs]
+        reward_locs = reward_locs[unique_idxs].astype(int)
+        color_labels = color_labels[unique_idxs]
+        x_locations = x_locations[unique_idxs]
+        y_locations = y_locations[unique_idxs]
         device = learning_algo.device
-        n = unique_observations_tcm.shape[0]
-        with torch.no_grad():
-            o = torch.tensor(unique_observations_tcm).float().to(device)
-            try:
-                abs_states = learning_algo.crar.encoder(o, mu_only=True)
-            except:
-                abs_states = learning_algo.crar.encoder(o)
+        n = latents.shape[0]
     
         actions = test_data_set.actions()[0:n]
         if not self.inTerminalState():
@@ -234,67 +217,37 @@ class MyEnv(Environment):
                 
         m = cm.ScalarMappable(cmap=cm.jet)
        
-        abs_states_np = abs_states.cpu().numpy()
-        if len(abs_states_np.shape) == 1:
-            abs_states_np = abs_states_np.reshape((1, -1))
-
         intern_dim = learning_algo._internal_dim
         if intern_dim == 2:
-            x = np.array(abs_states_np)[:,0]
-            y = np.array(abs_states_np)[:,1]
+            x = np.array(latents)[:,0]
+            y = np.array(latents)[:,1]
             z = np.zeros(y.shape)
         elif intern_dim == 3:
-            x = np.array(abs_states_np)[:,0]
-            y = np.array(abs_states_np)[:,1]
-            z = np.array(abs_states_np)[:,2]
+            x = np.array(latents)[:,0]
+            y = np.array(latents)[:,1]
+            z = np.array(latents)[:,2]
         else:
-            if abs_states_np.shape[0] > 2:
+            if latents.shape[0] > 2:
                 pca = PCA()
-                reduced_states = pca.fit_transform(abs_states_np)
+                reduced_states = pca.fit_transform(latents)
                 x = np.array(reduced_states)[:,0]
                 y = np.array(reduced_states)[:,1]
                 z = np.array(reduced_states)[:,2]
             else:
-                x = np.array(abs_states_np)[:,0]
-                y = np.array(abs_states_np)[:,1]
-                z = np.array(abs_states_np)[:,2]
+                x = np.array(latents)[:,0]
+                y = np.array(latents)[:,1]
+                z = np.array(latents)[:,2]
         fig = plt.figure()
         ax = fig.add_subplot(111,projection='3d')
         ax.set_xlabel(r'$X_1$')
         ax.set_ylabel(r'$X_2$')
         ax.set_zlabel(r'$X_3$')
                     
-        # Plot the estimated transitions
-        scatterplot_range = np.arange(n-1) if n < 50 else np.arange(n-50, n-1)
-        for i in scatterplot_range:
-            n_actions = 4
-            action_colors = ["0.9", "0.65", "0.4", "0.15"]
-            for action in range(n_actions):
-                action_encoding = np.zeros(n_actions)
-                action_encoding[action] = 1
-                with torch.no_grad():
-                    pred = learning_algo.crar.transition(torch.cat([
-                        abs_states[i:i+1].to(device),
-                        torch.as_tensor([action_encoding]).to(device)
-                        ], dim=1).float()).cpu().numpy()
-                if (intern_dim > 3) and (abs_states_np.shape[0] > 2):
-                    pred = pca.transform(pred)
-                x_transitions = np.concatenate([x[i:i+1],pred[0,:1]])
-                y_transitions = np.concatenate([y[i:i+1],pred[0,1:2]])
-                if intern_dim == 2:
-                    z_transitions = np.zeros(y_transitions.shape)
-                else:
-                    z_transitions = np.concatenate([z[i:i+1],pred[0,2:3]])
-                ax.plot(
-                    x_transitions, y_transitions, z_transitions,
-                    color=action_colors[action], alpha=0.75)
-        
-        # Plot the dots at each time step depending on the action taken
         colors = ['orange',
             cm.get_cmap('Blues'), cm.get_cmap('Reds'), cm.get_cmap('Purples')]
         color_steps = np.linspace(0.25, 1., MyEnv.HEIGHT, endpoint=True)
         markers = ['s', '^', 'o']
-        for i in scatterplot_range:
+        for i in range(n):
             if x_locations[i] == MyEnv.CENTRAL_STEM:
                 marker = markers[reward_locs[i]]
             else:
@@ -309,29 +262,11 @@ class MyEnv(Environment):
                 edgecolors='k', alpha=0.75, s=50, depthshade=True
                 )
         axes_lims=[ax.get_xlim(), ax.get_ylim(), ax.get_zlim()]
-        
-        # Plot the legend for transition estimates
-        box1b = TextArea("Estimated transitions (action 0, 1, 2, 3): ", textprops=dict(color="k"))
-        box2b = DrawingArea(90, 20, 0, 0)
-        el1b = Rectangle((5, 10), 15,2, fc="0.9", alpha=0.75)
-        el2b = Rectangle((25, 10), 15,2, fc="0.65", alpha=0.75) 
-        el3b = Rectangle((45, 10), 15,2, fc="0.4", alpha=0.75)
-        el4b = Rectangle((65, 10), 15,2, fc="0.15", alpha=0.75) 
-        box2b.add_artist(el1b)
-        box2b.add_artist(el2b)
-        box2b.add_artist(el3b)
-        box2b.add_artist(el4b)
-        boxb = HPacker(children=[box1b, box2b], align="center", pad=0, sep=5)
-        anchored_box = AnchoredOffsetbox(
-            loc=3, child=boxb, pad=0., frameon=True,
-            bbox_to_anchor=(0., 0.98), bbox_transform=ax.transAxes, borderpad=0.
-            )        
-        ax.add_artist(anchored_box)
         plt.show()
         plt.savefig(f'{fig_dir}latents.pdf')
 
         # Plot continuous measure of dimensionality
-        if (intern_dim > 3) and (abs_states_np.shape[0] > 2):
+        if (intern_dim > 3) and (latents.shape[0] > 2):
             variance_curve = np.cumsum(pca.explained_variance_ratio_)
             auc = np.trapz(variance_curve, dx=1/variance_curve.size)
             self._dimensionality_tracking.append(auc)
@@ -361,8 +296,8 @@ class MyEnv(Environment):
                 if (np.sum(idxs_i) == 0) or (np.sum(idxs_j) == 0):
                     continue
                 dist = []
-                states_i = abs_states_np[idxs_i]
-                states_j = abs_states_np[idxs_j]
+                states_i = latents[idxs_i]
+                states_j = latents[idxs_j]
                 if (i==j) and states_i.shape[0] == 1:
                     dist_matrix[i,j] = 0
                     continue

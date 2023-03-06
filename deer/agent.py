@@ -397,7 +397,7 @@ class NeuralAgent(object):
                     state = torch.as_tensor(self._state, device=device).float()
                     zs = torch.as_tensor(self._latent, device=device).float()
                     latent = self._learning_algo.crar.encoder(state, zs=zs)
-                    latent = latent.detach().numpy()
+                    latent = latent.detach().cpu().numpy()
                     self._latent[0, 0:-1] = self._latent[0, 1:]
                     self._latent[0, -1] = latent
                 else:
@@ -572,6 +572,15 @@ class DataSet(object):
         ret = np.zeros_like(self._observations)
         for input in range(len(self._observations)):
             ret[input] = self._observations[input].getSlice(0)
+        return ret
+
+    def latents(self):
+        """Get all latents currently in the replay memory, ordered by time where they were observed.
+        """
+
+        ret = np.zeros_like(self._latents)
+        for input in range(len(self._latents)):
+            ret[input] = self._latents[input].getSlice(0)
         return ret
 
     def randomBatch(self, batch_size):

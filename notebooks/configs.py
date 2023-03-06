@@ -5,7 +5,7 @@ fig_width = 6.4
 fig_height = 4.8
 
 import seaborn as sns
-sns.set(font='Arial',
+sns.set(#font='Arial',
         font_scale=16/12., #default size is 12pt, scale to 16pt
         palette='colorblind', #'Set1',
         rc={'axes.axisbelow': True,

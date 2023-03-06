@@ -25,15 +25,15 @@ device_num = sys.argv[5]
 if int(device_num) >= 0:
     my_env = os.environ
     my_env["CUDA_VISIBLE_DEVICES"] = device_num
-fname_prefix = 'altT5x5'
+fname_prefix = 'tMaze'
 fname_suffix = ''
-epochs = 40
+epochs = 31
 policy_eps = 0.4
 higher_dim_obs = True
 
 # Make directories
-engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
-#engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
+#engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
+engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
 exp_dir = f'{fname_prefix}_{nn_yaml}_dim{internal_dim}{fname_suffix}/'
 for d in ['pickles/', 'nnets/', 'figs/']:
     os.makedirs(f'{engram_dir}{d}{exp_dir}', exist_ok=True)
@@ -92,11 +92,11 @@ def run_env(arg):
         'steps_per_epoch': 2000,
         'epochs': epochs,
         'steps_per_test': 1000,
-        'mem_len': 1,
-        'train_len': 2,
+        'mem_len': 2,
+        'train_len': 10,
         'encoder_type': encoder_type,
         'frame_skip': 2,
-        'show_rewards': True,
+        'show_rewards': False,
         'learning_rate': 1*1E-4, #1*1E-4,
         'learning_rate_decay': 1.0,
         'discount': 0.9,
@@ -172,13 +172,14 @@ def run_env(arg):
 
 job_idx = int(sys.argv[1])
 n_jobs = int(sys.argv[2])
-fname_grid = ['mf']
+fname_grid = ['mf', 'mb']
 loss_weights_grid = [
     [0, 0, 0, 1, 0],
+    [1E-2, 1E-1, 1E-1, 1, 0],
     ]
 param_updates = [{}]*len(fname_grid)
 fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
-iters = np.arange(16)
+iters = np.arange(4)
 args = []
 for arg_idx in range(len(fname_grid)):
     for i in iters:
@@ -188,16 +189,14 @@ for arg_idx in range(len(fname_grid)):
         args.append([fname, loss_weights, param_update, i])
 split_args = np.array_split(args, n_jobs)
 
-run_env(args[0])
-
-#import time
-#start = time.time()
-## Run relevant parallelization script
-#if job_idx == -1:
-#    cpu_parallel()
-#else:
-#    gpu_parallel(job_idx)
-#end = time.time()
+import time
+start = time.time()
+# Run relevant parallelization script
+if job_idx == -1:
+    cpu_parallel()
+else:
+    gpu_parallel(job_idx)
+end = time.time()
 
 print(f'ELAPSED TIME: {end-start} seconds')
 

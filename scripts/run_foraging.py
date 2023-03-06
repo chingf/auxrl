@@ -25,7 +25,7 @@ device_num = sys.argv[5]
 if int(device_num) >= 0:
     my_env = os.environ
     my_env["CUDA_VISIBLE_DEVICES"] = device_num
-fname_prefix = 'sr'
+fname_prefix = 'dmVis'
 fname_suffix = ''
 epochs = 40
 policy_eps = 1.
@@ -34,8 +34,8 @@ foraging_give_rewards = True
 size_maze = 6
 
 # Make directories
-engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
-#engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
+#engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
+engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
 exp_dir = f'{fname_prefix}_{nn_yaml}_dim{internal_dim}{fname_suffix}/'
 for d in ['pickles/', 'nnets/', 'figs/', 'params/']:
     os.makedirs(f'{engram_dir}{d}{exp_dir}', exist_ok=True)
@@ -97,7 +97,6 @@ def run_env(arg):
         'steps_per_epoch': 500,
         'epochs': epochs,
         'steps_per_test': 1000,
-        'period_btw_summary_perfs': 1,
         'encoder_type': encoder_type,
         'frame_skip': 2,
         'learning_rate': 1*1E-4,
@@ -143,10 +142,8 @@ def run_env(arg):
     test_policy = EpsilonGreedyPolicy(learning_algo, env.nActions(), rng, 0.)
     agent = NeuralAgent(
         env, learning_algo, parameters['replay_memory_size'], 1,
-        parameters['batch_size'], rng,
-        train_policy=train_policy, test_policy=test_policy,
-        save_dir=engram_dir
-        )
+        parameters['batch_size'], rng, save_dir=engram_dir
+        train_policy=train_policy, test_policy=test_policy)
     agent.run(10, 500)
     agent.attach(bc.LearningRateController(
         initial_learning_rate=parameters['learning_rate'],
@@ -178,15 +175,11 @@ def run_env(arg):
 fname_grid = [
     'entro',
     'mb',
-    'sr_10_0.4',
-    'sr_10_0.6',
-    'sr_10_0.9',
+    'sr_15_0.93',
     'mf'
     ]
 loss_weights_grid = [
     [0, 1E-1, 1E-1, 1, 0],
-    [1E-2, 1E-1, 1E-1, 1, 0],
-    [1E-2, 1E-1, 1E-1, 1, 0],
     [1E-2, 1E-1, 1E-1, 1, 0],
     [1E-2, 1E-1, 1E-1, 1, 0],
     [0, 0, 0, 1, 0],
@@ -194,16 +187,14 @@ loss_weights_grid = [
 param_updates = [
     {},
     {},
-    {'pred_len': 10, 'pred_gamma': 0.4},
-    {'pred_len': 10, 'pred_gamma': 0.6},
-    {'pred_len': 10, 'pred_gamma': 0.9},
+    {'pred_len': 15, 'pred_gamma': 0.93},
     {}
     ]
 # If you wanted latents to predict observations:
 # {'yaml_mods': {'trans-pred': {'predict_z': False}}}
 
 fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
-iters = np.arange(50)
+iters = np.arange(8)
 args = []
 for arg_idx in range(len(fname_grid)):
     for i in iters:
