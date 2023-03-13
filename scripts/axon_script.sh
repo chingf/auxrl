@@ -3,9 +3,14 @@
 trap "exit" INT TERM ERR
 trap "kill 0" EXIT
 
-python run_figure8.py 0 4 dm 16 0 &
-python run_figure8.py 1 4 dm 16 1 &
-python run_figure8.py 2 4 dm 16 2 &
-python run_figure8.py 3 4 dm 16 3 &
+python run_foraging.py 0 8 dm 24 0 &
+python run_foraging.py 1 8 dm 24 1 &
+python run_foraging.py 2 8 dm 24 2 &
+python run_foraging.py 3 8 dm 24 3 &
+
+python run_foraging.py 4 8 dm 24 0 &
+python run_foraging.py 5 8 dm 24 1 &
+python run_foraging.py 6 8 dm 24 2 &
+python run_foraging.py 7 8 dm 24 3 &
 
 wait

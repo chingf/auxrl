@@ -34,7 +34,7 @@ class CRAR(LearningAlgo):
         random_state=np.random.RandomState(), double_Q=False,
         neural_network=NN, lr=1E-4, nn_yaml='basic', yaml_mods={},
         loss_weights=[1, 1, 1, 1, 1], # T, entropy, entropy, Q, VAE
-        internal_dim=5, entropy_temp=5, mem_len=1, train_len=1, encoder_type=None,
+        internal_dim=5, entropy_temp=5, mem_len=0, train_len=1, encoder_type=None,
         pred_len=1, pred_gamma=0.
         ):
         """ Initialize the environment. """
@@ -178,7 +178,7 @@ class CRAR(LearningAlgo):
             Esp = self.crar.encoder(next_states_val, zs=next_zs)
             Es = self.crar.encoder(states_val, save_kls=True)
         elif self._mem_len > 0:
-            _zs = torch.tensor(zs[:,:self._mem_len]).to(self.device)
+            _zs = torch.tensor(zs[:,:self._mem_len]).to(self.device).float()
             for t in range(self._mem_len, states_val.shape[1]):
                 Es = self.crar.encoder(states_val[:, t], zs=_zs)
                 _zs = torch.hstack((_zs[:,1:], Es.unsqueeze(1)))

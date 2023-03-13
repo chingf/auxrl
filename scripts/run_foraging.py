@@ -25,7 +25,7 @@ device_num = sys.argv[5]
 if int(device_num) >= 0:
     my_env = os.environ
     my_env["CUDA_VISIBLE_DEVICES"] = device_num
-fname_prefix = 'dmVis'
+fname_prefix = 'neighbors'
 fname_suffix = ''
 epochs = 40
 policy_eps = 1.
@@ -142,7 +142,7 @@ def run_env(arg):
     test_policy = EpsilonGreedyPolicy(learning_algo, env.nActions(), rng, 0.)
     agent = NeuralAgent(
         env, learning_algo, parameters['replay_memory_size'], 1,
-        parameters['batch_size'], rng, save_dir=engram_dir
+        parameters['batch_size'], rng, save_dir=engram_dir,
         train_policy=train_policy, test_policy=test_policy)
     agent.run(10, 500)
     agent.attach(bc.LearningRateController(
@@ -175,21 +175,23 @@ def run_env(arg):
 fname_grid = [
     'entro',
     'mb',
-    'sr_15_0.93',
-    'mf'
+    'entro_neighbor',
+    'mb_neighbor',
     ]
 loss_weights_grid = [
     [0, 1E-1, 1E-1, 1, 0],
     [1E-2, 1E-1, 1E-1, 1, 0],
-    [1E-2, 1E-1, 1E-1, 1, 0],
-    [0, 0, 0, 1, 0],
+    [0, 1E-1, 0, 1, 0],
+    [1E-2, 1E-1, 0, 1, 0],
     ]
 param_updates = [
     {},
     {},
-    {'pred_len': 15, 'pred_gamma': 0.93},
+    {},
     {}
     ]
+# If you want latents to predict future latents
+# {'pred_len': 15, 'pred_gamma': 0.93},
 # If you wanted latents to predict observations:
 # {'yaml_mods': {'trans-pred': {'predict_z': False}}}
 
