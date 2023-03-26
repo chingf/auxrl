@@ -31,7 +31,7 @@ class CRAR(LearningAlgo):
 
     def __init__(
         self, environment, freeze_interval=1000, batch_size=32,
-        random_state=np.random.RandomState(), double_Q=False,
+        random_state=np.random.RandomState(), double_Q=False, freeze_encoder=False,
         neural_network=NN, lr=1E-4, nn_yaml='basic', yaml_mods={},
         loss_weights=[1, 1, 1, 1, 1], # T, entropy, entropy, Q, VAE
         internal_dim=5, entropy_temp=5, mem_len=0, train_len=1, encoder_type=None,
@@ -44,6 +44,7 @@ class CRAR(LearningAlgo):
         self._freeze_interval = freeze_interval
         self._double_Q = double_Q
         self._random_state = random_state
+        self._freeze_encoder = freeze_encoder
         self._loss_weights = loss_weights
         self._internal_dim = internal_dim
         self._entropy_temp = entropy_temp
@@ -70,7 +71,10 @@ class CRAR(LearningAlgo):
             self._random_state, internal_dim=self._internal_dim,
             device=self.device, yaml=nn_yaml, yaml_mods=yaml_mods,
             mem_len=self._mem_len, encoder_type=self._encoder_type)
-        self.optimizer = torch.optim.Adam(self.crar.params, lr=lr)
+        if freeze_encoder:
+            self.optimizer = torch.optim.Adam(self.crar.Q.parameters(), lr=lr)
+        else:
+            self.optimizer = torch.optim.Adam(self.crar.params, lr=lr)
         self.scheduler = torch.optim.lr_scheduler.ExponentialLR(
             self.optimizer, gamma=0.9)
 
@@ -162,10 +166,12 @@ class CRAR(LearningAlgo):
             actions_val = actions_val[:, 0]
             rewards_val = rewards_val[:, 0]
             terminals_val = terminals_val[:, 0]
-            T_states_val = states_val
-            T_next_states_val = next_states_val
-            states_val = states_val[:,:1]
-            next_states_val = next_states_val[:,:1]
+            T_states_val = torch.as_tensor(
+                states_val, device=self.device).float()
+            T_next_states_val = torch.as_tensor(
+                next_states_val, device=self.device).float()
+            states_val = states_val[:,:1].squeeze(1)
+            next_states_val = next_states_val[:,:1].squeeze(1)
         self.optimizer.zero_grad()
         onehot_actions = np.zeros((self._batch_size, self._n_actions))
         onehot_actions[np.arange(self._batch_size), actions_val] = 1
@@ -195,10 +201,10 @@ class CRAR(LearningAlgo):
             next_states_val.reshape((self._batch_size, -1))
         sr_gamma = self._pred_gamma
         for t in np.arange(1, self._pred_len):
-            s = T_next_states_val[:,t:t+1]
-            if predict_z and self.mem_len==0:
+            s = T_next_states_val[:,t:t+1].squeeze(1)
+            if predict_z and self._mem_len==0:
                 next_step_pred = self.crar.encoder(s)
-            elif predict_z and self.mem_len>0: # TODO
+            elif predict_z and self._mem_len>0: # TODO
                 raise ValueError('Something went wrong.')
             else:
                 s.reshape((self._batch_size, -1))
@@ -278,6 +284,7 @@ class CRAR(LearningAlgo):
         return loss_Q.item(), loss_Q_unreduced
 
     def step_scheduler(self):
+        print("STEP")
         self.scheduler.step()
         self.scheduler_target.step()
 
@@ -300,6 +307,7 @@ class CRAR(LearningAlgo):
             if d == 0:
                 return crar_net.Q(x)
             else:
+                raise ValueError('This case should not be used')
                 q_plan_values = []
                 x = x.view(1, -1)
                 for a in range(self._n_actions):
