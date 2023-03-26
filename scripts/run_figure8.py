@@ -25,10 +25,10 @@ device_num = sys.argv[5]
 if int(device_num) >= 0:
     my_env = os.environ
     my_env["CUDA_VISIBLE_DEVICES"] = device_num
-fname_prefix = 'tMaze'
+fname_prefix = 'altTS1'
 fname_suffix = ''
 epochs = 31
-policy_eps = 0.4
+policy_eps = 0.6
 higher_dim_obs = True
 
 # Make directories
@@ -145,10 +145,6 @@ def run_env(arg):
         parameters['batch_size'], rng, save_dir=engram_dir,
         train_policy=train_policy, test_policy=test_policy)
     agent.run(10, 500)
-    agent.attach(bc.LearningRateController(
-        initial_learning_rate=parameters['learning_rate'],
-        learning_rate_decay=parameters['learning_rate_decay'],
-        periodicity=1))
     agent.attach(bc.TrainerController(
         evaluate_on='action',  periodicity=parameters['update_frequency'],
         show_episode_avg_V_value=True, show_avg_Bellman_residual=True))
@@ -170,16 +166,27 @@ def run_env(arg):
         }
     return _fname, loss_weights, result
 
-job_idx = int(sys.argv[1])
-n_jobs = int(sys.argv[2])
-fname_grid = ['mf', 'mb']
+fname_grid = [
+#    'mb_0.5',
+    'mb',
+    'mf',
+#    'entro_0.5',
+#    'entro_0.1',
+#    'mb_v2',
+#    'mb_v3',
+    ]
 loss_weights_grid = [
-    [0, 0, 0, 1, 0],
-    [1E-2, 1E-1, 1E-1, 1, 0],
+#    [1E-3, 0.5E-3, 0.5E-3, 1, 0], # TODO: MB component is usually 1E-2
+    [1E-2, 1E-3, 1E-3, 1, 0],
+    [0, 0, 0, 1, 0], 
+#    [0, 0.5E-3, 0.5E-3, 1, 0],
+#    [0, 0.1E-3, 0.1E-3, 1, 0],
+#   [1E-2, 0.5E-3, 0.5E-3, 1, 0],
+#   [1E-2, 0.1E-3, 0.1E-3, 1, 0],
     ]
 param_updates = [{}]*len(fname_grid)
 fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
-iters = np.arange(4)
+iters = np.arange(16)
 args = []
 for arg_idx in range(len(fname_grid)):
     for i in iters:
