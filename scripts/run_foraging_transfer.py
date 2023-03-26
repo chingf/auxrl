@@ -26,20 +26,21 @@ device_num = sys.argv[5]
 if int(device_num) >= 0:
     my_env = os.environ
     my_env["CUDA_VISIBLE_DEVICES"] = device_num
-fname_prefix = 'transfer_sr'
+fname_prefix = 'frozentransfer_neighbors6x6'
 fname_suffix = ''
-epochs = 40
-source_prefix = 'sr'
+epochs = 31 
+source_prefix = 'neighbors6x6'
 source_suffix = ''
-source_epoch = 40
-policy_eps = 1. 
+source_epoch = 41
+policy_eps = 1.
 encoder_only = True
+freeze_encoder = True
 higher_dim_obs = True
-size_maze = 6
+size_maze = 6 + 2
 
 # Make directories
-#engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
-engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
+engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
+#engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
 exp_dir = f'{fname_prefix}_{nn_yaml}_dim{internal_dim}{fname_suffix}/'
 source_dir = f'{source_prefix}_{nn_yaml}_dim{internal_dim}{source_suffix}/'
 for d in ['pickles/', 'nnets/', 'scores/', 'figs/', 'params/']:
@@ -136,7 +137,8 @@ def run_env(arg):
         'size_maze': size_maze,
         'pred_len': 1,
         'pred_gamma': 0.,
-        'yaml_mods': {}
+        'yaml_mods': {},
+        'freeze_encoder': freeze_encoder
         }
     parameters.update(param_update)
     with open(f'{engram_dir}params/{_fname}.yaml', 'w') as outfile:
@@ -149,8 +151,8 @@ def run_env(arg):
         )
     learning_algo = CRAR(
         env, parameters['freeze_interval'], parameters['batch_size'], rng,
-        internal_dim=parameters['internal_dim'],
-        lr=parameters['learning_rate'],
+        freeze_encoder=parameters['freeze_encoder'],
+        internal_dim=parameters['internal_dim'], lr=parameters['learning_rate'],
         nn_yaml=parameters['nn_yaml'], yaml_mods=parameters['yaml_mods'],
         double_Q=True, loss_weights=parameters['loss_weights'],
         encoder_type=parameters['encoder_type'],
@@ -173,10 +175,6 @@ def run_env(arg):
             )
     agent.run(10, 500)
     agent.attach(bc.VerboseController( evaluate_on='epoch', periodicity=1))
-    agent.attach(bc.LearningRateController(
-        initial_learning_rate=parameters['learning_rate'],
-        learning_rate_decay=parameters['learning_rate_decay'],
-        periodicity=1))
     agent.attach(bc.TrainerController(
         evaluate_on='action', periodicity=parameters['update_frequency'],
         show_episode_avg_V_value=True, show_avg_Bellman_residual=True))
@@ -192,16 +190,6 @@ def run_env(arg):
             f'{set_network[0]}/fname', nEpoch=set_network[1],
             encoder_only=set_network[2]
             )
-    if freeze_encoder:
-        parameter_lists = [
-            agent._learning_algo.crar.encoder.parameters(),
-            agent._learning_algo.crar_target.encoder.parameters(),
-            agent._learning_algo.crar.transition.parameters(),
-            agent._learning_algo.crar_target.transition.parameters(),
-            ]
-        for parameter_list in parameter_lists:
-            for p in parameter_list:
-                p.requires_grad = False
     agent.run(parameters['epochs'], parameters['steps_per_epoch'])
 
     result = {
@@ -218,19 +206,15 @@ def run_env(arg):
 fname_grid = [
     'entro',
     'mb',
-    'sr_10_0.4',
-    'sr_10_0.6',
-    'sr_10_0.9',
-    'mf'
+    'mf',
     ]
 network_files = [f'{source_prefix}_{f}' for f in fname_grid]
-fname_grid.append('clean')
-network_files.append(None)
+#fname_grid.append('clean')
+#network_files.append(None)
 loss_weights_grid = [[0., 0., 0., 1., 0.]] * len(fname_grid)
 fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
 param_updates = [{}]*len(fname_grid)
-freeze_encoder = False
-iters = np.arange(50)
+iters = np.arange(18)
 args = []
 for arg_idx in range(len(fname_grid)):
     for i in iters:

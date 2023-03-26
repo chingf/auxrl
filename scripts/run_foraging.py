@@ -25,17 +25,17 @@ device_num = sys.argv[5]
 if int(device_num) >= 0:
     my_env = os.environ
     my_env["CUDA_VISIBLE_DEVICES"] = device_num
-fname_prefix = 'neighbors'
+fname_prefix = 'neighbors6x6S2'
 fname_suffix = ''
-epochs = 40
+epochs = 41
 policy_eps = 1.
 higher_dim_obs = True
 foraging_give_rewards = True
-size_maze = 6
+size_maze = 6 + 2
 
 # Make directories
-#engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
-engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
+engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
+#engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
 exp_dir = f'{fname_prefix}_{nn_yaml}_dim{internal_dim}{fname_suffix}/'
 for d in ['pickles/', 'nnets/', 'figs/', 'params/']:
     os.makedirs(f'{engram_dir}{d}{exp_dir}', exist_ok=True)
@@ -145,10 +145,6 @@ def run_env(arg):
         parameters['batch_size'], rng, save_dir=engram_dir,
         train_policy=train_policy, test_policy=test_policy)
     agent.run(10, 500)
-    agent.attach(bc.LearningRateController(
-        initial_learning_rate=parameters['learning_rate'],
-        learning_rate_decay=parameters['learning_rate_decay'],
-        periodicity=1))
     agent.attach(bc.TrainerController(
         evaluate_on='action', periodicity=parameters['update_frequency'],
         show_episode_avg_V_value=True, show_avg_Bellman_residual=True))
@@ -173,16 +169,19 @@ def run_env(arg):
 
 # load user-defined parameters
 fname_grid = [
+    'entro_all',
     'entro',
     'mb',
-    'entro_neighbor',
-    'mb_neighbor',
+    'mf',
     ]
-loss_weights_grid = [
-    [0, 1E-1, 1E-1, 1, 0],
-    [1E-2, 1E-1, 1E-1, 1, 0],
-    [0, 1E-1, 0, 1, 0],
-    [1E-2, 1E-1, 0, 1, 0],
+loss_weights_grid = [ # 1E-1 for non-neighbors
+    [0, 1, 1, 1, 0],
+    [0, 1, 0, 1, 0],
+    [1E-1, 1, 0, 1, 0],
+    [0, 0, 0, 1, 0],
+    #[0, 1E-1, 0, 1, 0],
+    #[1E-1, 1E-1, 0, 1, 0],
+    #[0, 0, 0, 1, 0],
     ]
 param_updates = [
     {},
@@ -196,7 +195,7 @@ param_updates = [
 # {'yaml_mods': {'trans-pred': {'predict_z': False}}}
 
 fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
-iters = np.arange(8)
+iters = np.arange(14)
 args = []
 for arg_idx in range(len(fname_grid)):
     for i in iters:
