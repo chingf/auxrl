@@ -35,7 +35,7 @@ class CRAR(LearningAlgo):
         neural_network=NN, lr=1E-4, nn_yaml='basic', yaml_mods={},
         loss_weights=[1, 1, 1, 1, 1], # T, entropy, entropy, Q, VAE
         internal_dim=5, entropy_temp=5, mem_len=0, train_len=1, encoder_type=None,
-        pred_len=1, pred_gamma=0.
+        pred_len=1, pred_gamma=0., volume_weight=0.
         ):
         """ Initialize the environment. """
 
@@ -52,6 +52,7 @@ class CRAR(LearningAlgo):
         self._encoder_type = encoder_type
         self._pred_len = pred_len
         self._pred_gamma = pred_gamma
+        self._volume_weight = volume_weight
         self.update_counter = 0
         self.loss_T = [0]
         self.loss_Q = [0]
@@ -263,6 +264,14 @@ class CRAR(LearningAlgo):
             loss_VAE = torch.mean(self.crar.encoder.return_kls())
             self.loss_VAE[-1] += loss_VAE.item()
             all_losses = all_losses + self._loss_weights[4] * loss_VAE
+
+        # Enforce limited volume in abstract state space
+        if self._volume_weight > 0:
+            loss_vol = torch.pow(torch.norm(Es, p=float('inf'), dim=1), 2) - 1
+            loss_vol = torch.clip(loss_vol, min=0)
+            loss_vol = torch.mean(loss_vol)
+            all_losses = all_losses + self._volume_weight * loss_vol
+
         self.loss_total[-1] += all_losses.item()
         all_losses.backward()
         self.optimizer.step()
