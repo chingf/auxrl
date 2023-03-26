@@ -59,9 +59,8 @@ class MyEnv(Environment):
         if reset_goal:
             if self._prev_pos_goal != None:
                 prev_x, prev_y = self._prev_pos_goal
-                valid_pos = [
-                    v for v in valid_pos if abs(v[0] - prev_x) > 1 or abs(v[1] - prev_y) > 1
-                    ]
+                valid_pos = [v for v in valid_pos if\
+                    abs(v[0] - prev_x) > 2 or abs(v[1] - prev_y) > 2]
             self._pos_goal = valid_pos[np.random.choice(len(valid_pos))]
                 
     def reset(self, mode):
@@ -281,6 +280,7 @@ class MyEnv(Environment):
 
     def inputDimensions(self):
         if self._higher_dim_obs:
+            return [(1, self._size_maze, self._size_maze)]
             return [(1, self._size_maze-2, self._size_maze-2)]
             return [(1, self._size_maze*6, self._size_maze*6)]
         else:
@@ -310,7 +310,7 @@ class MyEnv(Environment):
 
         obs = copy.deepcopy(self._map)
         obs[pos_agent[0], pos_agent[1]] = 0.5
-        return obs[1:-1, 1:-1]
+        return obs#[1:-1, 1:-1]
 
         obs = copy.deepcopy(self._map)
         obs = obs/1.
