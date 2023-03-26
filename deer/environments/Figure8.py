@@ -306,7 +306,7 @@ class MyEnv(Environment):
                     for state_j in states_j[:state_j_idx]:
                         dist.append(np.linalg.norm(state_i-state_j))
                 dist_matrix[i, j] = dist_matrix[j, i] = np.nanmean(dist)
-        dist_matrix = dist_matrix/np.nanpercentile(dist_matrix.flatten(), 99)
+        dist_matrix = dist_matrix
         self._separability_matrix = dist_matrix
         plt.figure(); plt.imshow(dist_matrix); plt.colorbar()
         for boundary in [0, MyEnv.HEIGHT, MyEnv.HEIGHT*2, MyEnv.HEIGHT*3]:
