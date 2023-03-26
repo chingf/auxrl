@@ -26,10 +26,10 @@ device_num = sys.argv[5]
 if int(device_num) >= 0:
     my_env = os.environ
     my_env["CUDA_VISIBLE_DEVICES"] = device_num
-fname_prefix = 'frozentransfer_neighbors6x6'
+fname_prefix = 'frozentransfer_foragingM1'
 fname_suffix = ''
-epochs = 31 
-source_prefix = 'neighbors6x6'
+epochs = 61 
+source_prefix = 'foragingM1'
 source_suffix = ''
 source_epoch = 41
 policy_eps = 1.
@@ -206,15 +206,16 @@ def run_env(arg):
 fname_grid = [
     'entro',
     'mb',
+    'mb_only',
     'mf',
     ]
 network_files = [f'{source_prefix}_{f}' for f in fname_grid]
-#fname_grid.append('clean')
-#network_files.append(None)
+fname_grid.append('clean')
+network_files.append(None)
 loss_weights_grid = [[0., 0., 0., 1., 0.]] * len(fname_grid)
 fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
 param_updates = [{}]*len(fname_grid)
-iters = np.arange(18)
+iters = np.arange(33)
 args = []
 for arg_idx in range(len(fname_grid)):
     for i in iters:
