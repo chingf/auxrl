@@ -25,10 +25,10 @@ device_num = sys.argv[5]
 if int(device_num) >= 0:
     my_env = os.environ
     my_env["CUDA_VISIBLE_DEVICES"] = device_num
-fname_prefix = 'altTS1'
+fname_prefix = 'altTT1'
 fname_suffix = ''
-epochs = 31
-policy_eps = 0.6
+epochs = 61
+policy_eps = 0.8
 higher_dim_obs = True
 
 # Make directories
@@ -97,7 +97,7 @@ def run_env(arg):
         'encoder_type': encoder_type,
         'frame_skip': 2,
         'show_rewards': False,
-        'learning_rate': 1*1E-4, #1*1E-4,
+        'learning_rate': 1*1E-4,
         'learning_rate_decay': 1.0,
         'discount': 0.9,
         'epsilon_start': 1.0,
@@ -109,7 +109,8 @@ def run_env(arg):
         'freeze_interval': 1000,
         'deterministic': False,
         'loss_weights': loss_weights,
-        'yaml_mods': {}
+        'yaml_mods': {},
+        'volume_weight': 1E-3
         }
     parameters.update(param_update)
     with open(f'{engram_dir}params/{_fname}.yaml', 'w') as outfile:
@@ -126,7 +127,8 @@ def run_env(arg):
         nn_yaml=parameters['nn_yaml'], yaml_mods=parameters['yaml_mods'],
         double_Q=True, loss_weights=parameters['loss_weights'],
         encoder_type=parameters['encoder_type'], mem_len=parameters['mem_len'],
-        train_len=parameters['train_len']
+        train_len=parameters['train_len'],
+        volume_weight=parameters['volume_weight']
         )
     if parameters['figure8_give_rewards']:
         train_policy = EpsilonGreedyPolicy(
@@ -167,26 +169,20 @@ def run_env(arg):
     return _fname, loss_weights, result
 
 fname_grid = [
-#    'mb_0.5',
-    'mb',
     'mf',
-#    'entro_0.5',
-#    'entro_0.1',
-#    'mb_v2',
-#    'mb_v3',
+    'mb',
+    'entropy',
+    'entropy_smaller',
     ]
 loss_weights_grid = [
-#    [1E-3, 0.5E-3, 0.5E-3, 1, 0], # TODO: MB component is usually 1E-2
-    [1E-2, 1E-3, 1E-3, 1, 0],
     [0, 0, 0, 1, 0], 
-#    [0, 0.5E-3, 0.5E-3, 1, 0],
-#    [0, 0.1E-3, 0.1E-3, 1, 0],
-#   [1E-2, 0.5E-3, 0.5E-3, 1, 0],
-#   [1E-2, 0.1E-3, 0.1E-3, 1, 0],
+    [1E-2, 1E-3, 1E-3, 1, 0],
+    [0, 1E-2, 1E-2, 1, 0],
+    [0, 1E-3, 1E-3, 1, 0],
     ]
 param_updates = [{}]*len(fname_grid)
 fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
-iters = np.arange(16)
+iters = np.arange(48)
 args = []
 for arg_idx in range(len(fname_grid)):
     for i in iters:
