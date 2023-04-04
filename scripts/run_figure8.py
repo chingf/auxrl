@@ -21,8 +21,9 @@ job_idx = int(sys.argv[1])
 n_jobs = int(sys.argv[2])
 nn_yaml = sys.argv[3]
 internal_dim = int(sys.argv[4])
-device_num = sys.argv[5]
-if int(device_num) >= 0:
+n_gpus = (len(os.environ['CUDA_VISIBLE_DEVICES'])+1)/2
+if n_gpus > 1:
+    device_num = job_idx % n_gpus
     my_env = os.environ
     my_env["CUDA_VISIBLE_DEVICES"] = device_num
 fname_prefix = 'altTT1'

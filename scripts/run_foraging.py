@@ -21,21 +21,22 @@ job_idx = int(sys.argv[1])
 n_jobs = int(sys.argv[2])
 nn_yaml = sys.argv[3]
 internal_dim = int(sys.argv[4])
-device_num = sys.argv[5]
-if int(device_num) >= 0:
+n_gpus = (len(os.environ['CUDA_VISIBLE_DEVICES'])+1)/2
+if n_gpus > 1:
+    device_num = str(job_idx % n_gpus)
     my_env = os.environ
     my_env["CUDA_VISIBLE_DEVICES"] = device_num
-fname_prefix = 'continual_pt1'
+fname_prefix = 'continual6x6_pt1'
 fname_suffix = ''
 epochs = 61
 policy_eps = 1.
 higher_dim_obs = True
 foraging_give_rewards = True
-size_maze = 8 + 2
+size_maze = 6 + 2
 
 # Make directories
-engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
-#engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
+#engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
+engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
 exp_dir = f'{fname_prefix}_{nn_yaml}_dim{internal_dim}{fname_suffix}/'
 for d in ['pickles/', 'nnets/', 'figs/', 'params/']:
     os.makedirs(f'{engram_dir}{d}{exp_dir}', exist_ok=True)
