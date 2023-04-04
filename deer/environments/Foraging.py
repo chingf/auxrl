@@ -60,7 +60,7 @@ class MyEnv(Environment):
             if self._prev_pos_goal != None:
                 prev_x, prev_y = self._prev_pos_goal
                 valid_pos = [v for v in valid_pos if\
-                    abs(v[0] - prev_x) > 2 or abs(v[1] - prev_y) > 2]
+                    abs(v[0] - prev_x) > 3 or abs(v[1] - prev_y) > 3]
             self._pos_goal = valid_pos[np.random.choice(len(valid_pos))]
                 
     def reset(self, mode):
