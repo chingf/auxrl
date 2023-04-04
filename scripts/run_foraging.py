@@ -38,7 +38,7 @@ size_maze = 6 + 2
 #engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
 engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
 exp_dir = f'{fname_prefix}_{nn_yaml}_dim{internal_dim}{fname_suffix}/'
-for d in ['pickles/', 'nnets/', 'figs/']:
+for d in ['pickles/', 'nnets/', 'figs/', 'latents/']:
     os.makedirs(f'{engram_dir}{d}{exp_dir}', exist_ok=True)
 
 def gpu_parallel(job_idx):
@@ -124,7 +124,7 @@ def run_env(arg):
     rng = np.random.RandomState()
     env = Env(
         rng, reward=parameters['foraging_give_rewards'],
-        higher_dim_obs=parameters['higher_dim_obs'], plotfig=False,
+        higher_dim_obs=parameters['higher_dim_obs'],
         size_maze=parameters['size_maze']
         )
     os.makedirs(f'{engram_dir}nnets/{fname}', exist_ok=True)
@@ -173,24 +173,19 @@ fname_grid = [
     'entro',
     'mb',
     'mf',
-#    'sr',
     ]
-loss_weights_grid = [ # [1E-2, 1E-1, 1E-1, 1, 0] 
-#    [0, 1E-2, 0, 1, 0], #neighbor
-#    [1E-2, 1E-2, 0, 1, 0], #neighbor
+loss_weights_grid = [ # MB: [1E-2, 1E-1, 1E-1, 1, 0] Neigh: [1E-2, 1E-2, 0, 1, 0]
     [0, 1E-1, 1E-1, 1, 0],
     [1E-2, 1E-1, 1E-1, 1, 0],
     [0, 0, 0, 1, 0],
-#    [1E-2, 1E-1, 1E-1, 1, 0],
     ]
 param_updates = [
     {},
     {},
     {},
-#    {'pred_len': 10, 'pred_gamma': 0.93}
     ]
 # If you want latents to predict future latents
-# {'pred_len': 15, 'pred_gamma': 0.93},
+# {'pred_len': 10, 'pred_gamma': 0.93},
 # If you wanted latents to predict observations:
 # {'yaml_mods': {'trans-pred': {'predict_z': False}}}
 

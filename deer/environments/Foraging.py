@@ -30,7 +30,6 @@ class MyEnv(Environment):
         self._size_maze = kwargs.get("size_maze", 8)
         self._higher_dim_obs = kwargs.get("higher_dim_obs", False)
         self._reward = kwargs.get("reward", False)
-        self._plotfig = kwargs.get("plotfig", True)
         self._prev_pos_goal = kwargs.get("prev_pos_goal", None)
         self._dimensionality_tracking = []
         self._dimensionality_variance_ratio = None
@@ -109,7 +108,7 @@ class MyEnv(Environment):
         return reward
 
     def summarizePerformance(
-        self, test_data_set, learning_algo, fname, fig_dir_root='./'
+        self, test_data_set, learning_algo, fname, save_dir='./'
         ):
         """
         Plot of the low-dimensional representation of the environment
@@ -118,13 +117,17 @@ class MyEnv(Environment):
 
         if fname is None:
             fig_dir = './'
+            latents_dir = './'
         else:
-            fig_dir = f'{fig_dir_root}figs/{fname}/'
-            if not os.path.isdir(fig_dir):
-                os.makedirs(fig_dir)
+            fig_dir = f'{save_dir}figs/{fname}/'
+            latents_dir = f'{save_dir}latents/{fname}/'
+            os.makedirs(fig_dir, exist_ok=True)
+            os.makedirs(latents_dir, exist_ok=True)
 
         all_possib_inp = [] 
         labels = [] # which quadrant
+        maze_x = []
+        maze_y = []
         self.create_map(reset_goal=False)
         intern_dim = learning_algo._internal_dim
         for y_a in range(self._size_maze):
@@ -137,19 +140,23 @@ class MyEnv(Environment):
                     label = 0 if x_a < self._size_maze//2 else 2
                     label += (0 if y_a < self._size_maze//2 else 1)
                     labels.append(label)
+                    maze_x.append(x_a)
+                    maze_y.append(y_a)
         device = learning_algo.device
         with torch.no_grad():
             abs_states = learning_algo.crar.encoder(
                 torch.tensor(all_possib_inp).float().to(device)
                 )
         abs_states_np = abs_states.cpu().numpy()
-        if abs_states.ndim == 4: # data_format='channels_last' --> 'channels_first'
+        if abs_states.ndim == 4: # data_format='channels_last' -> 'channels_first'
             abs_states = np.transpose(abs_states_np, (0, 3, 1, 2))
         labels = np.array(labels)
        
         if not self.inTerminalState():
             self._mode_episode_count += 1
-        print("== Mean score per episode is {} over {} episodes ==".format(self._mode_score / (self._mode_episode_count+0.0001), self._mode_episode_count))
+        print("== Mean score per episode is {} over {} episodes ==".format(
+            self._mode_score / (self._mode_episode_count+0.0001
+            ), self._mode_episode_count))
         m = cm.ScalarMappable(cmap=cm.jet)
        
         if intern_dim == 2:
@@ -177,6 +184,12 @@ class MyEnv(Environment):
             ax.set_xlabel(r'$X_1$')
             ax.set_ylabel(r'$X_2$')
             ax.set_zlabel(r'$X_3$')
+
+        # Save latents
+        latents_data = {
+            'latents': abs_states_np, 'xs': maze_x, 'ys': maze_y}
+        with open(f'{latents_dir}latents.p') as f:
+            pickle.dump(latents_data, f)
                     
         # Plot the estimated transitions
         n = abs_states.shape[0]
@@ -233,11 +246,7 @@ class MyEnv(Environment):
             bbox_to_anchor=(0., 0.98), bbox_transform=ax.transAxes,
             borderpad=0.)        
         ax.add_artist(anchored_box)
-
-        if self._plotfig:
-            plt.savefig(f'{fig_dir}latents_{learning_algo.update_counter}.pdf')
-        else:
-            plt.savefig(f'{fig_dir}latents.pdf')
+        plt.savefig(f'{fig_dir}latents.pdf')
 
         # Plot continuous measure of dimensionality
         if (intern_dim > 3) and (abs_states_np.shape[0] > 2):

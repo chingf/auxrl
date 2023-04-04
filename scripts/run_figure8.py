@@ -36,7 +36,7 @@ higher_dim_obs = True
 #engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
 engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
 exp_dir = f'{fname_prefix}_{nn_yaml}_dim{internal_dim}{fname_suffix}/'
-for d in ['pickles/', 'nnets/', 'figs/']:
+for d in ['pickles/', 'nnets/', 'figs/', 'latents/']:
     os.makedirs(f'{engram_dir}{d}{exp_dir}', exist_ok=True)
 
 def gpu_parallel(job_idx):
@@ -120,7 +120,7 @@ def run_env(arg):
     env = Env(
         give_rewards=parameters['figure8_give_rewards'],
         higher_dim_obs=parameters['higher_dim_obs'],
-        show_rewards=parameters['show_rewards'], plotfig=False
+        show_rewards=parameters['show_rewards'],
         )
     learning_algo = CRAR(
         env, parameters['freeze_interval'], parameters['batch_size'], rng,

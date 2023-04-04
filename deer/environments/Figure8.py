@@ -214,9 +214,9 @@ class MyEnv(Environment):
         print("== Mean score per episode is {} over {} episodes ==".format(
             self._mode_score/(self._mode_episode_count+0.0001), self._mode_episode_count
             ))
-                
+        
+        # Get 3D projection of latents
         m = cm.ScalarMappable(cmap=cm.jet)
-       
         intern_dim = learning_algo._internal_dim
         if intern_dim == 2:
             x = np.array(latents)[:,0]
@@ -237,12 +237,20 @@ class MyEnv(Environment):
                 x = np.array(latents)[:,0]
                 y = np.array(latents)[:,1]
                 z = np.array(latents)[:,2]
+
+        # Save latents
+        latents_data = {
+            'latents': latents, 'reward_locs': reward_locs,
+            'color_labels': color_labels, 'xs': x_locations, 'ys': y_locations}
+        with open(f'{latents_dir}latents.p') as f:
+            pickle.dump(latents_data, f)
+
+        # Plot 3D latents
         fig = plt.figure()
         ax = fig.add_subplot(111,projection='3d')
         ax.set_xlabel(r'$X_1$')
         ax.set_ylabel(r'$X_2$')
         ax.set_zlabel(r'$X_3$')
-                    
         colors = ['orange',
             cm.get_cmap('Blues'), cm.get_cmap('Reds'), cm.get_cmap('Purples')]
         color_steps = np.linspace(0.25, 1., MyEnv.HEIGHT, endpoint=True)
