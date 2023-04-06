@@ -23,10 +23,10 @@ nn_yaml = sys.argv[3]
 internal_dim = int(sys.argv[4])
 n_gpus = (len(os.environ['CUDA_VISIBLE_DEVICES'])+1)/2
 if n_gpus > 1:
-    device_num = job_idx % n_gpus
+    device_num = str(job_idx % n_gpus)
     my_env = os.environ
     my_env["CUDA_VISIBLE_DEVICES"] = device_num
-fname_prefix = 'altTT1'
+fname_prefix = 'noisy_altT'
 fname_suffix = ''
 epochs = 61
 policy_eps = 0.8
@@ -92,7 +92,7 @@ def run_env(arg):
         'fname': fname,
         'steps_per_epoch': 2000,
         'epochs': epochs,
-        'steps_per_test': 1000,
+        'steps_per_test': 500,
         'mem_len': 2,
         'train_len': 10,
         'encoder_type': encoder_type,
@@ -172,18 +172,16 @@ def run_env(arg):
 fname_grid = [
     'mf',
     'mb',
-    'entropy',
-    'entropy_smaller',
+#    'entropy',
     ]
 loss_weights_grid = [
     [0, 0, 0, 1, 0], 
     [1E-2, 1E-3, 1E-3, 1, 0],
-    [0, 1E-2, 1E-2, 1, 0],
-    [0, 1E-3, 1E-3, 1, 0],
+#    [0, 1E-2, 1E-2, 1, 0],
     ]
 param_updates = [{}]*len(fname_grid)
 fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
-iters = np.arange(48)
+iters = np.arange(8)
 args = []
 for arg_idx in range(len(fname_grid)):
     for i in iters:
