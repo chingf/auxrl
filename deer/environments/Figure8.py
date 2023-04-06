@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import torch
+import pickle
 from deer.base_classes import Environment
 from sklearn.decomposition import PCA
 from scipy.stats import linregress
@@ -162,17 +163,19 @@ class MyEnv(Environment):
         return self.reward
 
     def summarizePerformance(
-        self, test_data_set, learning_algo, fname, fig_dir_root='./'
+        self, test_data_set, learning_algo, fname, save_dir='./'
         ):
         """ Plot of the low-dimensional representation of the environment built by the model
         """
 
         if fname is None:
             fig_dir = './'
+            latents_dir = './'
         else:
-            fig_dir = f'{fig_dir_root}figs/{fname}/'
-            if not os.path.isdir(fig_dir):
-                os.makedirs(fig_dir)
+            fig_dir = f'{save_dir}figs/{fname}/'
+            latents_dir = f'{save_dir}latents/{fname}/'
+            os.makedirs(fig_dir, exist_ok=True)
+            os.makedirs(latents_dir, exist_ok=True)
 
         # Only seen states
         observations = test_data_set.observations()[0]
@@ -182,8 +185,11 @@ class MyEnv(Environment):
         y_locations = []
         x_locations = []
         mem_len = learning_algo._mem_len
+        image_dims = (MyEnv.WIDTH+2, MyEnv.HEIGHT+2)
         for t in np.arange(observations.shape[0]):
-            agent_location = np.argwhere(observations[t-1]==10)[0,1:].tolist()
+            agent_location = list(np.unravel_index(
+                np.argmax(observations[t-1]), image_dims))
+            #agent_location = np.argwhere(observations[t-1]==10)[0,1:].tolist()
             agent_location[0] -= 1; agent_location[1] -= 1;
             if self._high_dim_obs:
                 agent_location = self._agent_loc_map[str(agent_location)]
@@ -191,7 +197,7 @@ class MyEnv(Environment):
             y_locations.append(agent_location[1])
             color_label = self._space_label[agent_location[0], agent_location[1]]
             color_labels.append(color_label)
-        hlen = 500
+        hlen = 250
         observations = observations[-hlen:]
         reward_locs = reward_locs[-hlen:]
         latents = latents[-hlen:]
@@ -242,7 +248,7 @@ class MyEnv(Environment):
         latents_data = {
             'latents': latents, 'reward_locs': reward_locs,
             'color_labels': color_labels, 'xs': x_locations, 'ys': y_locations}
-        with open(f'{latents_dir}latents.p') as f:
+        with open(f'{latents_dir}latents.p', 'wb') as f:
             pickle.dump(latents_data, f)
 
         # Plot 3D latents
@@ -400,6 +406,7 @@ class MyEnv(Environment):
 
     def observe(self):
         obs = self.get_observation(self.x, self.y, self._reward_location)
+        obs = obs + np.random.normal(0, 0.4, size=obs.shape) # TODO
         return [obs]
 
     def get_observation(self, x, y, reward_location):
