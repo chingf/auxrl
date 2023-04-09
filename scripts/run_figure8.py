@@ -21,15 +21,18 @@ job_idx = int(sys.argv[1])
 n_jobs = int(sys.argv[2])
 nn_yaml = sys.argv[3]
 internal_dim = int(sys.argv[4])
-n_gpus = (len(os.environ['CUDA_VISIBLE_DEVICES'])+1)/2
+try:
+    n_gpus = (len(os.environ['CUDA_VISIBLE_DEVICES'])+1)/2
+except:
+    n_gpus = 0
 if n_gpus > 1:
     device_num = str(job_idx % n_gpus)
     my_env = os.environ
     my_env["CUDA_VISIBLE_DEVICES"] = device_num
-fname_prefix = 'noisy_altT'
+fname_prefix = 'noisy_altT_eps0.5_volweight'
 fname_suffix = ''
-epochs = 61
-policy_eps = 0.8
+epochs = 41
+policy_eps = 0.5
 higher_dim_obs = True
 
 # Make directories
@@ -70,7 +73,7 @@ def cpu_parallel():
     results['epochs'] = []
     results['fname'] = []
     results['loss_weights'] = []
-    job_results = Parallel(n_jobs=40)(delayed(run_env)(arg) for arg in args)
+    job_results = Parallel(n_jobs=56)(delayed(run_env)(arg) for arg in args)
     for job_result in job_results:
         fname, loss_weights, result = job_result
         for key in result.keys():
@@ -111,7 +114,7 @@ def run_env(arg):
         'deterministic': False,
         'loss_weights': loss_weights,
         'yaml_mods': {},
-        'volume_weight': 1E-3
+        'volume_weight': 1E-4
         }
     parameters.update(param_update)
     with open(f'{engram_dir}params/{_fname}.yaml', 'w') as outfile:
@@ -152,7 +155,8 @@ def run_env(arg):
         evaluate_on='action',  periodicity=parameters['update_frequency'],
         show_episode_avg_V_value=True, show_avg_Bellman_residual=True))
     best_controller = bc.FindBestController(
-        validationID=Env.VALIDATION_MODE, testID=None, unique_fname=fname)
+        validationID=Env.VALIDATION_MODE, testID=None, unique_fname=fname,
+        savefrequency=5)
     agent.attach(best_controller)
     agent.attach(bc.InterleavedTestEpochController(
         id=Env.VALIDATION_MODE, epoch_length=parameters['steps_per_test'],
@@ -176,12 +180,12 @@ fname_grid = [
     ]
 loss_weights_grid = [
     [0, 0, 0, 1, 0], 
-    [1E-2, 1E-3, 1E-3, 1, 0],
+    [1E-1, 1E-2, 1E-2, 1, 0],
 #    [0, 1E-2, 1E-2, 1, 0],
     ]
 param_updates = [{}]*len(fname_grid)
 fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
-iters = np.arange(8)
+iters = np.arange(32)
 args = []
 for arg_idx in range(len(fname_grid)):
     for i in iters:
