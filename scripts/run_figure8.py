@@ -21,7 +21,10 @@ job_idx = int(sys.argv[1])
 n_jobs = int(sys.argv[2])
 nn_yaml = sys.argv[3]
 internal_dim = int(sys.argv[4])
-n_gpus = (len(os.environ['CUDA_VISIBLE_DEVICES'])+1)/2
+try:
+    n_gpus = (len(os.environ['CUDA_VISIBLE_DEVICES'])+1)/2
+except:
+    n_gpus = 0
 if n_gpus > 1:
     device_num = str(job_idx % n_gpus)
     my_env = os.environ
@@ -70,7 +73,7 @@ def cpu_parallel():
     results['epochs'] = []
     results['fname'] = []
     results['loss_weights'] = []
-    job_results = Parallel(n_jobs=40)(delayed(run_env)(arg) for arg in args)
+    job_results = Parallel(n_jobs=56)(delayed(run_env)(arg) for arg in args)
     for job_result in job_results:
         fname, loss_weights, result = job_result
         for key in result.keys():
