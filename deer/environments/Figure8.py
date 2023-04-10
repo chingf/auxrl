@@ -34,7 +34,7 @@ class MyEnv(Environment):
         self._width = MyEnv.WIDTH # Must be odd!
         self._high_dim_obs = kwargs.get('high_dim_obs', False)
         self._show_rewards = kwargs.get('show_rewards', True)
-        self._obs_noise = kwargs.get('obs_noise', 0.)
+        self._obs_noise = kwargs.get('obs_noise', 0.4)
         self.x = MyEnv.CENTRAL_STEM
         self.y = 0
         self._reward_location = MyEnv.LEFT_REWARD
@@ -407,8 +407,6 @@ class MyEnv(Environment):
 
     def observe(self):
         obs = self.get_observation(self.x, self.y, self._reward_location)
-        if self._obs_noise > 0.:
-            obs = obs + np.random.normal(0, self._obs_noise, size=obs.shape)
         return [obs]
 
     def get_observation(self, x, y, reward_location):
@@ -428,11 +426,16 @@ class MyEnv(Environment):
                 obs[right_reward[0], right_reward[1]] = 1
             else:
                 obs[reset_reward[0], reset_reward[1]] = 1
-        obs[x, y] = 10
+        obs[x, y] = 5
         if self._high_dim_obs:
             obs = self.get_higher_dim_obs((x,y), obs)
         pad_obs = np.ones((self._width+2, self._height+2))*2
         pad_obs[1:-1, 1:-1] = obs
+        if self._obs_noise > 0.:
+            pad_obs = pad_obs + np.random.normal(0, self._obs_noise, size=pad_obs.shape)
+        max_val = pad_obs.max()
+        if pad_obs[x+1,y+1] < max_val:
+            pad_obs[x+1,y+1] = max_val + 0.25
         return pad_obs
 
     def get_higher_dim_obs(self, agent_loc, obs):
