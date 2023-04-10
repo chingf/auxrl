@@ -22,14 +22,17 @@ job_idx = int(sys.argv[1])
 n_jobs = int(sys.argv[2])
 nn_yaml = sys.argv[3]
 internal_dim = int(sys.argv[4])
-n_gpus = (len(os.environ['CUDA_VISIBLE_DEVICES'])+1)/2
+try:
+    n_gpus = (len(os.environ['CUDA_VISIBLE_DEVICES'])+1)/2
+except:
+    n_gpus = 0
 if n_gpus > 1:
     device_num = job_idx % n_gpus
     my_env = os.environ
-    my_env["CUDA_VISIBLE_DEVICES"] = device_num
+    my_env["CUDA_VISIBLE_DEVICES"] = str(device_num)
 fname_prefix = 'frozentransfer_foraging_w_SR'
 fname_suffix = ''
-epochs = 61 
+epochs = 51 
 source_prefix = 'foraging_w_SR'
 source_suffix = ''
 source_epoch = 51
@@ -40,8 +43,8 @@ higher_dim_obs = True
 size_maze = 6 + 2 #8 + 2
 
 # Make directories
-engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
-#engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
+#engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
+engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
 exp_dir = f'{fname_prefix}_{nn_yaml}_dim{internal_dim}{fname_suffix}/'
 source_dir = f'{source_prefix}_{nn_yaml}_dim{internal_dim}{source_suffix}/'
 for d in ['pickles/', 'nnets/', 'scores/', 'figs/', 'latents/']:
