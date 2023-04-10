@@ -22,26 +22,29 @@ job_idx = int(sys.argv[1])
 n_jobs = int(sys.argv[2])
 nn_yaml = sys.argv[3]
 internal_dim = int(sys.argv[4])
-n_gpus = (len(os.environ['CUDA_VISIBLE_DEVICES'])+1)/2
+try:
+    n_gpus = (len(os.environ['CUDA_VISIBLE_DEVICES'])+1)/2
+except:
+    n_gpus = 0
 if n_gpus > 1:
     device_num = job_idx % n_gpus
     my_env = os.environ
     my_env["CUDA_VISIBLE_DEVICES"] = device_num
-fname_prefix = 'continual6x6_pt2'
+fname_prefix = 'continual_foraging_w_SR'
 fname_suffix = ''
-epochs = 61 
-source_prefix = 'continual6x6_pt1'
+epochs = 51 
+source_prefix = 'foraging_w_SR'
 source_suffix = ''
-source_epoch = 61
+source_epoch = 51
 policy_eps = 1.
-encoder_only = False #True
-freeze_encoder = False #True
+encoder_only = False
+freeze_encoder = False
 higher_dim_obs = True
 size_maze = 6 + 2 #8 + 2
 
 # Make directories
-#engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
-engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
+engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
+#engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
 exp_dir = f'{fname_prefix}_{nn_yaml}_dim{internal_dim}{fname_suffix}/'
 source_dir = f'{source_prefix}_{nn_yaml}_dim{internal_dim}{source_suffix}/'
 for d in ['pickles/', 'nnets/', 'scores/', 'figs/', 'latents/']:
@@ -208,19 +211,25 @@ fname_grid = [
     'entro',
     'mb',
     'mf',
+    'sr'
     ]
 network_files = [f'{source_prefix}_{f}' for f in fname_grid]
 #fname_grid.append('clean')
 #network_files.append(None)
-#loss_weights_grid = [[0., 0., 0., 1., 0.]] * len(fname_grid)
-loss_weights_grid = [ 
+loss_weights_grid = [ # MB: [1E-2, 1E-1, 1E-1, 1, 0] Neigh: [1E-2, 1E-2, 0, 1, 0]
     [0, 1E-1, 1E-1, 1, 0],
     [1E-2, 1E-1, 1E-1, 1, 0],
     [0, 0, 0, 1, 0],
+    [1E-2, 1E-1, 1E-1, 1, 0],
+    ]
+param_updates = [
+    {},
+    {},
+    {},
+    {'pred_len': 10, 'pred_gamma': 0.93},
     ]
 fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
-param_updates = [{}]*len(fname_grid)
-iters = np.arange(18)
+iters = np.arange(28)
 args = []
 for arg_idx in range(len(fname_grid)):
     for i in iters:
