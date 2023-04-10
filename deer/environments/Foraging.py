@@ -59,7 +59,7 @@ class MyEnv(Environment):
             if self._prev_pos_goal != None:
                 prev_x, prev_y = self._prev_pos_goal
                 valid_pos = [v for v in valid_pos if\
-                    abs(v[0] - prev_x) > 3 or abs(v[1] - prev_y) > 3]
+                    abs(v[0] - prev_x) > 2 or abs(v[1] - prev_y) > 2]
             self._pos_goal = valid_pos[np.random.choice(len(valid_pos))]
                 
     def reset(self, mode):
@@ -117,12 +117,9 @@ class MyEnv(Environment):
 
         if fname is None:
             fig_dir = './'
-            latents_dir = './'
         else:
             fig_dir = f'{save_dir}figs/{fname}/'
-            latents_dir = f'{save_dir}latents/{fname}/'
             os.makedirs(fig_dir, exist_ok=True)
-            os.makedirs(latents_dir, exist_ok=True)
 
         all_possib_inp = [] 
         labels = [] # which quadrant
@@ -185,12 +182,6 @@ class MyEnv(Environment):
             ax.set_ylabel(r'$X_2$')
             ax.set_zlabel(r'$X_3$')
 
-        # Save latents
-        latents_data = {
-            'latents': abs_states_np, 'xs': maze_x, 'ys': maze_y}
-        with open(f'{latents_dir}latents.p') as f:
-            pickle.dump(latents_data, f)
-                    
         # Plot the estimated transitions
         n = abs_states.shape[0]
         n_actions = 4
