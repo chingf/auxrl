@@ -202,7 +202,7 @@ param_updates = [
 # {'yaml_mods': {'trans-pred': {'predict_z': False}}}
 
 fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
-iters = np.arange(16)
+iters = np.arange(8)
 args = []
 for arg_idx in range(len(fname_grid)):
     for i in iters:

@@ -29,10 +29,10 @@ if n_gpus > 1:
     device_num = str(job_idx % n_gpus)
     my_env = os.environ
     my_env["CUDA_VISIBLE_DEVICES"] = device_num
-fname_prefix = 'noisy_altT_eps0.5_volweight'
+fname_prefix = 'vnoisy_altT_eps0.75'
 fname_suffix = ''
 epochs = 41
-policy_eps = 0.5
+policy_eps = 0.75
 higher_dim_obs = True
 
 # Make directories
@@ -114,7 +114,7 @@ def run_env(arg):
         'deterministic': False,
         'loss_weights': loss_weights,
         'yaml_mods': {},
-        'volume_weight': 1E-4
+        'volume_weight': 1E-3
         }
     parameters.update(param_update)
     with open(f'{engram_dir}params/{_fname}.yaml', 'w') as outfile:
@@ -124,6 +124,7 @@ def run_env(arg):
         give_rewards=parameters['figure8_give_rewards'],
         higher_dim_obs=parameters['higher_dim_obs'],
         show_rewards=parameters['show_rewards'],
+        obs_noise=1.
         )
     learning_algo = CRAR(
         env, parameters['freeze_interval'], parameters['batch_size'], rng,
@@ -174,18 +175,22 @@ def run_env(arg):
     return _fname, loss_weights, result
 
 fname_grid = [
-    'mf',
-    'mb',
+#    'mf',
+#    'mb',
 #    'entropy',
+    'diffusive'
     ]
 loss_weights_grid = [
-    [0, 0, 0, 1, 0], 
-    [1E-1, 1E-2, 1E-2, 1, 0],
+#    [0, 0, 0, 1, 0], 
+#    [1E-1, 1E-2, 1E-2, 1, 0],
 #    [0, 1E-2, 1E-2, 1, 0],
+    [1E-1, 1E-2, 1E-2, 1, 0],
     ]
-param_updates = [{}]*len(fname_grid)
+param_updates = [
+    {'pred_len': 10, 'pred_gamma': 0.93}
+    ]
 fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
-iters = np.arange(32)
+iters = np.arange(16)
 args = []
 for arg_idx in range(len(fname_grid)):
     for i in iters:
@@ -194,6 +199,8 @@ for arg_idx in range(len(fname_grid)):
         param_update = param_updates[arg_idx]
         args.append([fname, loss_weights, param_update, i])
 split_args = np.array_split(args, n_jobs)
+
+run_env(args[0])
 
 import time
 start = time.time()

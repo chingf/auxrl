@@ -5,7 +5,8 @@ trap "kill 0" EXIT
 
 for JOB_IDX in {0..15}
 do
-    python run_figure8.py $JOB_IDX 16 dm 10 &
+    python run_foraging.py $JOB_IDX 16 dm 9 &
+    #python run_figure8.py $JOB_IDX 16 dm 28 &
 done
 
 wait
