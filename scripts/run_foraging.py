@@ -29,17 +29,17 @@ if n_gpus > 1:
     device_num = str(job_idx % n_gpus)
     my_env = os.environ
     my_env["CUDA_VISIBLE_DEVICES"] = device_num
-fname_prefix = 'test_sweep'
+fname_prefix = 'test2' #'ccn_Tsweep'
 fname_suffix = ''
-epochs = 51
+epochs = 41
 policy_eps = 1.
 higher_dim_obs = True
 foraging_give_rewards = True
 size_maze = 6 + 2
 
 # Make directories
-engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
-#engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
+#engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
+engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
 exp_dir = f'{fname_prefix}_{nn_yaml}_dim{internal_dim}{fname_suffix}/'
 for d in ['pickles/', 'nnets/', 'figs/', 'latents/']:
     os.makedirs(f'{engram_dir}{d}{exp_dir}', exist_ok=True)
@@ -173,19 +173,28 @@ def run_env(arg):
 
 # load user-defined parameters
 fname_grid = [
-    'mf',
-    '1',
+#    'mf',
+#    '1',
+#    '2',
+#    '4',
+#    '8',
     '10',
     ]
 loss_weights_grid = [ # MB: [1E-2, 1E-1, 1E-1, 1, 0] Neigh: [1E-2, 1E-2, 0, 1, 0]
-    [0, 0, 0, 1, 0],
-    [1E-2, 1E-1, 1E-1, 1, 0],
-    [1E-2, 1E-1, 1E-1, 1, 0],
+#    [0, 0, 0, 1, 0],
+#    [1E-1, 1E-1, 1E-1, 1, 0],
+#    [1E-1, 1E-1, 1E-1, 1, 0],
+#    [1E-1, 1E-1, 1E-1, 1, 0],
+#    [1E-1, 1E-1, 1E-1, 1, 0],
+    [1E-1, 1E-1, 1E-1, 1, 0],
     ]
 param_updates = [
-    {},
-    {},
-    {'pred_len': 10, 'pred_gamma': 0.93}
+#    {},
+#    {},
+#    {'pred_len': 2, 'pred_gamma': 0.6},
+#    {'pred_len': 4, 'pred_gamma': 0.76},
+#    {'pred_len': 8, 'pred_gamma': 0.87},
+    {'pred_len': 10, 'pred_gamma': 0.9},
     ]
 # If you want latents to predict future latents
 # {'pred_len': 10, 'pred_gamma': 0.93},
@@ -193,7 +202,7 @@ param_updates = [
 # {'yaml_mods': {'trans-pred': {'predict_z': False}}}
 
 fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
-iters = np.arange(18)
+iters = np.arange(16)
 args = []
 for arg_idx in range(len(fname_grid)):
     for i in iters:

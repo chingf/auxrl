@@ -212,11 +212,11 @@ class CRAR(LearningAlgo):
                 s.reshape((self._batch_size, -1))
             T_target = T_target + (sr_gamma**t) * next_step_pred
             weight += (sr_gamma**t)
-        T_target = T_target*(1/weight)
+        T_target = T_target
         loss_T = torch.nn.functional.mse_loss(TEs, T_target, reduction='none')
         terminals_mask = torch.tensor(1-terminals_val).float().to(self.device)
         loss_T = loss_T * terminals_mask[:, None]
-        loss_T = torch.mean(loss_T)
+        loss_T = torch.mean(loss_T)*(1/weight)
         self.loss_T[-1] += loss_T.item()
 
         # Increase entropy of randomly sampled states

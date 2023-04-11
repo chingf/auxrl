@@ -30,12 +30,12 @@ if n_gpus > 1:
     device_num = job_idx % n_gpus
     my_env = os.environ
     my_env["CUDA_VISIBLE_DEVICES"] = str(device_num)
-fname_prefix = 'frozentransfer_test_sweep'
+fname_prefix = 'frozentransfer_test_sweep10x' #'frozentransfer_ccn_Tsweep' # TODO
 fname_suffix = ''
-epochs = 51 
-source_prefix = 'test_sweep'
+epochs = 41 
+source_prefix = 'test_sweep10x'
 source_suffix = ''
-source_epoch = 51
+source_epoch = 51 #41 #TODO
 policy_eps = 1.
 encoder_only = True
 freeze_encoder = True
@@ -43,8 +43,8 @@ higher_dim_obs = True
 size_maze = 6 + 2 #8 + 2
 
 # Make directories
-engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
-#engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
+#engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
+engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
 exp_dir = f'{fname_prefix}_{nn_yaml}_dim{internal_dim}{fname_suffix}/'
 source_dir = f'{source_prefix}_{nn_yaml}_dim{internal_dim}{source_suffix}/'
 for d in ['pickles/', 'nnets/', 'scores/', 'figs/', 'latents/']:
@@ -207,10 +207,14 @@ def run_env(arg):
     return _fname, loss_weights, result
 
 # load user-defined parameters
-fname_grid = [
-    'mf',
-    '1',
-    '10',
+fname_grid = [ #TODO
+    '10_v2', '1_v2'
+#    'mf',
+#    '1',
+#    '2',
+#    '4',
+#    '8',
+#    '10',
     ]
 network_files = [f'{source_prefix}_{f}' for f in fname_grid]
 #fname_grid.append('clean')
@@ -218,7 +222,7 @@ network_files = [f'{source_prefix}_{f}' for f in fname_grid]
 loss_weights_grid = [[0., 0., 0., 1., 0.]] * len(fname_grid)
 fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
 param_updates = [{}]*len(fname_grid)
-iters = np.arange(18)
+iters = np.arange(8) #36 #TODO
 args = []
 for arg_idx in range(len(fname_grid)):
     for i in iters:
