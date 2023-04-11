@@ -201,6 +201,7 @@ class CRAR(LearningAlgo):
         T_target = Esp if predict_z else \
             next_states_val.reshape((self._batch_size, -1))
         sr_gamma = self._pred_gamma
+        weight = 1.
         for t in np.arange(1, self._pred_len):
             s = T_next_states_val[:,t:t+1].squeeze(1)
             if predict_z and self._mem_len==0:
@@ -210,6 +211,8 @@ class CRAR(LearningAlgo):
             else:
                 s.reshape((self._batch_size, -1))
             T_target = T_target + (sr_gamma**t) * next_step_pred
+            weight += (sr_gamma**t)
+        T_target = T_target*(1/weight)
         loss_T = torch.nn.functional.mse_loss(TEs, T_target, reduction='none')
         terminals_mask = torch.tensor(1-terminals_val).float().to(self.device)
         loss_T = loss_T * terminals_mask[:, None]

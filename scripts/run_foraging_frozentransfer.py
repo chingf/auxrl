@@ -30,10 +30,10 @@ if n_gpus > 1:
     device_num = job_idx % n_gpus
     my_env = os.environ
     my_env["CUDA_VISIBLE_DEVICES"] = str(device_num)
-fname_prefix = 'frozentransfer_foraging_w_SR'
+fname_prefix = 'frozentransfer_test_sweep'
 fname_suffix = ''
 epochs = 51 
-source_prefix = 'foraging_w_SR'
+source_prefix = 'test_sweep'
 source_suffix = ''
 source_epoch = 51
 policy_eps = 1.
@@ -43,8 +43,8 @@ higher_dim_obs = True
 size_maze = 6 + 2 #8 + 2
 
 # Make directories
-#engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
-engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
+engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
+#engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
 exp_dir = f'{fname_prefix}_{nn_yaml}_dim{internal_dim}{fname_suffix}/'
 source_dir = f'{source_prefix}_{nn_yaml}_dim{internal_dim}{source_suffix}/'
 for d in ['pickles/', 'nnets/', 'scores/', 'figs/', 'latents/']:
@@ -208,10 +208,9 @@ def run_env(arg):
 
 # load user-defined parameters
 fname_grid = [
-    'entro',
-    'mb',
     'mf',
-    'sr'
+    '1',
+    '10',
     ]
 network_files = [f'{source_prefix}_{f}' for f in fname_grid]
 #fname_grid.append('clean')
@@ -219,7 +218,7 @@ network_files = [f'{source_prefix}_{f}' for f in fname_grid]
 loss_weights_grid = [[0., 0., 0., 1., 0.]] * len(fname_grid)
 fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
 param_updates = [{}]*len(fname_grid)
-iters = np.arange(28)
+iters = np.arange(18)
 args = []
 for arg_idx in range(len(fname_grid)):
     for i in iters:

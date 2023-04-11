@@ -29,7 +29,7 @@ if n_gpus > 1:
     device_num = str(job_idx % n_gpus)
     my_env = os.environ
     my_env["CUDA_VISIBLE_DEVICES"] = device_num
-fname_prefix = 'foraging_w_SR'
+fname_prefix = 'test_sweep'
 fname_suffix = ''
 epochs = 51
 policy_eps = 1.
@@ -173,22 +173,19 @@ def run_env(arg):
 
 # load user-defined parameters
 fname_grid = [
-    'entro',
-    'mb',
     'mf',
-    'sr'
+    '1',
+    '10',
     ]
 loss_weights_grid = [ # MB: [1E-2, 1E-1, 1E-1, 1, 0] Neigh: [1E-2, 1E-2, 0, 1, 0]
-    [0, 1E-1, 1E-1, 1, 0],
-    [1E-2, 1E-1, 1E-1, 1, 0],
     [0, 0, 0, 1, 0],
+    [1E-2, 1E-1, 1E-1, 1, 0],
     [1E-2, 1E-1, 1E-1, 1, 0],
     ]
 param_updates = [
     {},
     {},
-    {},
-    {'pred_len': 10, 'pred_gamma': 0.93},
+    {'pred_len': 10, 'pred_gamma': 0.93}
     ]
 # If you want latents to predict future latents
 # {'pred_len': 10, 'pred_gamma': 0.93},
@@ -196,7 +193,7 @@ param_updates = [
 # {'yaml_mods': {'trans-pred': {'predict_z': False}}}
 
 fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
-iters = np.arange(28)
+iters = np.arange(18)
 args = []
 for arg_idx in range(len(fname_grid)):
     for i in iters:
