@@ -29,9 +29,9 @@ if n_gpus > 1:
     device_num = str(job_idx % n_gpus)
     my_env = os.environ
     my_env["CUDA_VISIBLE_DEVICES"] = device_num
-fname_prefix = 'vnoisy_altT_eps0.75'
+fname_prefix = 'ccn_fig8_eps0.75'
 fname_suffix = ''
-epochs = 41
+epochs = 61
 policy_eps = 0.75
 higher_dim_obs = True
 
@@ -175,22 +175,16 @@ def run_env(arg):
     return _fname, loss_weights, result
 
 fname_grid = [
-#    'mf',
-#    'mb',
-#    'entropy',
-    'diffusive'
+    'mf',
+    '1',
     ]
 loss_weights_grid = [
-#    [0, 0, 0, 1, 0], 
-#    [1E-1, 1E-2, 1E-2, 1, 0],
-#    [0, 1E-2, 1E-2, 1, 0],
+    [0, 0, 0, 1, 0], 
     [1E-1, 1E-2, 1E-2, 1, 0],
     ]
-param_updates = [
-    {'pred_len': 10, 'pred_gamma': 0.93}
-    ]
+param_updates = [{}, {}]
 fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
-iters = np.arange(16)
+iters = np.arange(32)
 args = []
 for arg_idx in range(len(fname_grid)):
     for i in iters:
