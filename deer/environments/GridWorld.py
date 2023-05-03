@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-import matplotlib
+import matplotlib.pyplot as plt
 import os
 import copy
 import dm_env
@@ -25,7 +25,7 @@ class ObservationType(enum.IntEnum):
     GRID = enum.auto()
     AGENT_GOAL_POS = enum.auto()
 
-class GridWorld(dm_env.Environment):
+class Env(dm_env.Environment):
     VALIDATION_MODE = 0
 
     def __init__(
@@ -59,26 +59,25 @@ class GridWorld(dm_env.Environment):
             raise ValueError('observation_type is the wrong type.')
         if type(layout) == int: 
             layout = np.zeros((layout+2, layout+2))
-            layout[0,:] = layout[:,0] = layout[-1,:] = layout[:,-1] = 1
+            layout[0,:] = layout[:,0] = layout[-1,:] = layout[:,-1] = -1
             self._layout = layout
         else:
             self._layout = np.array(layout)
-
+        self._layout_dims = self._layout.shape
         if start_state is None:
             start_state = self._sample_start()
         self._start_state = start_state
         self._state = self._start_state
-        if goal_state is None:
-            goal_state = self._sample_goal()
-        self.goal_state = goal_state
         self._number_of_states = np.prod(np.shape(self._layout))
         self._discount = discount
         self._penalty_for_walls = penalty_for_walls
         self._reward_goal = reward_goal
         self._observation_type = observation_type
-        self._layout_dims = self._layout.shape
         self._max_episode_length = max_episode_length
         self._num_episode_steps = 0
+        if goal_state is None:
+            goal_state = self._sample_goal()
+        self.goal_state = goal_state
 
     def _sample_start(self):
         """Randomly sample starting state."""
@@ -87,6 +86,7 @@ class GridWorld(dm_env.Environment):
         while n < max_tries:
             start_state = tuple(np.random.randint(d) for d in self._layout_dims)
             if self._layout[start_state] == 0:
+                print('Got start')
                 return start_state
             n += 1
         raise ValueError('Failed to sample a start state.')
@@ -97,8 +97,8 @@ class GridWorld(dm_env.Environment):
         max_tries = 1e5
         while n < max_tries:
             goal_state = tuple(np.random.randint(d) for d in self._layout_dims)
-        if goal_state != self._state and self._layout[goal_state] == 0:
-            return goal_state
+            if goal_state != self._state and self._layout[goal_state] == 0:
+                return goal_state
         n += 1
         raise ValueError('Failed to sample a goal state.')
 
@@ -123,7 +123,7 @@ class GridWorld(dm_env.Environment):
         return self._state
 
     def set_state(self, x, y):
-        self._state = (y, x)
+        self._state = (x, y)
 
     @goal_state.setter
     def goal_state(self, new_goal):
@@ -168,7 +168,7 @@ class GridWorld(dm_env.Environment):
         elif self._observation_type is ObservationType.AGENT_GOAL_POS:
             return np.array(self._state + self._goal_state, dtype=np.float32)
         elif self._observation_type is ObservationType.STATE_INDEX:
-            y, x = self._state
+            x, y = self._state
             return y * self._layout.shape[1] + x
 
     def reset(self, reset_start=True):
@@ -181,29 +181,29 @@ class GridWorld(dm_env.Environment):
             observation=self.get_obs())
 
     def step(self, action):
-        y, x = self._state
-        if action == 0:  # up
-            new_state = (y - 1, x)
+        x, y = self._state
+        if action == 0:  # left
+            new_state = (x-1, y)
         elif action == 1:  # right
-            new_state = (y, x + 1)
-        elif action == 2:  # down
-            new_state = (y + 1, x)
-        elif action == 3:  # left
-            new_state = (y, x - 1)
+            new_state = (x+1, y)
+        elif action == 2:  # up
+            new_state = (x, y-1)
+        elif action == 3:  # down
+            new_state = (x, y+1)
         else:
             raise ValueError('Invalid action')
     
         new_y, new_x = new_state
         step_type = dm_env.StepType.MID
-        if self._layout[new_y, new_x] == -1:  # wall
+        if self._layout[new_x, new_y] == -1:  # wall
             reward = self._penalty_for_walls
             discount = self._discount
-            new_state = (y, x)
-        elif self._layout[new_y, new_x] == 0:  # empty cell
+            new_state = (x, y)
+        elif self._layout[new_x, new_y] == 0:  # empty cell
             reward = 0.
             discount = self._discount
         else:  # a goal
-            reward = self._layout[new_y, new_x]
+            reward = self._layout[new_x, new_y]
             discount = 0.
             new_state = self._start_state
             step_type = dm_env.StepType.LAST
@@ -230,7 +230,7 @@ class GridWorld(dm_env.Environment):
         plt.text(
             self._goal_state[1], self._goal_state[0], r'$\mathbf{G}$',
             fontsize=16, ha='center', va='center')
-        h, w = self._layout.shape
+        w, h = self._layout.shape
         for y in range(h - 1):
             plt.plot([-0.5, w - 0.5], [y + 0.5, y + 0.5], '-k', lw=2)
         for x in range(w - 1):
@@ -238,10 +238,10 @@ class GridWorld(dm_env.Environment):
 
     def plot_state(self, return_rgb=False):
         self.plot_grid(add_start=False)
-        # Add the agent location
+        # Add the agent location as a smiley face
         plt.text(
-            self._state[1], self._state[0], u'😃',, fontname='symbola',
-            fontsize=18, ha='center', va='center')
+            self._state[1], self._state[0], '\U0001F603',
+            fontname='symbola', fontsize=18, ha='center', va='center')
         if return_rgb:
             fig = plt.gcf()
             plt.axis('tight')
@@ -255,15 +255,14 @@ class GridWorld(dm_env.Environment):
 
     def plot_policy(self, policy):
         action_names = [
-            r'$\uparrow$', r'$\rightarrow$', r'$\downarrow$', r'$\leftarrow$'
-        ]
+             r'$\leftarrow$', r'$\rightarrow$', r'$\uparrow$', r'$\downarrow$']
         self.plot_grid()
         plt.title('Policy Visualization')
-        h, w = self._layout.shape
+        w, h = self._layout.shape
         for y in range(h):
             for x in range(w):
-                if (y, x) != self._goal_state:
-                    action_name = action_names[policy[y, x]]
+                if (x, y) != self._goal_state:
+                    action_name = action_names[policy[x, y]]
                     plt.text(x, y, action_name, ha='center', va='center')
 
     def plot_greedy_policy(self, q):
