@@ -6,6 +6,9 @@ import copy
 import dm_env
 import enum
 
+from acme import specs
+from acme import wrappers
+from acme.utils import tree_utils
 
 class ObservationType(enum.IntEnum):
     """
@@ -18,6 +21,7 @@ class ObservationType(enum.IntEnum):
       (1 if goal, 0 otherwise)
     * AGENT_GOAL_POS: float32 tuple with
       (agent_y, agent_x, goal_y, goal_x)
+
     """
 
     STATE_INDEX = enum.auto()
@@ -32,7 +36,7 @@ class Env(dm_env.Environment):
         self, layout, start_state=None, goal_state=None,
         observation_type=ObservationType.GRID, discount=1.,
         penalty_for_walls=0., reward_goal=1.,
-        max_episode_length=None, prev_reward_goal=None):
+        max_episode_length=300, prev_reward_goal=None):
 
         """Build a grid environment.
 
@@ -86,7 +90,6 @@ class Env(dm_env.Environment):
         while n < max_tries:
             start_state = tuple(np.random.randint(d) for d in self._layout_dims)
             if self._layout[start_state] == 0:
-                print('Got start')
                 return start_state
             n += 1
         raise ValueError('Failed to sample a start state.')
@@ -140,8 +143,8 @@ class Env(dm_env.Environment):
                 name='observation_agent_onehot')
         elif self._observation_type is ObservationType.GRID:
             return specs.Array(
-                shape=self._layout_dims + (3,), dtype=np.float32,
-                name='observation_grid')
+                shape=(3,) + self._layout_dims, dtype=np.float32,
+                name='observation_grid') # (C, H, W)
         elif self._observation_type is ObservationType.AGENT_GOAL_POS:
             return specs.Array(
                 shape=(4,), dtype=np.float32,
@@ -160,10 +163,10 @@ class Env(dm_env.Environment):
             obs[self._state] = 1 # Place agent
             return obs
         elif self._observation_type is ObservationType.GRID:
-            obs = np.zeros(self._layout.shape + (3,), dtype=np.float32)
-            obs[..., 0] = self._layout < 0
-            obs[self._state[0], self._state[1], 1] = 1
-            obs[self._goal_state[0], self._goal_state[1], 2] = 1
+            obs = np.zeros((3,) + self._layout.shape, dtype=np.float32)
+            obs[0, ...] = self._layout < 0
+            obs[1, self._state[0], self._state[1]] = 1
+            obs[2, self._goal_state[0], self._goal_state[1]] = 1
             return obs
         elif self._observation_type is ObservationType.AGENT_GOAL_POS:
             return np.array(self._state + self._goal_state, dtype=np.float32)

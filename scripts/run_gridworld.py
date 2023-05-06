@@ -5,16 +5,18 @@ import yaml
 from joblib import Parallel, delayed
 import numpy as np
 import matplotlib.pyplot as plt
-from joblib import hash, dump, load
 import os
+import time
+import shortuuid
+import torch
 
-from deer.default_parser import process_args
-from deer.agent import NeuralAgent
-from deer.learning_algos.CRAR_torch import CRAR
-import deer.controllers as bc
+from acme import specs
+from acme import wrappers
+
+from deer.Agent import Agent
+from deer.networks.Network import Network
 from deer.environments.GridWorld import Env as Env
-
-from deer.policies import EpsilonGreedyPolicy
+from deer.utils import run_train_episode, run_eval_episode
 
 # Experiment Parameters
 job_idx = int(sys.argv[1])
@@ -29,36 +31,33 @@ if n_gpus > 1:
     device_num = str(job_idx % n_gpus)
     my_env = os.environ
     my_env["CUDA_VISIBLE_DEVICES"] = device_num
-fname_prefix = 'test2' #'ccn_Tsweep'
+fname_prefix = 'test'
 fname_suffix = ''
-epochs = 41
-policy_eps = 1.
-higher_dim_obs = True
-foraging_give_rewards = True
-size_maze = 6 + 2
+n_episodes = 2_000
+eval_every = 100
+epsilon = 1.
+size_maze = 6
 
 # Make directories
 #engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
 engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
 exp_dir = f'{fname_prefix}_{nn_yaml}_dim{internal_dim}{fname_suffix}/'
-for d in ['pickles/', 'nnets/', 'figs/', 'latents/']:
+for d in ['pickles/', 'nnets/', 'figs/', 'params/']:
     os.makedirs(f'{engram_dir}{d}{exp_dir}', exist_ok=True)
+pickle_dir = f'{engram_dir}pickles/{exp_dir}/'
+param_dir = f'{engram_dir}params/{exp_dir}/'
 
 def gpu_parallel(job_idx):
     results_dir = f'{engram_dir}pickles/{exp_dir}'
     results = {}
-    results['dimensionality_tracking'] = []
-    results['dimensionality_variance_ratio'] = []
-    results['valid_scores'] = []
-    results['valid_steps'] = []
-    results['iteration'] = []
-    results['valid_eps'] = []
-    results['training_eps'] = []
-    results['epochs'] = []
+    results['episode'] = []
+    results['train_score'] = []
+    results['valid_score'] = []
+    results['train_time_to_ep_end'] = []
+    results['valid_time_to_ep_end'] = []
     results['fname'] = []
-    results['loss_weights'] = []
     for _arg in split_args[job_idx]:
-        fname, loss_weights, result = run_env(_arg)
+        fname, loss_weights, result = run(_arg)
         for key in result.keys():
             results[key].append(result[key])
         results['fname'].append(fname)
@@ -76,10 +75,10 @@ def cpu_parallel():
     results['iteration'] = []
     results['valid_eps'] = []
     results['training_eps'] = []
-    results['epochs'] = []
+    results['episodes'] = []
     results['fname'] = []
     results['loss_weights'] = []
-    job_results = Parallel(n_jobs=56)(delayed(run_env)(arg) for arg in args)
+    job_results = Parallel(n_jobs=56)(delayed(run)(arg) for arg in args)
     for job_result in job_results:
         fname, loss_weights, result = job_result
         for key in result.keys():
@@ -89,111 +88,142 @@ def cpu_parallel():
     with open(f'{results_dir}results_0.p', 'wb') as f:
         pickle.dump(results, f)
 
-def run_env(arg):
+def run(arg):
     _fname, loss_weights, param_update, i = arg
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print(device)
     fname = f'{exp_dir}{_fname}_{i}'
-    encoder_type = 'variational' if loss_weights[-1] > 0 else 'regular'
+    fname_nnet_dir = f'{engram_dir}nnets/{exp_dir}/{fname}/'
+    fname_fig_dir = f'{engram_dir}figs/{exp_dir}/{fname}/'
+    fname_pickle_dir = f'{engram_dir}pickles/{exp_dir}/{fname}/'
     parameters = {
-        'nn_yaml': nn_yaml,
-        'internal_dim': internal_dim,
         'fname': fname,
-        'steps_per_epoch': 500,
-        'epochs': epochs,
-        'steps_per_test': 1000,
-        'encoder_type': encoder_type,
-        'frame_skip': 2,
-        'learning_rate': 1*1E-4,
-        'learning_rate_decay': 1.0,
-        'discount': 0.9,
-        'epsilon_start': 1.0,
-        'epsilon_min': 1.0,
-        'epsilon_decay': 1000,
-        'update_frequency': 1,
-        'replay_memory_size': 100000, #50000
-        'batch_size': 64, #256,
-        'freeze_interval': 1000,
-        'deterministic': False,
-        'loss_weights': loss_weights,
+        'n_episodes': n_episodes,
+        'n_test_episodes': 5,
+        'agent_args': {
+            'loss_weights': loss_weights, 'lr': 1e-4, 
+            'replay_capacity': 100_000, 'epsilon': epsilon,
+            'batch_size': 64, 'target_update_frequency': 1000,
+            'device': device, 'train_seq_len': 1},
+        'network_args': {
+            'latent_dim': internal_dim, 'network_yaml': nn_yaml,
+            'device': device},
         'dset_args': {'layout': size_maze}
-        'pred_len': 1,
-        'pred_gamma': 0., 
-        'yaml_mods': {}
         }
     parameters.update(param_update)
-    with open(f'{engram_dir}params/{_fname}.yaml', 'w') as outfile:
+    with open(f'{param_dir}{_fname}.yaml', 'w') as outfile:
         yaml.dump(parameters, outfile, default_flow_style=False)
-    rng = np.random.RandomState()
     env = Env(**parameters['dset_args'])
-    os.makedirs(f'{engram_dir}nnets/{fname}', exist_ok=True)
-    with open(f'{engram_dir}nnets/{fname}/goal.txt', 'w') as goalfile:
+    env = wrappers.SinglePrecisionWrapper(env)
+    env_spec = specs.make_environment_spec(env)
+    network = Network(env_spec, **parameters['network_args'])
+    agent = Agent(env_spec, network, **parameters['agent_args'])
+
+    os.makedirs(fname_nnet_dir, exist_ok=True)
+    with open(f'{fname_nnet_dir}goal.txt', 'w') as goalfile:
         goalfile.write(str(env._goal_state))
-    learning_algo = CRAR(
-        env, parameters['freeze_interval'], parameters['batch_size'], rng,
-        internal_dim=parameters['internal_dim'], lr=parameters['learning_rate'],
-        nn_yaml=parameters['nn_yaml'], yaml_mods=parameters['yaml_mods'],
-        double_Q=True, loss_weights=parameters['loss_weights'],
-        encoder_type=parameters['encoder_type'],
-        pred_len=parameters['pred_len'], pred_gamma=parameters['pred_gamma']
-        )
-    train_policy = EpsilonGreedyPolicy(
-        learning_algo, env.nActions(), rng, policy_eps)
-    test_policy = EpsilonGreedyPolicy(learning_algo, env.nActions(), rng, 0.)
-    agent = NeuralAgent(
-        env, learning_algo, parameters['replay_memory_size'], 1,
-        parameters['batch_size'], rng, save_dir=engram_dir,
-        train_policy=train_policy, test_policy=test_policy)
-    agent.run(10, 500)
-    agent.attach(bc.TrainerController(
-        evaluate_on='action', periodicity=parameters['update_frequency'],
-        show_episode_avg_V_value=True, show_avg_Bellman_residual=True))
-    best_controller = bc.FindBestController(
-        validationID=Env.VALIDATION_MODE, testID=None,
-        unique_fname=fname)
-    agent.attach(best_controller)
-    agent.attach(bc.InterleavedTestEpochController(
-        id=Env.VALIDATION_MODE, epoch_length=parameters['steps_per_test'],
-        periodicity=1, show_score=True, summarize_every=5, unique_fname=fname))
-    agent.run(parameters['epochs'], parameters['steps_per_epoch'])
 
-    result = {
-        'dimensionality_tracking': env._dimensionality_tracking[-1],
-        'dimensionality_variance_ratio': env._dimensionality_variance_ratio,
-        'valid_scores':  best_controller._validationScores,
-        'valid_steps':  best_controller._validationSteps, 'iteration': i,
-        'valid_eps': best_controller._validationEps,
-        'epochs': best_controller._epochNumbers, 'training_eps': agent.n_eps
-        }
-    return _fname, loss_weights, result
+    result = {}
+    result['episode'] = []
+    result['train_loss'] = []
+    result['mf_loss'] = []
+    result['neg_random_loss'] = []
+    result['neg_neighbor_loss'] = []
+    result['pos_sample_loss'] = []
+    result['train_score'] = []
+    result['valid_score'] = []
+    result['train_steps_per_ep'] = []
+    result['valid_steps_per_ep'] = []
+    result['model'] = []
+    result['model_iter'] = []
 
-# load user-defined parameters
+    sec_per_step_SUM = 0.
+    sec_per_step_NUM = 0.
+
+    for episode in range(n_episodes):
+        start = time.time()
+        losses, score, steps_per_episode = run_train_episode(env, agent)
+        end = time.time()
+        sec_per_step_SUM += (end-start)
+        sec_per_step_NUM += steps_per_episode
+        result['episode'].append(episode)
+        result['train_loss'].append(losses[4])
+        result['mf_loss'].append(losses[3])
+        result['neg_random_loss'].append(losses[2])
+        result['neg_neighbor_loss'].append(losses[1])
+        result['pos_sample_loss'].append(losses[0])
+        result['train_score'].append(score)
+        result['train_steps_per_ep'].append(steps_per_episode)
+        result['model'].append(_fname)
+        result['model_iter'].append(i)
+        if episode % eval_every == 0:
+            sec_per_step = sec_per_step_SUM/sec_per_step_NUM
+            print(f'[TRAIN SUMMARY] {500*sec_per_step_NUM} sec/ 500 steps')
+            print(f'{sec_per_step_NUM} training steps elapsed.')
+            score, steps_per_episode = run_eval_episode(
+                env, agent, parameters['n_test_episodes'])
+            result['valid_score'].append(score)
+            result['valid_steps_per_ep'].append(steps_per_episode)
+            agent.save_network(fname_nnet_dir, episode)
+            # Save plots tracking training progress
+            fig, axs = plt.subplots(3, 2, figsize=(7, 10))
+            loss_keys = [
+                'train_loss', 'mf_loss', 'neg_random_loss',
+                'neg_neighbor_loss', 'pos_sample_loss']
+            for i, loss_key in enumerate(loss_keys):
+                ax = axs[i%3][i//3]
+                ax.plot(result[loss_key])
+                ax.set_ylabel(loss_key)
+            plt.tight_layout()
+            plt.savefig(f'{fname_fig_dir}train_losses.png')
+            plt.figure()
+            plt.plot(result['train_score'])
+            plt.ylabel('Training Score'); plt.xlabel('Training Episodes')
+            plt.tight_layout()
+            plt.savefig(f'{fname_fig_dir}train_scores.png')
+            plt.figure()
+            plt.plot(
+                result['episode'][::eval_every],
+                result['train_score'][::eval_every])
+            plt.ylabel('Validation Score'); plt.xlabel('Training Episodes')
+            plt.tight_layout()
+            plt.savefig(f'{fname_fig_dir}valid_scores.png')
+            plt.close('all')
+        else:
+            result['valid_score'].append(None)
+            result['valid_steps_per_ep'].append(None)
+    # Save pickle
+    unique_id = shortuuid.uuid()
+    with open(f'{pickle_dir}{unique_id}.p', 'wb') as f:
+        pickle.dump(result, f)
+
+# Labels assigned to each network
 fname_grid = [
     'mf',
-#    '1',
-#    '2',
-#    '4',
-#    '8',
-#    '10',
+    '1',
+    '8',
     ]
-loss_weights_grid = [ # MB: [1E-2, 1E-1, 1E-1, 1, 0] Neigh: [1E-2, 1E-2, 0, 1, 0]
-    [0, 0, 0, 1, 0],
-#    [1E-1, 1E-1, 1E-1, 1, 0],
-#    [1E-1, 1E-1, 1E-1, 1, 0],
-#    [1E-1, 1E-1, 1E-1, 1, 0],
-#    [1E-1, 1E-1, 1E-1, 1, 0],
-#    [1E-1, 1E-1, 1E-1, 1, 0],
+
+# Typical loss weights:
+# MB: [1E-2, 1E-1, 1E-1, 1] Neigh: [1E-2, 1E-2, 0, 1]
+loss_weights_grid = [
+    [0, 0, 0, 1],
+    [1E-1, 1E-1, 1E-1, 1],
+    [1E-1, 1E-1, 1E-1, 1],
     ]
-param_updates = [
-    {},
-#    {},
-#    {'pred_len': 2, 'pred_gamma': 0.6},
-#    {'pred_len': 4, 'pred_gamma': 0.76},
-#    {'pred_len': 8, 'pred_gamma': 0.87},
-#    {'pred_len': 10, 'pred_gamma': 0.9},
-    ]
+
 # If you want latents to predict future latents
-# {'pred_len': 10, 'pred_gamma': 0.93},
+# {'agent_args': {'pred_len': 10, 'pred_gamma': 0.93}},
 # If you wanted latents to predict observations:
 # {'yaml_mods': {'trans-pred': {'predict_z': False}}}
+param_updates = [
+    {},
+    {},
+    #{'pred_len': 2, 'pred_gamma': 0.6},
+    #{'pred_len': 4, 'pred_gamma': 0.76},
+    {'agent_args': {'pred_len': 8, 'pred_gamma': 0.87}},
+    #{'pred_len': 10, 'pred_gamma': 0.9},
+    ]
 
 fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
 iters = np.arange(8)
@@ -206,7 +236,7 @@ for arg_idx in range(len(fname_grid)):
         args.append([fname, loss_weights, param_update, i])
 split_args = np.array_split(args, n_jobs)
 
-run_env(args[0])
+run(args[0])
 
 import time
 start = time.time()

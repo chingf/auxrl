@@ -19,25 +19,18 @@ crar-fc: &crar-fc
   - *act
   - [Linear, 16, auto]
 
-crar-float-fc: &crar-float-fc
-  - [Linear, auto, 10]
-  - *act
-  - [Linear, 10, 1]
-
 encoder:
   convs: *encoder-convs
   fc: *encoder-fc
   flatten: False
 
-qnet:
+q:
   convs: *none
   fc: *crar-fc
 
-trans-pred:
+t:
+  convs: *none
   fc: *crar-fc
   encode_new_state: False
   predict_z: True
-
-float-pred:
-  fc: *crar-float-fc
 
