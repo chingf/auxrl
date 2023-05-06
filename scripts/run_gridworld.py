@@ -13,10 +13,10 @@ import torch
 from acme import specs
 from acme import wrappers
 
-from deer.Agent import Agent
-from deer.networks.Network import Network
-from deer.environments.GridWorld import Env as Env
-from deer.utils import run_train_episode, run_eval_episode
+from auxrl.Agent import Agent
+from auxrl.networks.Network import Network
+from auxrl.environments.GridWorld import Env as Env
+from auxrl.utils import run_train_episode, run_eval_episode
 
 # Experiment Parameters
 job_idx = int(sys.argv[1])

@@ -6,7 +6,7 @@ from pathlib import Path
 import torch
 import torch.nn as nn
 from copy import deepcopy
-from deer.networks.Modules import Encoder, Q, T
+from auxrl.networks.Modules import Encoder, Q, T
 
 NETWORK_DIR = os.path.dirname(os.path.abspath(__file__))
 

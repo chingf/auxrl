@@ -20,8 +20,8 @@ from acme import wrappers
 from acme.utils import tree_utils
 import copy
 
-from deer.networks.Network import Network
-from deer.ReplayBuffer import ReplayBuffer
+from auxrl.networks.Network import Network
+from auxrl.ReplayBuffer import ReplayBuffer
 
 Transitions = collections.namedtuple(
     'Transitions', ['state', 'action', 'reward', 'discount', 'next_state'])
