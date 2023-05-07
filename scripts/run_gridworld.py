@@ -34,7 +34,8 @@ if n_gpus > 1:
 fname_prefix = 'test'
 fname_suffix = ''
 n_episodes = 2_000
-eval_every = 100
+eval_every = 10
+save_net_every = 200
 epsilon = 1.
 size_maze = 6
 
@@ -92,16 +93,18 @@ def run(arg):
     _fname, loss_weights, param_update, i = arg
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(device)
-    fname = f'{exp_dir}{_fname}_{i}'
+    fname = f'{_fname}_{i}'
     fname_nnet_dir = f'{engram_dir}nnets/{exp_dir}/{fname}/'
     fname_fig_dir = f'{engram_dir}figs/{exp_dir}/{fname}/'
     fname_pickle_dir = f'{engram_dir}pickles/{exp_dir}/{fname}/'
+    for _dir in [fname_nnet_dir, fname_fig_dir, fname_pickle_dir]:
+        os.makedirs(_dir, exist_ok=True)
     parameters = {
         'fname': fname,
         'n_episodes': n_episodes,
         'n_test_episodes': 5,
         'agent_args': {
-            'loss_weights': loss_weights, 'lr': 1e-4, 
+            'loss_weights': loss_weights, 'lr': 1e-5, 
             'replay_capacity': 100_000, 'epsilon': epsilon,
             'batch_size': 64, 'target_update_frequency': 1000,
             'device': device, 'train_seq_len': 1},
@@ -125,6 +128,7 @@ def run(arg):
 
     result = {}
     result['episode'] = []
+    result['step'] = []
     result['train_loss'] = []
     result['mf_loss'] = []
     result['neg_random_loss'] = []
@@ -147,6 +151,7 @@ def run(arg):
         sec_per_step_SUM += (end-start)
         sec_per_step_NUM += steps_per_episode
         result['episode'].append(episode)
+        result['step'].append(sec_per_step_NUM)
         result['train_loss'].append(losses[4])
         result['mf_loss'].append(losses[3])
         result['neg_random_loss'].append(losses[2])
@@ -158,13 +163,12 @@ def run(arg):
         result['model_iter'].append(i)
         if episode % eval_every == 0:
             sec_per_step = sec_per_step_SUM/sec_per_step_NUM
-            print(f'[TRAIN SUMMARY] {500*sec_per_step_NUM} sec/ 500 steps')
+            print(f'[TRAIN SUMMARY] {500*sec_per_step} sec/ 500 steps')
             print(f'{sec_per_step_NUM} training steps elapsed.')
             score, steps_per_episode = run_eval_episode(
                 env, agent, parameters['n_test_episodes'])
             result['valid_score'].append(score)
             result['valid_steps_per_ep'].append(steps_per_episode)
-            agent.save_network(fname_nnet_dir, episode)
             # Save plots tracking training progress
             fig, axs = plt.subplots(3, 2, figsize=(7, 10))
             loss_keys = [
@@ -192,6 +196,9 @@ def run(arg):
         else:
             result['valid_score'].append(None)
             result['valid_steps_per_ep'].append(None)
+        if episode % save_net_every == 0:
+            agent.save_network(fname_nnet_dir, episode)
+
     # Save pickle
     unique_id = shortuuid.uuid()
     with open(f'{pickle_dir}{unique_id}.p', 'wb') as f:
@@ -226,7 +233,7 @@ param_updates = [
     ]
 
 fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
-iters = np.arange(8)
+iters = np.arange(10)
 args = []
 for arg_idx in range(len(fname_grid)):
     for i in iters:
@@ -235,8 +242,6 @@ for arg_idx in range(len(fname_grid)):
         param_update = param_updates[arg_idx]
         args.append([fname, loss_weights, param_update, i])
 split_args = np.array_split(args, n_jobs)
-
-run(args[0])
 
 import time
 start = time.time()

@@ -3,10 +3,9 @@
 trap "exit" INT TERM ERR
 trap "kill 0" EXIT
 
-for JOB_IDX in {0..15}
+for JOB_IDX in {0..3}
 do
-    python run_foraging.py $JOB_IDX 16 dm 9 &
-    #python run_figure8.py $JOB_IDX 16 dm 28 &
+    python run_gridworld.py $JOB_IDX 4 dm 16 &
 done
 
 wait

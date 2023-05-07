@@ -71,7 +71,7 @@ class Agent(acme.Actor):
         self._network.encoder.reset()
         self._target_network.encoder.reset()
 
-    def select_action(self, obs, force_greedy=False):
+    def select_action(self, obs, force_greedy=False, verbose=False):
         """ Epsilon-greedy action selection. """
 
         with torch.no_grad():
@@ -80,6 +80,7 @@ class Agent(acme.Actor):
             q_values = self._network.Q(z)
         q_values = q_values.squeeze(0).detach()
         if force_greedy or (self._epsilon < torch.rand(1)):
+            if verbose: print(q_values)
             action = q_values.argmax(axis=-1)
         else:
             action = torch.randint(
@@ -95,12 +96,11 @@ class Agent(acme.Actor):
             return [0,0,0,0,0]
         device = self._device
         self._optimizer.zero_grad()
-        # Sample a minibatch of transitions from experience replay.
         transitions = self._replay_buffer.sample(
             self._batch_size, self._replay_seq_len)
 
-        # If a sequence, you may need to do some formattingf #TODO
-        if self._replay_seq_len > 1:
+        # If a sequence, you may need to do some formatting
+        if self._replay_seq_len > 1: #TODO
             actions_val = actions_val[:, 0]
             rewards_val = rewards_val[:, 0]
             terminals_val = terminals_val[:, 0]
@@ -119,6 +119,7 @@ class Agent(acme.Actor):
         next_obs = torch.tensor(
             transitions.next_obs.astype(np.float32)).to(device)
         terminal = torch.tensor(transitions.terminal.astype(np.float32)) # (N,)
+        terminal_mask = (1-terminal) # (N,)
         onehot_actions = np.zeros((self._batch_size, self._n_actions))
         onehot_actions[np.arange(self._batch_size), a] = 1
         onehot_actions = torch.as_tensor(onehot_actions, device=self._device).float()
@@ -147,9 +148,7 @@ class Agent(acme.Actor):
             _obs = pred_next_obs[:,t:t+1].squeeze(1)
             _z = self._network.encoder(_obs)
             T_target = T_target + (sr_gamma**t) * _z
-        loss_pos_sample = torch.norm(Tz - T_target, dim=1)
-        terminal_mask = (1-terminal).to(device)
-        loss_pos_sample = torch.mean(loss_pos_sample * terminal_mask)
+        loss_pos_sample = torch.mean(torch.norm(Tz - T_target, dim=1))
 
         # Negative Sample Loss (entropy)
         rolled = torch.roll(z, 1, dims=0)
@@ -161,6 +160,8 @@ class Agent(acme.Actor):
             ))
 
         # Q Loss
+        if self._n_updates%self._target_update_frequency == 0: # Update target network
+            self._target_network.set_params(self._network.get_params())
         if self._mem_len > 0: # TODO
             raise ValueError('Proper POMDP latents not yet done.')
             _zs = torch.tensor(zs[:,:self._mem_len]).to(self.device)
@@ -177,10 +178,11 @@ class Agent(acme.Actor):
             argmax_next_q = torch.argmax(next_q, axis=1)
             max_next_q = target_next_q[
                 np.arange(self._batch_size), argmax_next_q].reshape((-1,1))
-        Q_target = r + terminal_mask*self._discount_factor*max_next_q
+        Q_target = r + self._discount_factor*max_next_q
         q_vals = self._network.Q(z)
-        q_vals = q_vals[np.arange(self._batch_size), a]
-        loss_Q = torch.mean(torch.norm(q_vals - Q_target, dim=1))
+        q_vals = q_vals[np.arange(self._batch_size), a.squeeze()]
+        loss_Q = torch.mean(
+            torch.nn.functional.mse_loss(q_vals, Q_target.squeeze(), reduction='none'))
 
         # Aggregate all losses and update parameters
         all_losses = self._loss_weights[0] * loss_pos_sample \
@@ -193,7 +195,7 @@ class Agent(acme.Actor):
 
         # Update target network if needed
         if self._n_updates % self._target_update_frequency == 0:
-            self._target_network.set_params(self._network.get_params())
+            print(f'Q loss at step {self._n_updates}: {loss_Q.item()}')
 
         return [
             loss_pos_sample.item(), loss_neg_neighbor.item(),
