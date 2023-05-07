@@ -33,9 +33,9 @@ if n_gpus > 1:
     my_env["CUDA_VISIBLE_DEVICES"] = device_num
 fname_prefix = 'test2'
 fname_suffix = ''
-n_episodes = 1_000
-eval_every = 10
-save_net_every = 200
+n_episodes = 501
+eval_every = 1
+save_net_every = 250
 epsilon = 1.
 size_maze = 6
 
@@ -186,10 +186,17 @@ def run(arg):
             plt.figure()
             plt.plot(
                 result['episode'][::eval_every],
-                result['train_score'][::eval_every])
+                result['valid_score'][::eval_every])
             plt.ylabel('Validation Score'); plt.xlabel('Training Episodes')
             plt.tight_layout()
             plt.savefig(f'{fname_fig_dir}valid_scores.png')
+            plt.figure()
+            plt.plot(
+                result['episode'][::eval_every],
+                result['valid_steps_per_ep'][::eval_every])
+            plt.ylabel('Validation Steps to Goal'); plt.xlabel('Training Episodes')
+            plt.tight_layout()
+            plt.savefig(f'{fname_fig_dir}valid_steps.png')
             plt.close('all')
         else:
             result['valid_score'].append(None)
