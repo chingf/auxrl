@@ -59,7 +59,8 @@ def run_train_episode(
     return avg_episode_losses, episode_return, episode_steps
 
 def run_eval_episode(
-    env: dm_env.Environment, agent: acme.Actor, n_test_episodes: int=1):
+    env: dm_env.Environment, agent: acme.Actor, n_test_episodes: int=1,
+    verbose: bool=False):
     all_episode_steps = []
     all_episode_return = []
     for _t in range(n_test_episodes):
@@ -68,12 +69,10 @@ def run_eval_episode(
         timestep = env.reset()
         agent.observe_first(timestep)
         while not timestep.last():
-            verbose = False #(_t == 0) and (episode_steps < 10) 
             action = agent.select_action(
                 timestep.observation, force_greedy=True, verbose=verbose)
             if verbose:
-                print(timestep.observation)
-                print(action)
+                env.plot_state()
             timestep = env.step(action)
             agent.observe(
                 action, next_timestep=timestep, latent=agent.get_curr_latent())
