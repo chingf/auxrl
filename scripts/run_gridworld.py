@@ -31,9 +31,9 @@ if n_gpus > 1:
     device_num = str(job_idx % n_gpus)
     my_env = os.environ
     my_env["CUDA_VISIBLE_DEVICES"] = device_num
-fname_prefix = 'test'
+fname_prefix = 'test2'
 fname_suffix = ''
-n_episodes = 2_000
+n_episodes = 1_000
 eval_every = 10
 save_net_every = 200
 epsilon = 1.
@@ -107,10 +107,8 @@ def run(arg):
             'loss_weights': loss_weights, 'lr': 1e-5, 
             'replay_capacity': 100_000, 'epsilon': epsilon,
             'batch_size': 64, 'target_update_frequency': 1000,
-            'device': device, 'train_seq_len': 1},
-        'network_args': {
-            'latent_dim': internal_dim, 'network_yaml': nn_yaml,
-            'device': device},
+            'train_seq_len': 1},
+        'network_args': {'latent_dim': internal_dim, 'network_yaml': nn_yaml},
         'dset_args': {'layout': size_maze}
         }
     parameters.update(param_update)
@@ -119,8 +117,8 @@ def run(arg):
     env = Env(**parameters['dset_args'])
     env = wrappers.SinglePrecisionWrapper(env)
     env_spec = specs.make_environment_spec(env)
-    network = Network(env_spec, **parameters['network_args'])
-    agent = Agent(env_spec, network, **parameters['agent_args'])
+    network = Network(env_spec, device=device, **parameters['network_args'])
+    agent = Agent(env_spec, network, device=device, **parameters['agent_args'])
 
     os.makedirs(fname_nnet_dir, exist_ok=True)
     with open(f'{fname_nnet_dir}goal.txt', 'w') as goalfile:
