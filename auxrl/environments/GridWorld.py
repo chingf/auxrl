@@ -134,6 +134,8 @@ class Env(dm_env.Environment):
             raise ValueError('This is not a valid goal!')
         self._layout[self._layout > 0] = 0
         self._layout[new_goal] = self._reward_goal
+        print('goal set')
+        print(self._layout)
         self._goal_state = new_goal
 
     def observation_spec(self):
@@ -143,7 +145,7 @@ class Env(dm_env.Environment):
                 name='observation_agent_onehot')
         elif self._observation_type is ObservationType.GRID:
             return specs.Array(
-                shape=(3,) + self._layout_dims, dtype=np.float32,
+                shape=(1,) + self._layout_dims, dtype=np.float32,
                 name='observation_grid') # (C, H, W)
         elif self._observation_type is ObservationType.AGENT_GOAL_POS:
             return specs.Array(
@@ -163,10 +165,10 @@ class Env(dm_env.Environment):
             obs[self._state] = 1 # Place agent
             return obs
         elif self._observation_type is ObservationType.GRID:
-            obs = np.zeros((3,) + self._layout.shape, dtype=np.float32)
-            obs[0, ...] = self._layout < 0
-            obs[1, self._state[0], self._state[1]] = 1
-            obs[2, self._goal_state[0], self._goal_state[1]] = 1
+            obs = np.zeros((1,) + self._layout.shape, dtype=np.float32)
+            obs[0, ...] = (self._layout < 0)*(-1)
+            obs[0, self._state[0], self._state[1]] = 1
+            obs[0, self._goal_state[0], self._goal_state[1]] = 5
             return obs
         elif self._observation_type is ObservationType.AGENT_GOAL_POS:
             return np.array(self._state + self._goal_state, dtype=np.float32)
@@ -196,7 +198,7 @@ class Env(dm_env.Environment):
         else:
             raise ValueError('Invalid action')
     
-        new_y, new_x = new_state
+        new_x, new_y = new_state
         step_type = dm_env.StepType.MID
         if self._layout[new_x, new_y] == -1:  # wall
             reward = self._penalty_for_walls
