@@ -40,8 +40,8 @@ epsilon = 1.
 size_maze = 6
 
 # Make directories
-#engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
-engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
+engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
+#engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
 exp_dir = f'{fname_prefix}_{nn_yaml}_dim{internal_dim}{fname_suffix}/'
 for d in ['pickles/', 'nnets/', 'figs/', 'params/']:
     os.makedirs(f'{engram_dir}{d}{exp_dir}', exist_ok=True)
@@ -49,45 +49,15 @@ pickle_dir = f'{engram_dir}pickles/{exp_dir}/'
 param_dir = f'{engram_dir}params/{exp_dir}/'
 
 def gpu_parallel(job_idx):
-    results_dir = f'{engram_dir}pickles/{exp_dir}'
-    results = {}
-    results['episode'] = []
-    results['train_score'] = []
-    results['valid_score'] = []
-    results['train_time_to_ep_end'] = []
-    results['valid_time_to_ep_end'] = []
-    results['fname'] = []
     for _arg in split_args[job_idx]:
         fname, loss_weights, result = run(_arg)
-        for key in result.keys():
-            results[key].append(result[key])
-        results['fname'].append(fname)
-        results['loss_weights'].append(loss_weights)
-    with open(f'{results_dir}results_{job_idx}.p', 'wb') as f:
-        pickle.dump(results, f)
 
 def cpu_parallel():
-    results_dir = f'{engram_dir}pickles/{exp_dir}'
-    results = {}
-    results['dimensionality_tracking'] = []
-    results['dimensionality_variance_ratio'] = []
-    results['valid_scores'] = []
-    results['valid_steps'] = []
-    results['iteration'] = []
-    results['valid_eps'] = []
-    results['training_eps'] = []
-    results['episodes'] = []
-    results['fname'] = []
-    results['loss_weights'] = []
     job_results = Parallel(n_jobs=56)(delayed(run)(arg) for arg in args)
     for job_result in job_results:
         fname, loss_weights, result = job_result
         for key in result.keys():
             results[key].append(result[key])
-        results['fname'].append(fname)
-        results['loss_weights'].append(loss_weights)
-    with open(f'{results_dir}results_0.p', 'wb') as f:
-        pickle.dump(results, f)
 
 def run(arg):
     _fname, loss_weights, param_update, i = arg
