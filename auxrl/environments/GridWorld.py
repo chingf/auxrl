@@ -36,7 +36,7 @@ class Env(dm_env.Environment):
         self, layout, start_state=None, goal_state=None,
         observation_type=ObservationType.GRID, discount=1.,
         penalty_for_walls=0., reward_goal=1., hide_goal=True,
-        max_episode_length=300, prev_reward_goal=None):
+        max_episode_length=150, prev_reward_goal=None):
 
         """Build a grid environment.
 
