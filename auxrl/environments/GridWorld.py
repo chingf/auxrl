@@ -35,8 +35,8 @@ class Env(dm_env.Environment):
     def __init__(
         self, layout, start_state=None, goal_state=None,
         observation_type=ObservationType.GRID, discount=1.,
-        penalty_for_walls=0., reward_goal=1.,
-        max_episode_length=300, prev_reward_goal=None):
+        penalty_for_walls=0., reward_goal=1., hide_goal=True,
+        max_episode_length=150, prev_reward_goal=None):
 
         """Build a grid environment.
 
@@ -76,11 +76,11 @@ class Env(dm_env.Environment):
         self._discount = discount
         self._penalty_for_walls = penalty_for_walls
         self._reward_goal = reward_goal
+        self._hide_goal = hide_goal
         self._observation_type = observation_type
         self._max_episode_length = max_episode_length
         self._num_episode_steps = 0
-        if goal_state is None:
-            goal_state = self._sample_goal()
+        goal_state = self._sample_goal()
         self.goal_state = goal_state
 
     def _sample_start(self):
@@ -101,6 +101,8 @@ class Env(dm_env.Environment):
         while n < max_tries:
             goal_state = tuple(np.random.randint(d) for d in self._layout_dims)
             if goal_state != self._state and self._layout[goal_state] == 0:
+                if self.start_state == goal_state:
+                    raise ValueError('Collision')
                 return goal_state
         n += 1
         raise ValueError('Failed to sample a goal state.')
@@ -168,7 +170,8 @@ class Env(dm_env.Environment):
             obs = np.zeros((1,) + self._layout.shape, dtype=np.float32)
             obs[0, ...] = (self._layout < 0)*(-1)
             obs[0, self._state[0], self._state[1]] = 1
-            obs[0, self._goal_state[0], self._goal_state[1]] = 5
+            if not self._hide_goal:
+                obs[0, self._goal_state[0], self._goal_state[1]] = 5
             return obs
         elif self._observation_type is ObservationType.AGENT_GOAL_POS:
             return np.array(self._state + self._goal_state, dtype=np.float32)
@@ -179,6 +182,8 @@ class Env(dm_env.Environment):
     def reset(self, reset_start=True):
         if reset_start:
             self._start_state = self._sample_start()
+            if self._start_state == self.goal_state:
+                raise ValueError('Collision')
         self._state = self._start_state
         self._num_episode_steps = 0
         return dm_env.TimeStep(
@@ -209,7 +214,7 @@ class Env(dm_env.Environment):
             discount = self._discount
         else:  # a goal
             reward = self._layout[new_x, new_y]
-            discount = 0.
+            discount = 1. #0.
             new_state = self._start_state
             step_type = dm_env.StepType.LAST
     
@@ -232,8 +237,10 @@ class Env(dm_env.Environment):
             plt.text(
                 self._start_state[1], self._start_state[0], r'$\mathbf{S}$',
                 fontsize=16, ha='center', va='center')
+        goal_text = r'$\mathbf{G}$'
+        if self._hide_goal: goal_text = f'({goal_text})'
         plt.text(
-            self._goal_state[1], self._goal_state[0], r'$\mathbf{G}$',
+            self._goal_state[1], self._goal_state[0], goal_text,
             fontsize=16, ha='center', va='center')
         w, h = self._layout.shape
         for y in range(h - 1):
@@ -246,7 +253,7 @@ class Env(dm_env.Environment):
         # Add the agent location as a smiley face
         plt.text(
             self._state[1], self._state[0], '\U0001F603',
-            fontname='symbola', fontsize=18, ha='center', va='center')
+            fontsize=18, ha='center', va='center')
         if return_rgb:
             fig = plt.gcf()
             plt.axis('tight')
