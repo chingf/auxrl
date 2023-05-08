@@ -31,18 +31,18 @@ if n_gpus > 1:
     device_num = str(job_idx % n_gpus)
     my_env = os.environ
     my_env["CUDA_VISIBLE_DEVICES"] = device_num
-fname_prefix = 'gridworld2'
+fname_prefix = 'gridtest'
 fname_suffix = ''
-n_episodes = 301
+n_episodes = 251
 n_cpu_jobs = 20
 eval_every = 1
-save_net_every = 100
+save_net_every = 50
 epsilon = 1.
 size_maze = 6
 
 # Make directories
-engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
-#engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
+#engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
+engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
 exp_dir = f'{fname_prefix}_{nn_yaml}_dim{internal_dim}{fname_suffix}/'
 for d in ['pickles/', 'nnets/', 'figs/', 'params/']:
     os.makedirs(f'{engram_dir}{d}{exp_dir}', exist_ok=True)
@@ -179,7 +179,8 @@ def run(arg):
 # Labels assigned to each network
 fname_grid = [
     'mf',
-    '1',
+    'mb_other_norm',
+#    'entro',
 #    '8',
     ]
 
@@ -187,7 +188,8 @@ fname_grid = [
 # MB: [1E-2, 1E-1, 1E-1, 1] Neigh: [1E-2, 1E-2, 0, 1]
 loss_weights_grid = [
     [0, 0, 0, 1],
-    [1E-1, 1E-1, 1E-1, 1],
+    [1E-2, 1E-1, 1E-1, 1],
+#    [0., 1E-1, 1E-1, 1],
 #    [1E-1, 1E-1, 1E-1, 1],
     ]
 
@@ -205,7 +207,7 @@ param_updates = [
     ]
 
 fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
-iters = np.arange(10)
+iters = np.arange(2)
 args = []
 for arg_idx in range(len(fname_grid)):
     for i in iters:
@@ -214,6 +216,8 @@ for arg_idx in range(len(fname_grid)):
         param_update = param_updates[arg_idx]
         args.append([fname, loss_weights, param_update, i])
 split_args = np.array_split(args, n_jobs)
+
+run(args[0])
 
 import time
 start = time.time()
