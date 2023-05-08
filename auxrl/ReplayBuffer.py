@@ -36,6 +36,15 @@ class ReplayBuffer(object):
         self.buffer.append(transition)
         self._prev_obs = timestep.observation
 
+    def sample_deque(self, indices):
+        batch_as_list = [None for _ in range(indices.size)]
+        for buffer_i, val in enumerate(self.buffer):
+            if buffer_i in indices:
+                list_indices = np.argwhere(indices==buffer_i)
+                for list_i in list_indices:
+                    batch_as_list[list_i[0]] = self.buffer[buffer_i]
+        return batch_as_list
+
     def sample(self, batch_size: int, seq_len: int=1) -> Transitions:
         # Sample a random batch of Transitions as a list.
         n_items = len(self.buffer)
