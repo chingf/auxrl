@@ -198,8 +198,10 @@ class Agent(acme.Actor):
             print(f'Q loss at step {self._n_updates}: {loss_Q.item()}')
 
         return [
-            loss_pos_sample.item(), loss_neg_neighbor.item(),
-            loss_neg_random.item(), loss_Q.item(), all_losses.item()]
+            self._loss_weights[0]*loss_pos_sample.item(),
+            self._loss_weights[1]*loss_neg_neighbor.item(),
+            self._loss_weights[2]*loss_neg_random.item(),
+            self._loss_weights[3]*loss_Q.item(), all_losses.item()]
 
     def observe_first(self, timestep: dm_env.TimeStep):
         self._replay_buffer.add_first(timestep)
