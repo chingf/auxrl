@@ -43,6 +43,9 @@ class Network(object):
 
         self.encoder = Encoder(
             env_spec, latent_dim, config['encoder'], mem_len).to(device)
+        if self._freeze_encoder:
+            for p in self.encoder.parameters():
+                p.requires_grad = False
         self.Q = Q(env_spec, latent_dim, config['q']).to(device)
         self.T = T(env_spec, latent_dim, config['t']).to(device)
 

@@ -36,7 +36,7 @@ class Env(dm_env.Environment):
         self, layout, start_state=None, goal_state=None,
         observation_type=ObservationType.GRID, discount=1.,
         penalty_for_walls=0., reward_goal=1., hide_goal=True,
-        max_episode_length=150, prev_reward_goal=None):
+        max_episode_length=150, prev_goal_state=None):
 
         """Build a grid environment.
 
@@ -79,6 +79,9 @@ class Env(dm_env.Environment):
         self._hide_goal = hide_goal
         self._observation_type = observation_type
         self._max_episode_length = max_episode_length
+        self._prev_goal_state = prev_goal_state
+        if self._prev_goal_state != None:
+            self._new_goal_state_gap = min(min(self._layout_dims)//3, 3)
         self._num_episode_steps = 0
         goal_state = self._sample_goal()
         self.goal_state = goal_state
@@ -103,7 +106,18 @@ class Env(dm_env.Environment):
             if goal_state != self._state and self._layout[goal_state] == 0:
                 if self.start_state == goal_state:
                     raise ValueError('Collision')
-                return goal_state
+                if self._prev_goal_state == None:
+                    return goal_state
+                else:
+                    prev_x, prev_y = self._prev_goal_state
+                    new_goal_x_dist = abs(goal_state[0]-prev_x)
+                    new_goal_y_dist = abs(goal_state[1]-prev_y)
+                    distance_check = new_goal_x_dist > self._new_goal_state_gap\
+                        or new_goal_y_dist > self._new_goal_state_gap
+                    if distance_check:
+                        print(f'Previous goal: {self._prev_goal_state}')
+                        print(f'New goal: {goal_state}')
+                        return goal_state
         n += 1
         raise ValueError('Failed to sample a goal state.')
 
