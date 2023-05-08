@@ -31,11 +31,12 @@ if n_gpus > 1:
     device_num = str(job_idx % n_gpus)
     my_env = os.environ
     my_env["CUDA_VISIBLE_DEVICES"] = device_num
-fname_prefix = 'test2'
+fname_prefix = 'gridworld2'
 fname_suffix = ''
-n_episodes = 501
+n_episodes = 301
+n_cpu_jobs = 20
 eval_every = 1
-save_net_every = 250
+save_net_every = 100
 epsilon = 1.
 size_maze = 6
 
@@ -50,14 +51,10 @@ param_dir = f'{engram_dir}params/{exp_dir}/'
 
 def gpu_parallel(job_idx):
     for _arg in split_args[job_idx]:
-        fname, loss_weights, result = run(_arg)
+        run(_arg)
 
 def cpu_parallel():
-    job_results = Parallel(n_jobs=56)(delayed(run)(arg) for arg in args)
-    for job_result in job_results:
-        fname, loss_weights, result = job_result
-        for key in result.keys():
-            results[key].append(result[key])
+    job_results = Parallel(n_jobs=n_cpu_jobs)(delayed(run)(arg) for arg in args)
 
 def run(arg):
     _fname, loss_weights, param_update, i = arg
@@ -74,7 +71,7 @@ def run(arg):
         'n_episodes': n_episodes,
         'n_test_episodes': 5,
         'agent_args': {
-            'loss_weights': loss_weights, 'lr': 1e-5, 
+            'loss_weights': loss_weights, 'lr': 1e-4,
             'replay_capacity': 100_000, 'epsilon': epsilon,
             'batch_size': 64, 'target_update_frequency': 1000,
             'train_seq_len': 1},
@@ -183,7 +180,7 @@ def run(arg):
 fname_grid = [
     'mf',
     '1',
-    '8',
+#    '8',
     ]
 
 # Typical loss weights:
@@ -191,7 +188,7 @@ fname_grid = [
 loss_weights_grid = [
     [0, 0, 0, 1],
     [1E-1, 1E-1, 1E-1, 1],
-    [1E-1, 1E-1, 1E-1, 1],
+#    [1E-1, 1E-1, 1E-1, 1],
     ]
 
 # If you want latents to predict future latents
@@ -203,7 +200,7 @@ param_updates = [
     {},
     #{'pred_len': 2, 'pred_gamma': 0.6},
     #{'pred_len': 4, 'pred_gamma': 0.76},
-    {'agent_args': {'pred_len': 8, 'pred_gamma': 0.87}},
+    #{'agent_args': {'pred_len': 8, 'pred_gamma': 0.87}},
     #{'pred_len': 10, 'pred_gamma': 0.9},
     ]
 
