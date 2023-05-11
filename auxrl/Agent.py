@@ -96,20 +96,11 @@ class Agent(acme.Actor):
             return [0,0,0,0,0]
         device = self._device
         self._optimizer.zero_grad()
-        transitions = self._replay_buffer.sample(
-            self._batch_size, self._replay_seq_len)
-
-        # If a sequence, you may need to do some formatting
-        if self._replay_seq_len > 1: #TODO
-            actions_val = actions_val[:, 0]
-            rewards_val = rewards_val[:, 0]
-            terminals_val = terminals_val[:, 0]
-            T_states_val = torch.as_tensor(
-                states_val, device=self.device).float()
-            T_next_states_val = torch.as_tensor(
-                next_states_val, device=self.device).float()
-            states_val = states_val[:,:1].squeeze(1)
-            next_states_val = next_states_val[:,:1].squeeze(1)
+        transitions_seq = self._replay_buffer.sample(self._batch_size, self._replay_seq_len)
+        if self._replay_seq_len > 1:
+            transitions = transitions_seq[0]
+        else:
+            transitions = transitions_seq
 
         # Unpack transition information
         obs = torch.tensor(transitions.obs.astype(np.float32)).to(device) # (N,C,H,W)
@@ -118,8 +109,6 @@ class Agent(acme.Actor):
             transitions.reward.astype(np.float32)).view(-1,1).to(device) # (N,1)
         next_obs = torch.tensor(
             transitions.next_obs.astype(np.float32)).to(device)
-        terminal = torch.tensor(transitions.terminal.astype(np.float32)) # (N,)
-        terminal_mask = (1-terminal) # (N,)
         onehot_actions = np.zeros((self._batch_size, self._n_actions))
         onehot_actions[np.arange(self._batch_size), a] = 1
         onehot_actions = torch.as_tensor(onehot_actions, device=self._device).float()
@@ -142,12 +131,19 @@ class Agent(acme.Actor):
 
         # Positive Sample Loss (transition predictions)
         T_target = next_z
-        pred_gamma = self._pred_gamma
+        terminal_mask = (1-transitions.terminal).astype(np.float32) # (N,)
+        T_target_scale = torch.ones(self._batch_size)
         for t in np.arange(1, self._pred_len): # TODO
-            import pdb; pdb.set_trace()
-            _obs = pred_next_obs[:,t:t+1].squeeze(1)
-            _z = self._network.encoder(_obs)
-            T_target = T_target + (sr_gamma**t) * _z
+            _obs = torch.tensor(transitions_seq[t].next_obs.astype(np.float32))
+            _z = self._network.encoder(_obs.to(device))
+            scale_term = (self._pred_gamma**t)*torch.tensor(terminal_mask)
+            T_target_scale = T_target_scale + scale_term
+            T_target = T_target + _z*scale_term.to(device)[:, None]
+            terminal = transitions_seq[t].terminal
+            terminal_mask = ((1-terminal) + terminal_mask) == 2 # (N,)
+            terminal_mask = terminal_mask.astype(np.float32)
+        if self._pred_len > 1:
+            T_target = T_target / T_target_scale.to(device)[:,None]
         loss_pos_sample = torch.mean(torch.norm(Tz - T_target, dim=1))
 
         # Negative Sample Loss (entropy)
