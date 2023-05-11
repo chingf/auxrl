@@ -210,7 +210,13 @@ def run(arg):
 # Labels assigned to each network
 fname_grid = [
     'mf',
-    'mb_other_norm',
+    'mb',
+    'mb_e-3',
+    'mb_0.1x',
+    '4_e-3_scale',
+    '8_e-3_scale',
+    '4_0.1x_scale',
+    '8_0.1x_scale',
     ]
 source_fnames = [f'{source_prefix}_{f}' for f in fname_grid]
 #fname_grid.append('clean')
@@ -218,7 +224,7 @@ source_fnames = [f'{source_prefix}_{f}' for f in fname_grid]
 loss_weights_grid = [[0., 0., 0., 1.]] * len(fname_grid)
 fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
 param_updates = [{}]*len(fname_grid)
-iters = np.arange(2)
+iters = np.arange(5)
 args = []
 for arg_idx in range(len(fname_grid)):
     for i in iters:
