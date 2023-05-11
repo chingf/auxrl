@@ -228,7 +228,7 @@ class Env(dm_env.Environment):
             discount = self._discount
         else:  # a goal
             reward = self._layout[new_x, new_y]
-            discount = 1. #0.
+            discount = self._discount #0.
             new_state = self._start_state
             step_type = dm_env.StepType.LAST
     
