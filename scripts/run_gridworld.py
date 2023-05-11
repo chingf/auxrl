@@ -8,6 +8,8 @@ import matplotlib.pyplot as plt
 import os
 import time
 import shortuuid
+from flatten_dict import flatten
+from flatten_dict import unflatten
 import torch
 
 from acme import specs
@@ -78,7 +80,9 @@ def run(arg):
         'network_args': {'latent_dim': internal_dim, 'network_yaml': nn_yaml},
         'dset_args': {'layout': size_maze}
         }
-    parameters.update(param_update)
+    parameters = flatten(parameters)
+    parameters.update(flatten(param_update))
+    parameters = unflatten(parameters)
     with open(f'{param_dir}{_fname}.yaml', 'w') as outfile:
         yaml.dump(parameters, outfile, default_flow_style=False)
     env = Env(**parameters['dset_args'])
@@ -178,19 +182,27 @@ def run(arg):
 
 # Labels assigned to each network
 fname_grid = [
-    'mf',
-    'mb_other_norm',
-#    'entro',
-#    '8',
+#    'mf',
+#    'mb',
+    'mb_e-3',
+    'mb_0.1x',
+    '4_e-3_scale',
+    '8_e-3_scale',
+    '4_0.1x_scale',
+    '8_0.1x_scale',
     ]
 
 # Typical loss weights:
 # MB: [1E-2, 1E-1, 1E-1, 1] Neigh: [1E-2, 1E-2, 0, 1]
 loss_weights_grid = [
-    [0, 0, 0, 1],
-    [1E-2, 1E-1, 1E-1, 1],
-#    [0., 1E-1, 1E-1, 1],
-#    [1E-1, 1E-1, 1E-1, 1],
+#    [0, 0, 0, 1],
+#    [1E-2, 1E-1, 1E-1, 1],
+    [1E-3, 1E-1, 1E-1, 1],
+    [1E-3, 1E-2, 1E-2, 1],
+    [1E-3, 1E-1, 1E-1, 1],
+    [1E-3, 1E-1, 1E-1, 1],
+    [1E-3, 1E-2, 1E-2, 1],
+    [1E-3, 1E-2, 1E-2, 1],
     ]
 
 # If you want latents to predict future latents
@@ -200,14 +212,14 @@ loss_weights_grid = [
 param_updates = [
     {},
     {},
-    #{'pred_len': 2, 'pred_gamma': 0.6},
-    #{'pred_len': 4, 'pred_gamma': 0.76},
-    #{'agent_args': {'pred_len': 8, 'pred_gamma': 0.87}},
-    #{'pred_len': 10, 'pred_gamma': 0.9},
+    {'agent_args': {'pred_len': 4, 'pred_gamma': 0.76}},
+    {'agent_args': {'pred_len': 8, 'pred_gamma': 0.87}},
+    {'agent_args': {'pred_len': 4, 'pred_gamma': 0.76}},
+    {'agent_args': {'pred_len': 8, 'pred_gamma': 0.87}},
     ]
 
 fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
-iters = np.arange(2)
+iters = np.arange(5)
 args = []
 for arg_idx in range(len(fname_grid)):
     for i in iters:
@@ -216,8 +228,6 @@ for arg_idx in range(len(fname_grid)):
         param_update = param_updates[arg_idx]
         args.append([fname, loss_weights, param_update, i])
 split_args = np.array_split(args, n_jobs)
-
-run(args[0])
 
 import time
 start = time.time()
