@@ -193,7 +193,12 @@ class Env(dm_env.Environment):
             x, y = self._state
             return y * self._layout.shape[1] + x
 
-    def reset(self, reset_start=True):
+    def reset(self, reset_start=True, reset_goal=False):
+        if reset_goal:
+            self._prev_goal_state = self.goal_state
+            self._new_goal_state_gap = min(min(self._layout_dims)//3, 3)
+            goal_state = self._sample_goal()
+            self.goal_state = goal_state
         if reset_start:
             self._start_state = self._sample_start()
             if self._start_state == self.goal_state:
