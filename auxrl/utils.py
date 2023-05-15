@@ -67,15 +67,12 @@ def run_eval_episode(
         episode_steps = 0
         episode_return = 0
         timestep = env.reset()
-        agent.observe_first(timestep)
         while not timestep.last():
             action = agent.select_action(
                 timestep.observation, force_greedy=True, verbose=verbose)
             if verbose:
                 env.plot_state()
             timestep = env.step(action)
-            agent.observe(
-                action, next_timestep=timestep, latent=agent.get_curr_latent())
             episode_steps += 1
             episode_return += timestep.reward
         all_episode_steps.append(episode_steps)
