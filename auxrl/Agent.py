@@ -35,7 +35,8 @@ class Agent(acme.Actor):
         replay_capacity: int=1_000_000, epsilon: float=1.,
         batch_size: int=32, target_update_frequency: int=1000,
         device: torch.device=torch.device('cpu'), train_seq_len: int=1,
-        entropy_temp: int=5, discount_factor: float=0.9):
+        entropy_temp: int=5, discount_factor: float=0.9,
+        respect_terminals: bool=False):
 
         self._env_spec = env_spec
         self._loss_weights = loss_weights
@@ -60,6 +61,7 @@ class Agent(acme.Actor):
         self._entropy_temp = entropy_temp
         self._discount_factor = discount_factor
         self._train_seq_len = train_seq_len
+        self._respect_terminals = respect_terminals
         # Initialize optimizer
         self._optimizer = torch.optim.Adam(
             self._network.get_trainable_params(), lr=lr)
@@ -97,7 +99,8 @@ class Agent(acme.Actor):
             return [0,0,0,0,0]
         device = self._device
         self._optimizer.zero_grad()
-        transitions_seq = self._replay_buffer.sample(self._batch_size, self._replay_seq_len)
+        transitions_seq = self._replay_buffer.sample(
+            self._batch_size, self._replay_seq_len, self._respect_terminals)
         if self._replay_seq_len > 1:
             transitions = transitions_seq[0]
         else:
