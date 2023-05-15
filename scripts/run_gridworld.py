@@ -35,16 +35,17 @@ if n_gpus > 1:
     my_env["CUDA_VISIBLE_DEVICES"] = device_num
 fname_prefix = 'gridtest'
 fname_suffix = ''
-n_episodes = 251
-n_cpu_jobs = 20
+n_episodes = 301
+n_cpu_jobs = 28
 eval_every = 1
 save_net_every = 50
 epsilon = 1.
 size_maze = 6
+continual_transfer = False
 
 # Make directories
-#engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
-engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
+engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
+#engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
 exp_dir = f'{fname_prefix}_{nn_yaml}_dim{internal_dim}{fname_suffix}/'
 for d in ['pickles/', 'nnets/', 'figs/', 'params/']:
     os.makedirs(f'{engram_dir}{d}{exp_dir}', exist_ok=True)
@@ -72,9 +73,10 @@ def run(arg):
         'fname': fname,
         'n_episodes': n_episodes,
         'n_test_episodes': 5,
+        'continual_transfer': continual_transfer,
         'agent_args': {
             'loss_weights': loss_weights, 'lr': 1e-4,
-            'replay_capacity': 100_000, 'epsilon': epsilon,
+            'replay_capacity': 20_000, 'epsilon': epsilon,
             'batch_size': 64, 'target_update_frequency': 1000,
             'train_seq_len': 1},
         'network_args': {'latent_dim': internal_dim, 'network_yaml': nn_yaml},
@@ -86,7 +88,7 @@ def run(arg):
     with open(f'{param_dir}{_fname}.yaml', 'w') as outfile:
         yaml.dump(parameters, outfile, default_flow_style=False)
     env = Env(**parameters['dset_args'])
-    env = wrappers.SinglePrecisionWrapper(env)
+    #env = wrappers.SinglePrecisionWrapper(env)
     env_spec = specs.make_environment_spec(env)
     network = Network(env_spec, device=device, **parameters['network_args'])
     agent = Agent(env_spec, network, device=device, **parameters['agent_args'])
@@ -112,8 +114,12 @@ def run(arg):
 
     sec_per_step_SUM = 0.
     sec_per_step_NUM = 0.
+    goal_reset_episode = n_episodes//2 + 1
 
     for episode in range(n_episodes):
+        if continual_transfer and (episode == goal_reset_episode):
+            env.reset(reset_goal=True)
+            agent._replay_buffer.flush()
         start = time.time()
         losses, score, steps_per_episode = run_train_episode(env, agent)
         end = time.time()
@@ -182,27 +188,21 @@ def run(arg):
 
 # Labels assigned to each network
 fname_grid = [
-#    'mf',
-#    'mb',
-    'mb_e-3',
-    'mb_0.1x',
-    '4_e-3_scale',
-    '8_e-3_scale',
-    '4_0.1x_scale',
-    '8_0.1x_scale',
+    'mf',
+    'mb',
+    '2e-2',
+    '4e-2',
+    '8e-3_v2',
     ]
 
 # Typical loss weights:
 # MB: [1E-2, 1E-1, 1E-1, 1] Neigh: [1E-2, 1E-2, 0, 1]
 loss_weights_grid = [
-#    [0, 0, 0, 1],
-#    [1E-2, 1E-1, 1E-1, 1],
+    [0, 0, 0, 1],
+    [1E-2, 1E-1, 1E-1, 1],
+    [5E-3, 1E-1, 1E-1, 1],
+    [5E-3, 1E-1, 1E-1, 1],
     [1E-3, 1E-1, 1E-1, 1],
-    [1E-3, 1E-2, 1E-2, 1],
-    [1E-3, 1E-1, 1E-1, 1],
-    [1E-3, 1E-1, 1E-1, 1],
-    [1E-3, 1E-2, 1E-2, 1],
-    [1E-3, 1E-2, 1E-2, 1],
     ]
 
 # If you want latents to predict future latents
@@ -212,8 +212,7 @@ loss_weights_grid = [
 param_updates = [
     {},
     {},
-    {'agent_args': {'pred_len': 4, 'pred_gamma': 0.76}},
-    {'agent_args': {'pred_len': 8, 'pred_gamma': 0.87}},
+    {'agent_args': {'pred_len': 2, 'pred_gamma': 0.6}},
     {'agent_args': {'pred_len': 4, 'pred_gamma': 0.76}},
     {'agent_args': {'pred_len': 8, 'pred_gamma': 0.87}},
     ]
@@ -228,6 +227,8 @@ for arg_idx in range(len(fname_grid)):
         param_update = param_updates[arg_idx]
         args.append([fname, loss_weights, param_update, i])
 split_args = np.array_split(args, n_jobs)
+
+run(args[0])
 
 import time
 start = time.time()
