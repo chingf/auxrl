@@ -33,7 +33,7 @@ if n_gpus > 1:
     device_num = str(job_idx % n_gpus)
     my_env = os.environ
     my_env["CUDA_VISIBLE_DEVICES"] = device_num
-fname_prefix = 'gridtest'
+fname_prefix = 'gridtestScale2'
 fname_suffix = ''
 n_episodes = 301
 n_cpu_jobs = 28
@@ -188,20 +188,24 @@ def run(arg):
 
 # Labels assigned to each network
 fname_grid = [
-    'mf',
-    'mb',
-    '2e-2',
+#    'mf',
+#    'mb',
     '4e-2',
-    '8e-3_v2',
+    '8e-2',
+    '4e-3',
+    '8e-3',
     ]
 
 # Typical loss weights:
 # MB: [1E-2, 1E-1, 1E-1, 1] Neigh: [1E-2, 1E-2, 0, 1]
 loss_weights_grid = [
-    [0, 0, 0, 1],
+#    [0, 0, 0, 1],
+#    [1E-2, 1E-1, 1E-1, 1],
+
     [1E-2, 1E-1, 1E-1, 1],
-    [5E-3, 1E-1, 1E-1, 1],
-    [5E-3, 1E-1, 1E-1, 1],
+    [1E-2, 1E-1, 1E-1, 1],
+
+    [1E-3, 1E-1, 1E-1, 1],
     [1E-3, 1E-1, 1E-1, 1],
     ]
 
@@ -210,11 +214,14 @@ loss_weights_grid = [
 # If you wanted latents to predict observations:
 # {'yaml_mods': {'trans-pred': {'predict_z': False}}}
 param_updates = [
-    {},
-    {},
-    {'agent_args': {'pred_len': 2, 'pred_gamma': 0.6}},
-    {'agent_args': {'pred_len': 4, 'pred_gamma': 0.76}},
-    {'agent_args': {'pred_len': 8, 'pred_gamma': 0.87}},
+#    {},
+#    {},
+#    {'agent_args': {'pred_len': 2, 'pred_gamma': 0.6, 'pred_scale': True}},
+
+    {'agent_args': {'pred_len': 4, 'pred_gamma': 0.76, 'pred_scale': True}},
+    {'agent_args': {'pred_len': 8, 'pred_gamma': 0.87, 'pred_scale': True}},
+    {'agent_args': {'pred_len': 4, 'pred_gamma': 0.76, 'pred_scale': True}},
+    {'agent_args': {'pred_len': 8, 'pred_gamma': 0.87, 'pred_scale': True}},
     ]
 
 fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
