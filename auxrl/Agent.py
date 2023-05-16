@@ -102,7 +102,7 @@ class Agent(acme.Actor):
         transitions_seq = self._replay_buffer.sample(
             self._batch_size, self._replay_seq_len, self._respect_terminals)
         if self._replay_seq_len > 1:
-            transitions = transitions_seq[0]
+            transitions = transitions_seq[-1]
         else:
             transitions = transitions_seq
 
