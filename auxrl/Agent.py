@@ -31,7 +31,8 @@ class Agent(acme.Actor):
     def __init__(self,
         env_spec: specs.EnvironmentSpec, network: Network,
         loss_weights: list=[0,0,0,1], lr: float=1e-4,
-        pred_len: int=1, pred_gamma: float=0., pred_scale: bool=False,
+        pred_TD: bool=False, pred_gamma: float=0.,
+        pred_len: int=1, pred_scale: bool=False, # Only used if not pred_TD
         replay_capacity: int=1_000_000, epsilon: float=1.,
         batch_size: int=32, target_update_frequency: int=1000,
         device: torch.device=torch.device('cpu'), train_seq_len: int=1,
@@ -41,13 +42,18 @@ class Agent(acme.Actor):
         self._env_spec = env_spec
         self._loss_weights = loss_weights
         self._n_actions = env_spec.actions.num_values
-        self._pred_len = pred_len
+        self._pred_TD = pred_TD
         self._pred_gamma = pred_gamma
         self._pred_scale = pred_scale
+        self._pred_len = pred_len
         self._mem_len = network._mem_len
         self._replay_seq_len = pred_len
         if network._mem_len > 0:
             self._replay_seq_len += max(network._mem_len + train_seq_len)
+        if self._pred_TD:
+            if self._replay_seq_len != 2:
+                warnings.warn('Overriding replay length to 2 for predictive TD loss!')
+            self._pred_len = self._replay_seq_len = 2
         # Initialize networks
         self._network = network
         self._target_network = network.copy()
@@ -134,23 +140,37 @@ class Agent(acme.Actor):
         Tz = self._network.T(z_and_action)
 
         # Positive Sample Loss (transition predictions)
-        T_target = next_z
-        #terminal_mask = (1-transitions.terminal).astype(np.float32) # (N,)
-        total_scale_term = 1
-        #T_target_scale = torch.ones(self._batch_size)
-        for t in np.arange(1, self._pred_len): # TODO
-            _obs = torch.tensor(transitions_seq[t].next_obs.astype(np.float32))
+        if self._pred_TD:
+            _obs = torch.tensor(transitions_seq[0].obs.astype(np.float32))
+            _a = transitions_seq[0].action.astype(int)
             _z = self._network.encoder(_obs.to(device))
-            scale_term = self._pred_gamma**t
-            total_scale_term += scale_term
-            scale_term = scale_term #* torch.tensor(terminal_mask)
-            T_target = T_target + _z * scale_term#[:, None]
-            terminal = transitions_seq[t].terminal
-            #terminal_mask = ((1-terminal) + terminal_mask) == 2 # (N,)
-            #terminal_mask = terminal_mask.astype(np.float32)
-        if self._pred_len > 1 and self._pred_scale:
-            T_target = T_target / total_scale_term #T_target_scale.to(device)[:,None]
-        loss_pos_sample = torch.mean(torch.norm(Tz - T_target, dim=1))
+            _onehot_actions = np.zeros((self._batch_size, self._n_actions))
+            _onehot_actions[np.arange(self._batch_size), _a] = 1
+            _onehot_actions = torch.as_tensor(_onehot_actions, device=self._device).float()
+            _z_and_action = torch.cat([_z, _onehot_actions], dim=1)
+            _Tz = self._network.T(_z_and_action)
+            with torch.no_grad():
+                _next_Tz = self._network.T(z_and_action)
+            T_target = z + self._pred_gamma * _next_Tz
+            loss_pos_sample = torch.mean(torch.norm(_Tz - T_target, dim=1))
+        else:
+            T_target = next_z
+            #terminal_mask = (1-transitions.terminal).astype(np.float32) # (N,)
+            total_scale_term = 1
+            #T_target_scale = torch.ones(self._batch_size)
+            for t in np.arange(1, self._pred_len): # TODO
+                _obs = torch.tensor(transitions_seq[t].next_obs.astype(np.float32))
+                _z = self._network.encoder(_obs.to(device))
+                scale_term = self._pred_gamma**t
+                total_scale_term += scale_term
+                scale_term = scale_term #* torch.tensor(terminal_mask)
+                T_target = T_target + _z * scale_term#[:, None]
+                terminal = transitions_seq[t].terminal
+                #terminal_mask = ((1-terminal) + terminal_mask) == 2 # (N,)
+                #terminal_mask = terminal_mask.astype(np.float32)
+            if self._pred_len > 1 and self._pred_scale:
+                T_target = T_target / total_scale_term #T_target_scale.to(device)[:,None]
+            loss_pos_sample = torch.mean(torch.norm(Tz - T_target, dim=1))
 
         # Negative Sample Loss (entropy)
         rolled = torch.roll(z, 1, dims=0)
