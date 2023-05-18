@@ -32,12 +32,12 @@ if n_gpus > 1:
     device_num = str(job_idx % n_gpus)
     my_env = os.environ
     my_env["CUDA_VISIBLE_DEVICES"] = device_num
-fname_prefix = 'frozentransfer_gridtestScale2'
+fname_prefix = 'frozentransfer_gridtestTD'
 fname_suffix = ''
-n_episodes = 401
-source_prefix = 'gridtestScale2'
+n_episodes = 301
+source_prefix = 'gridtestTD'
 source_suffix = ''
-source_episode = 300
+source_episode = 200
 epsilon = 1.
 encoder_only = True
 freeze_encoder = True
@@ -47,8 +47,8 @@ save_net_every = 50
 size_maze = 6
 
 # Make directories
-engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
-#engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
+#engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
+engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
 exp_dir = f'{fname_prefix}_{nn_yaml}_dim{internal_dim}{fname_suffix}/'
 source_dir = f'{source_prefix}_{nn_yaml}_dim{internal_dim}{source_suffix}/'
 for d in ['pickles/', 'nnets/', 'figs/', 'params/']:
@@ -209,12 +209,8 @@ def run(arg):
 
 # Labels assigned to each network
 fname_grid = [
-#    'mf',
-#    'mb',
-    '4e-2',
-    '8e-2',
-    '4e-3',
-    '8e-3',
+    'mb_-3'
+    'gamma0.25v2_-2',
     ]
 source_fnames = [f'{source_prefix}_{f}' for f in fname_grid]
 #fname_grid.append('clean')
