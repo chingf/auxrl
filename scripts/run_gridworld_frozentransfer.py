@@ -41,14 +41,14 @@ source_episode = 200
 epsilon = 1.
 encoder_only = True
 freeze_encoder = True
-n_cpu_jobs = 30 # Only used in event of CPU paralellization
+n_cpu_jobs = 56 # Only used in event of CPU paralellization
 eval_every = 1
 save_net_every = 50
 size_maze = 6
 
 # Make directories
-#engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
-engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
+engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
+#engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
 exp_dir = f'{fname_prefix}_{nn_yaml}_dim{internal_dim}{fname_suffix}/'
 source_dir = f'{source_prefix}_{nn_yaml}_dim{internal_dim}{source_suffix}/'
 for d in ['pickles/', 'nnets/', 'figs/', 'params/']:
@@ -209,8 +209,17 @@ def run(arg):
 
 # Labels assigned to each network
 fname_grid = [
-    'mb_-3'
-    'gamma0.25v2_-2',
+    'neigh_0',
+    'neigh_1',
+    'neigh_2',
+    'g0_-2_neigh0',
+    'g0_-2_neigh-1',
+    'g0.25_-3_neigh0',
+    'g0.25_-3_neigh-1',
+    'g0.25_-3_neigh-2',
+    'g0.8_-4_neigh0',
+    'g0.8_-4_neigh-1',
+    'g0.8_-4_neigh-2',
     ]
 source_fnames = [f'{source_prefix}_{f}' for f in fname_grid]
 #fname_grid.append('clean')

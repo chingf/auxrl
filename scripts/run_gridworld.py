@@ -33,10 +33,10 @@ if n_gpus > 1:
     device_num = str(job_idx % n_gpus)
     my_env = os.environ
     my_env["CUDA_VISIBLE_DEVICES"] = device_num
-fname_prefix = 'gridtestTD'
+fname_prefix = 'gridtestTD2'
 fname_suffix = ''
 n_episodes = 201
-n_cpu_jobs = 28
+n_cpu_jobs = 56
 eval_every = 1
 save_net_every = 50
 epsilon = 1.
@@ -44,8 +44,8 @@ size_maze = 6
 continual_transfer = False
 
 # Make directories
-#engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
-engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
+engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
+#engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
 exp_dir = f'{fname_prefix}_{nn_yaml}_dim{internal_dim}{fname_suffix}/'
 for d in ['pickles/', 'nnets/', 'figs/', 'params/']:
     os.makedirs(f'{engram_dir}{d}{exp_dir}', exist_ok=True)
@@ -188,22 +188,33 @@ def run(arg):
 
 # Labels assigned to each network
 fname_grid = [
-    'mb_-3'
-    'gamma0.25v2_-2',
-#    'gamma0.25v2',
-#    'gamma0.5v2_e-2',
-#    'gamma0.8v2_e-2',
-#    'gamma0.5v2',
-#    'gamma0.v2',
-#    'gamma0.8v2',
+    'neigh_0',
+    'neigh_1',
+    'neigh_2',
+    'g0_-2_neigh0',
+    'g0_-2_neigh-1',
+    'g0.25_-3_neigh0',
+    'g0.25_-3_neigh-1',
+    'g0.25_-3_neigh-2',
+    'g0.8_-4_neigh0',
+    'g0.8_-4_neigh-1',
+    'g0.8_-4_neigh-2',
     ]
 
 # Typical loss weights:
 # MB: [1E-2, 1E-1, 1E-1, 1] Neigh: [1E-2, 1E-2, 0, 1]
 loss_weights_grid = [
-    [1E-3, 1E-1, 1E-1, 1],
-    [1E-2, 1E-1, 1E-1, 1],
-#    [1E-2, 1E-1, 1E-1, 1],
+    [0, 1E0, 0, 1],
+    [0, 1E1, 0, 1],
+    [0, 1E2, 0, 1],
+    [1E-2, 1E0, 0, 1],
+    [1E-2, 1E-1, 0, 1],
+    [1E-3, 1E0, 0, 1],
+    [1E-3, 1E-1, 0, 1],
+    [1E-3, 1E-2, 0, 1],
+    [1E-4, 1E0, 0, 1],
+    [1E-4, 1E-1, 0, 1],
+    [1E-4, 1E-2, 0, 1],
     ]
 
 # If you want latents to predict future latents
@@ -211,10 +222,15 @@ loss_weights_grid = [
 # If you wanted latents to predict observations:
 # {'yaml_mods': {'trans-pred': {'predict_z': False}}}
 param_updates = [
-        {},
-        {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.25}},
-#        {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.5}},
-#        {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.8}},
+    {}, {}, {},
+    {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.}},
+    {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.}},
+    {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.25}},
+    {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.25}},
+    {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.25}},
+    {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.8}},
+    {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.8}},
+    {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.8}},
     ]
 
 fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
