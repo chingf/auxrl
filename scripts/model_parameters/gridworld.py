@@ -10,8 +10,53 @@ def mf_grid():
     return fname_grid, loss_weights_grid, param_updates
 
 
-def selected_models():
-    pass
+def selected_models(include_pos_sample_only=False):
+    fname_grid = [
+        'mf',
+        'entro_0',
+        'g0_-2_entro0',
+        'g0.25_-3_entro0',
+        'g0.5_-3_entro0',
+        'g0.8_-4_entro0'
+        ]
+    loss_weights_grid = [
+        [0, 0, 0, 1],
+        [0, 1E0, 1E0, 1],
+        [1E-2, 1E0, 1E0, 1],
+        [1E-3, 1E0, 1E0, 1],
+        [1E-3, 1E0, 1E0, 1],
+        [1E-4, 1E0, 1E0, 1],
+        ]
+    param_updates = [
+        {},
+        {},
+        {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.}},
+        {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.25}},
+        {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.5}},
+        {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.8}},
+        ]
+
+    if include_pos_sample_only:
+        fname_grid.extend([
+            'g0_-2',
+            'g0.25_-3',
+            'g0.5_-3',
+            'g0.8_-3'
+            ])
+        loss_weights_grid.extend([
+            [1E-2, 0, 0, 1],
+            [1E-3, 0, 0, 1],
+            [1E-3, 0, 0, 1],
+            [1E-3, 0, 0, 1],
+            ])
+        param_updates.extend([
+            {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.}},
+            {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.25}},
+            {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.5}},
+            {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.8}},
+            ])
+
+    return fname_grid, loss_weights_grid, param_updates
 
 def full_grid():
     fname_grid = [
