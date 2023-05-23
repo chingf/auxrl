@@ -19,6 +19,7 @@ from auxrl.Agent import Agent
 from auxrl.networks.Network import Network
 from auxrl.environments.GridWorld import Env as Env
 from auxrl.utils import run_train_episode, run_eval_episode
+from model_parameters.gridworld import mf_grid, full_grid
 
 # Experiment Parameters
 job_idx = int(sys.argv[1])
@@ -33,7 +34,7 @@ if n_gpus > 1:
     device_num = str(job_idx % n_gpus)
     my_env = os.environ
     my_env["CUDA_VISIBLE_DEVICES"] = device_num
-fname_prefix = 'gridtestTD2'
+fname_prefix = 'gridworld6x6'
 fname_suffix = ''
 n_episodes = 201
 n_cpu_jobs = 56
@@ -186,55 +187,14 @@ def run(arg):
     with open(f'{pickle_dir}{unique_id}.p', 'wb') as f:
         pickle.dump(result, f)
 
-# Labels assigned to each network
-fname_grid = [
-    'neigh_0',
-    'neigh_1',
-    'neigh_2',
-    'g0_-2_neigh0',
-    'g0_-2_neigh-1',
-    'g0.25_-3_neigh0',
-    'g0.25_-3_neigh-1',
-    'g0.25_-3_neigh-2',
-    'g0.8_-4_neigh0',
-    'g0.8_-4_neigh-1',
-    'g0.8_-4_neigh-2',
-    ]
-
-# Typical loss weights:
-# MB: [1E-2, 1E-1, 1E-1, 1] Neigh: [1E-2, 1E-2, 0, 1]
-loss_weights_grid = [
-    [0, 1E0, 0, 1],
-    [0, 1E1, 0, 1],
-    [0, 1E2, 0, 1],
-    [1E-2, 1E0, 0, 1],
-    [1E-2, 1E-1, 0, 1],
-    [1E-3, 1E0, 0, 1],
-    [1E-3, 1E-1, 0, 1],
-    [1E-3, 1E-2, 0, 1],
-    [1E-4, 1E0, 0, 1],
-    [1E-4, 1E-1, 0, 1],
-    [1E-4, 1E-2, 0, 1],
-    ]
-
-# If you want latents to predict future latents
-# {'agent_args': {'pred_len': 10, 'pred_gamma': 0.93}},
-# If you wanted latents to predict observations:
-# {'yaml_mods': {'trans-pred': {'predict_z': False}}}
-param_updates = [
-    {}, {}, {},
-    {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.}},
-    {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.}},
-    {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.25}},
-    {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.25}},
-    {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.25}},
-    {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.8}},
-    {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.8}},
-    {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.8}},
-    ]
-
+# Load model parameters
+fname_grid, loss_weights_grid, param_updates = mf_grid()
+assert(len(fname_grid) == len(loss_weights_grid))
+assert(len(fname_grid) == len(param_updates))
 fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
-iters = np.arange(5)
+
+# Collect argument combinations
+iters = np.arange(15)
 args = []
 for arg_idx in range(len(fname_grid)):
     for i in iters:

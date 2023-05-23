@@ -18,6 +18,7 @@ from auxrl.Agent import Agent
 from auxrl.networks.Network import Network
 from auxrl.environments.GridWorld import Env as Env
 from auxrl.utils import run_train_episode, run_eval_episode
+from model_parameters.gridworld import mf_grid, full_grid
 
 # Experiment Parameters
 job_idx = int(sys.argv[1])
@@ -32,10 +33,10 @@ if n_gpus > 1:
     device_num = str(job_idx % n_gpus)
     my_env = os.environ
     my_env["CUDA_VISIBLE_DEVICES"] = device_num
-fname_prefix = 'frozentransfer_gridtestTD'
+fname_prefix = 'frozentransfer_gridworld6x6'
 fname_suffix = ''
 n_episodes = 301
-source_prefix = 'gridtestTD'
+source_prefix = 'gridworld6x6'
 source_suffix = ''
 source_episode = 200
 epsilon = 1.
@@ -207,27 +208,17 @@ def run(arg):
     with open(f'{pickle_dir}{unique_id}.p', 'wb') as f:
         pickle.dump(result, f)
 
-# Labels assigned to each network
-fname_grid = [
-    'neigh_0',
-    'neigh_1',
-    'neigh_2',
-    'g0_-2_neigh0',
-    'g0_-2_neigh-1',
-    'g0.25_-3_neigh0',
-    'g0.25_-3_neigh-1',
-    'g0.25_-3_neigh-2',
-    'g0.8_-4_neigh0',
-    'g0.8_-4_neigh-1',
-    'g0.8_-4_neigh-2',
-    ]
+# Load model parameters
+fname_grid, _, _ = mf_grid()
 source_fnames = [f'{source_prefix}_{f}' for f in fname_grid]
 #fname_grid.append('clean')
 #source_fnames.append(None)
 loss_weights_grid = [[0., 0., 0., 1.]] * len(fname_grid)
 fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
 param_updates = [{}]*len(fname_grid)
-iters = np.arange(5)
+
+# Collect argument combinations
+iters = np.arange(15)
 args = []
 for arg_idx in range(len(fname_grid)):
     for i in iters:
