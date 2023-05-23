@@ -48,8 +48,10 @@ save_net_every = 50
 size_maze = 6
 
 # Make directories
-engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
-#engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
+if 'SLURM_JOBID' in os.environ.keys():
+    engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
+else:
+    engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
 exp_dir = f'{fname_prefix}_{nn_yaml}_dim{internal_dim}{fname_suffix}/'
 source_dir = f'{source_prefix}_{nn_yaml}_dim{internal_dim}{source_suffix}/'
 for d in ['pickles/', 'nnets/', 'figs/', 'params/']:
