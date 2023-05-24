@@ -19,7 +19,7 @@ from auxrl.Agent import Agent
 from auxrl.networks.Network import Network
 from auxrl.environments.GridWorld import Env as Env
 from auxrl.utils import run_train_episode, run_eval_episode
-from model_parameters.gridworld import mf_grid, full_grid
+from model_parameters.gridworld import mf_grid, full_grid, selected_models
 
 # Experiment Parameters
 job_idx = int(sys.argv[1])
@@ -72,6 +72,14 @@ def run(arg):
     fname_pickle_dir = f'{engram_dir}pickles/{exp_dir}/{fname}/'
     for _dir in [fname_nnet_dir, fname_fig_dir, fname_pickle_dir]:
         os.makedirs(_dir, exist_ok=True)
+
+    net_exists = np.any(['network_ep' in f for f in os.listdir(fname_nnet_dir)])
+    if net_exists:
+        print(f'Skipping {fname}')
+        return
+    else:
+        print(f'Running {fname}')
+
     parameters = {
         'fname': fname,
         'n_episodes': n_episodes,
@@ -190,13 +198,13 @@ def run(arg):
         pickle.dump(result, f)
 
 # Load model parameters
-fname_grid, loss_weights_grid, param_updates = mf_grid()
+fname_grid, loss_weights_grid, param_updates = selected_models()
 assert(len(fname_grid) == len(loss_weights_grid))
 assert(len(fname_grid) == len(param_updates))
 fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
 
 # Collect argument combinations
-iters = np.arange(15)
+iters = np.arange(30)
 args = []
 for arg_idx in range(len(fname_grid)):
     for i in iters:

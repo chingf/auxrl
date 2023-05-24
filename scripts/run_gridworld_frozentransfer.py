@@ -33,7 +33,7 @@ if n_gpus > 1:
     device_num = str(job_idx % n_gpus)
     my_env = os.environ
     my_env["CUDA_VISIBLE_DEVICES"] = device_num
-fname_prefix = 'frozentransfer1E1_gridworld6x6'
+fname_prefix = 'frozentransfer_gridworld6x6'
 fname_suffix = ''
 n_episodes = 301
 source_prefix = 'gridworld6x6'
@@ -92,6 +92,14 @@ def run(arg):
     fname_pickle_dir = f'{engram_dir}pickles/{exp_dir}/{fname}/'
     for _dir in [fname_nnet_dir, fname_fig_dir, fname_pickle_dir]:
         os.makedirs(_dir, exist_ok=True)
+
+    net_exists = np.any(['network_ep' in f for f in os.listdir(fname_nnet_dir)])
+    if net_exists:
+        print(f'Skipping {fname}')
+        return
+    else:
+        print(f'Running {fname}')
+
     parameters = {
         'source_network_path': load_network,
         'source_network_episode': source_episode,
@@ -215,12 +223,12 @@ fname_grid, _, _ = selected_models()
 source_fnames = [f'{source_prefix}_{f}' for f in fname_grid]
 #fname_grid.append('clean')
 #source_fnames.append(None)
-loss_weights_grid = [[0., 0., 0., 10.]] * len(fname_grid)
+loss_weights_grid = [[0., 0., 0., 1]] * len(fname_grid)
 fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
 param_updates = [{}]*len(fname_grid)
 
 # Collect argument combinations
-iters = np.arange(15)
+iters = np.arange(30)
 args = []
 for arg_idx in range(len(fname_grid)):
     for i in iters:
