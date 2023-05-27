@@ -121,9 +121,9 @@ class Env(dm_env.Environment):
             new_state = (x-1, y)
         elif action == 1:  # right
             new_state = (x+1, y)
-        elif action == 2:  # up
+        elif action == 2:  # down
             new_state = (x, y-1)
-        elif action == 3:  # down
+        elif action == 3:  # up
             new_state = (x, y+1)
         else:
             raise ValueError('Invalid action')
@@ -141,7 +141,7 @@ class Env(dm_env.Environment):
             if (self._state == right_reward) and (action == 0):
                 invalid_move = True
         elif self._last_reward_loc == RewardLoc.RESET:
-            if (self._state == reset_reward) and (action != 2):
+            if (self._state == reset_reward) and (action != 3):
                 invalid_move = True
 
         # Execute move if valid

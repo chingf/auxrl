@@ -39,8 +39,8 @@ fname_suffix = ''
 n_episodes = 201
 n_cpu_jobs = 56
 eval_every = 5
-save_net_every = 50
-epsilon = 0.75
+save_net_every = 5
+epsilon = 0.4
 
 # Make directories
 if 'SLURM_JOBID' in os.environ.keys():
