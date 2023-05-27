@@ -5,16 +5,21 @@ import yaml
 from joblib import Parallel, delayed
 import numpy as np
 import matplotlib.pyplot as plt
-from joblib import hash, dump, load
 import os
+import time
+import shortuuid
+from flatten_dict import flatten
+from flatten_dict import unflatten
+import torch
 
-from deer.default_parser import process_args
-from deer.agent import NeuralAgent
-from deer.learning_algos.CRAR_torch import CRAR
-import deer.controllers as bc
-from deer.environments.Figure8 import MyEnv as Env
+from acme import specs
+from acme import wrappers
 
-from deer.policies import EpsilonGreedyPolicy, FixedFigure8Policy
+from auxrl.Agent import Agent
+from auxrl.networks.Network import Network
+from auxrl.environments.AlternatingT import Env as Env
+from auxrl.utils import run_train_episode, run_eval_episode
+from model_parameters.gridworld import mf_grid, full_grid, selected_models
 
 # Experiment Parameters
 job_idx = int(sys.argv[1])
@@ -29,11 +34,13 @@ if n_gpus > 1:
     device_num = str(job_idx % n_gpus)
     my_env = os.environ
     my_env["CUDA_VISIBLE_DEVICES"] = device_num
-fname_prefix = 'ccn_fig8_eps0.75'
+fname_prefix = 'tmp'
 fname_suffix = ''
-epochs = 61
-policy_eps = 0.75
-higher_dim_obs = True
+n_episodes = 201
+n_cpu_jobs = 56
+eval_every = 5
+save_net_every = 50
+epsilon = 0.75
 
 # Make directories
 if 'SLURM_JOBID' in os.environ.keys():
@@ -41,152 +48,159 @@ if 'SLURM_JOBID' in os.environ.keys():
 else:
     engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
 exp_dir = f'{fname_prefix}_{nn_yaml}_dim{internal_dim}{fname_suffix}/'
-for d in ['pickles/', 'nnets/', 'figs/', 'latents/']:
+for d in ['pickles/', 'nnets/', 'figs/', 'params/']:
     os.makedirs(f'{engram_dir}{d}{exp_dir}', exist_ok=True)
+pickle_dir = f'{engram_dir}pickles/{exp_dir}/'
+param_dir = f'{engram_dir}params/{exp_dir}/'
 
 def gpu_parallel(job_idx):
-    results_dir = f'{engram_dir}pickles/{exp_dir}'
-    results = {}
-    results['separability_matrix'] = []
-    results['separability_slope'] = []
-    results['separability_tracking'] = []
-    results['dimensionality_tracking'] = []
-    results['valid_scores'] = []
-    results['epochs'] = []
-    results['fname'] = []
-    results['loss_weights'] = []
     for _arg in split_args[job_idx]:
-        fname, loss_weights, result = run_env(_arg)
-        for key in result.keys():
-            results[key].append(result[key])
-        results['fname'].append(fname)
-        results['loss_weights'].append(loss_weights)
-    with open(f'{results_dir}results_{job_idx}.p', 'wb') as f:
-        pickle.dump(results, f)
+        run(_arg)
 
 def cpu_parallel():
-    results_dir = f'{engram_dir}pickles/{exp_dir}'
-    results = {}
-    results['separability_matrix'] = []
-    results['separability_slope'] = []
-    results['separability_tracking'] = []
-    results['dimensionality_tracking'] = []
-    results['valid_scores'] = []
-    results['epochs'] = []
-    results['fname'] = []
-    results['loss_weights'] = []
-    job_results = Parallel(n_jobs=56)(delayed(run_env)(arg) for arg in args)
-    for job_result in job_results:
-        fname, loss_weights, result = job_result
-        for key in result.keys():
-            results[key].append(result[key])
-        results['fname'].append(fname)
-        results['loss_weights'].append(loss_weights)
-    with open(f'{results_dir}results_0.p', 'wb') as f:
-        pickle.dump(results, f)
+    job_results = Parallel(n_jobs=n_cpu_jobs)(delayed(run)(arg) for arg in args)
 
-def run_env(arg):
+def run(arg):
     _fname, loss_weights, param_update, i = arg
-    fname = f'{exp_dir}{_fname}_{i}'
-    encoder_type = 'variational' if loss_weights[-1] > 0 else 'regular'
-    parameters = {
-        'figure8_give_rewards': True,
-        'nn_yaml': nn_yaml,
-        'higher_dim_obs': higher_dim_obs,
-        'internal_dim': internal_dim,
-        'fname': fname,
-        'steps_per_epoch': 2000,
-        'epochs': epochs,
-        'steps_per_test': 500,
-        'mem_len': 2,
-        'train_len': 10,
-        'encoder_type': encoder_type,
-        'frame_skip': 2,
-        'show_rewards': False,
-        'learning_rate': 1*1E-4,
-        'learning_rate_decay': 1.0,
-        'discount': 0.9,
-        'epsilon_start': 1.0,
-        'epsilon_min': 1.0,
-        'epsilon_decay': 1000,
-        'update_frequency': 1,
-        'replay_memory_size': 100000, #50000
-        'batch_size': 64,
-        'freeze_interval': 1000,
-        'deterministic': False,
-        'loss_weights': loss_weights,
-        'yaml_mods': {},
-        'volume_weight': 1E-3
-        }
-    parameters.update(param_update)
-    with open(f'{engram_dir}params/{_fname}.yaml', 'w') as outfile:
-        yaml.dump(parameters, outfile, default_flow_style=False)
-    rng = np.random.RandomState()
-    env = Env(
-        give_rewards=parameters['figure8_give_rewards'],
-        higher_dim_obs=parameters['higher_dim_obs'],
-        show_rewards=parameters['show_rewards'],
-        obs_noise=1.
-        )
-    learning_algo = CRAR(
-        env, parameters['freeze_interval'], parameters['batch_size'], rng,
-        internal_dim=parameters['internal_dim'], lr=parameters['learning_rate'],
-        nn_yaml=parameters['nn_yaml'], yaml_mods=parameters['yaml_mods'],
-        double_Q=True, loss_weights=parameters['loss_weights'],
-        encoder_type=parameters['encoder_type'], mem_len=parameters['mem_len'],
-        train_len=parameters['train_len'],
-        volume_weight=parameters['volume_weight']
-        )
-    if parameters['figure8_give_rewards']:
-        train_policy = EpsilonGreedyPolicy(
-            learning_algo, env.nActions(), rng, epsilon=policy_eps)
-        test_policy = EpsilonGreedyPolicy(
-            learning_algo, env.nActions(), rng, 0.)
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print(device)
+    fname = f'{_fname}_{i}'
+    fname_nnet_dir = f'{engram_dir}nnets/{exp_dir}/{fname}/'
+    fname_fig_dir = f'{engram_dir}figs/{exp_dir}/{fname}/'
+    fname_pickle_dir = f'{engram_dir}pickles/{exp_dir}/{fname}/'
+    for _dir in [fname_nnet_dir, fname_fig_dir]:
+        os.makedirs(_dir, exist_ok=True)
+
+    net_exists = np.any(['network_ep' in f for f in os.listdir(fname_nnet_dir)])
+    if net_exists:
+        print(f'Skipping {fname}')
+        #return
     else:
-        train_policy = FixedFigure8Policy.FixedFigure8Policy(
-            learning_algo, env.nActions(), rng, epsilon=policy_eps,
-            height=env.HEIGHT, width=env.WIDTH)
-        test_policy = FixedFigure8Policy.FixedFigure8Policy(
-            learning_algo, env.nActions(), rng,
-            height=env.HEIGHT, width=env.WIDTH)
-    agent = NeuralAgent(
-        env, learning_algo, parameters['replay_memory_size'], 1,
-        parameters['batch_size'], rng, save_dir=engram_dir,
-        train_policy=train_policy, test_policy=test_policy)
-    agent.run(10, 500)
-    agent.attach(bc.TrainerController(
-        evaluate_on='action',  periodicity=parameters['update_frequency'],
-        show_episode_avg_V_value=True, show_avg_Bellman_residual=True))
-    best_controller = bc.FindBestController(
-        validationID=Env.VALIDATION_MODE, testID=None, unique_fname=fname,
-        savefrequency=5)
-    agent.attach(best_controller)
-    agent.attach(bc.InterleavedTestEpochController(
-        id=Env.VALIDATION_MODE, epoch_length=parameters['steps_per_test'],
-        periodicity=1, show_score=True, summarize_every=10, unique_fname=fname))
-    agent.run(parameters['epochs'], parameters['steps_per_epoch'])
+        print(f'Running {fname}')
 
-    result = {
-        'separability_matrix':  env._separability_matrix,
-        'separability_slope': env._separability_slope[-1], 
-        'separability_tracking': [s[-1] for s in env._separability_tracking],
-        'dimensionality_tracking': env._dimensionality_tracking[-1],
-        'valid_scores':  best_controller._validationScores,
-        'epochs': best_controller._epochNumbers,
+    parameters = {
+        'fname': fname,
+        'n_episodes': n_episodes,
+        'n_test_episodes': 1,
+        'agent_args': {
+            'loss_weights': loss_weights, 'lr': 1e-4, # Volume loss?
+            'replay_capacity': 20_000, # 100_000
+            'epsilon': epsilon,
+            'batch_size': 64, 'target_update_frequency': 1000,
+            'train_seq_len': 1},
+        'network_args': {'latent_dim': internal_dim, 'network_yaml': nn_yaml},
+        'dset_args': {'hide_goal': False},
+        'max_eval_episode_steps': 500,
+#        'mem_len': 2, #TODO
+#        'train_len': 10,
         }
-    return _fname, loss_weights, result
+    parameters = flatten(parameters)
+    parameters.update(flatten(param_update))
+    parameters = unflatten(parameters)
+    with open(f'{param_dir}{_fname}.yaml', 'w') as outfile:
+        yaml.dump(parameters, outfile, default_flow_style=False)
+    env = Env(**parameters['dset_args'])
+    env_spec = specs.make_environment_spec(env)
+    network = Network(env_spec, device=device, **parameters['network_args'])
+    agent = Agent(env_spec, network, device=device, **parameters['agent_args'])
 
-fname_grid = [
-    'mf',
-    '1',
-    ]
+    result = {}
+    result['episode'] = []
+    result['step'] = []
+    result['train_loss'] = []
+    result['mf_loss'] = []
+    result['neg_random_loss'] = []
+    result['neg_neighbor_loss'] = []
+    result['pos_sample_loss'] = []
+    result['train_score'] = []
+    result['valid_score'] = []
+    result['train_steps_per_ep'] = []
+    result['valid_steps_per_ep'] = []
+    result['model'] = []
+    result['model_iter'] = []
+
+    sec_per_step_SUM = 0.
+    sec_per_step_NUM = 0.
+    goal_reset_episode = n_episodes//2 + 1
+
+    for episode in range(n_episodes):
+        start = time.time()
+        losses, score, steps_per_episode = run_train_episode(env, agent)
+        end = time.time()
+        sec_per_step_SUM += (end-start)
+        sec_per_step_NUM += steps_per_episode
+        result['episode'].append(episode)
+        result['step'].append(sec_per_step_NUM)
+        result['train_loss'].append(losses[4])
+        result['mf_loss'].append(losses[3])
+        result['neg_random_loss'].append(losses[2])
+        result['neg_neighbor_loss'].append(losses[1])
+        result['pos_sample_loss'].append(losses[0])
+        result['train_score'].append(score)
+        result['train_steps_per_ep'].append(steps_per_episode)
+        result['model'].append(_fname)
+        result['model_iter'].append(i)
+        if episode % eval_every == 0:
+            sec_per_step = sec_per_step_SUM/sec_per_step_NUM
+            print(f'[TRAIN SUMMARY] {500*sec_per_step} sec/ 500 steps')
+            print(f'{sec_per_step_NUM} training steps elapsed.')
+            score, steps_per_episode = run_eval_episode(
+                env, agent, parameters['n_test_episodes'],
+                max_episode_steps=parameters['max_eval_episode_steps'])
+            result['valid_score'].append(score)
+            result['valid_steps_per_ep'].append(steps_per_episode)
+            # Save plots tracking training progress
+            fig, axs = plt.subplots(3, 2, figsize=(7, 10))
+            loss_keys = [
+                'train_loss', 'mf_loss', 'neg_random_loss',
+                'neg_neighbor_loss', 'pos_sample_loss']
+            for i, loss_key in enumerate(loss_keys):
+                ax = axs[i%3][i//3]
+                ax.plot(result[loss_key])
+                ax.set_ylabel(loss_key)
+            plt.tight_layout()
+            plt.savefig(f'{fname_fig_dir}train_losses.png')
+            plt.figure()
+            plt.plot(result['train_score'])
+            plt.ylabel('Training Score'); plt.xlabel('Training Episodes')
+            plt.tight_layout()
+            plt.savefig(f'{fname_fig_dir}train_scores.png')
+            plt.figure()
+            plt.plot(
+                result['episode'][::eval_every],
+                result['valid_score'][::eval_every])
+            plt.ylabel('Validation Score'); plt.xlabel('Training Episodes')
+            plt.tight_layout()
+            plt.savefig(f'{fname_fig_dir}valid_scores.png')
+            plt.figure()
+            plt.plot(
+                result['episode'][::eval_every],
+                result['valid_steps_per_ep'][::eval_every])
+            plt.ylabel('Validation Steps to Goal'); plt.xlabel('Training Episodes')
+            plt.tight_layout()
+            plt.savefig(f'{fname_fig_dir}valid_steps.png')
+            plt.close('all')
+        else:
+            result['valid_score'].append(None)
+            result['valid_steps_per_ep'].append(None)
+        if episode % save_net_every == 0:
+            agent.save_network(fname_nnet_dir, episode)
+
+    # Save pickle
+    unique_id = shortuuid.uuid()
+    with open(f'{pickle_dir}{unique_id}.p', 'wb') as f:
+        pickle.dump(result, f)
+
+# Load model parameters
+fname_grid = ['mf', '1',]
 loss_weights_grid = [
     [0, 0, 0, 1, 0], 
-    [1E-1, 1E-2, 1E-2, 1, 0],
-    ]
+    [1E-1, 1E-2, 1E-2, 1, 0],]
 param_updates = [{}, {}]
 fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
-iters = np.arange(32)
+
+# Collect argument combinations
+iters = np.arange(30)
 args = []
 for arg_idx in range(len(fname_grid)):
     for i in iters:
@@ -196,7 +210,7 @@ for arg_idx in range(len(fname_grid)):
         args.append([fname, loss_weights, param_update, i])
 split_args = np.array_split(args, n_jobs)
 
-run_env(args[0])
+run(args[0])
 
 import time
 start = time.time()
