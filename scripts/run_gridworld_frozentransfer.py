@@ -18,13 +18,16 @@ from auxrl.Agent import Agent
 from auxrl.networks.Network import Network
 from auxrl.environments.GridWorld import Env as Env
 from auxrl.utils import run_train_episode, run_eval_episode
-from model_parameters.gridworld import mf_grid, full_grid, selected_models
+from model_parameters.gridworld import mf_grid, full_grid, selected_models, test
+from model_parameters.gridworld import selected_models_seedparams
 
 # Experiment Parameters
 job_idx = int(sys.argv[1])
 n_jobs = int(sys.argv[2])
 nn_yaml = sys.argv[3]
 internal_dim = int(sys.argv[4])
+load_function = selected_models_seedparams
+random_seed = True
 try:
     n_gpus = (len(os.environ['CUDA_VISIBLE_DEVICES'])+1)/2
 except:
@@ -33,10 +36,10 @@ if n_gpus > 1:
     device_num = str(job_idx % n_gpus)
     my_env = os.environ
     my_env["CUDA_VISIBLE_DEVICES"] = device_num
-fname_prefix = 'frozentransfer_gridworld6x6'
+fname_prefix = 'frozentransfer_gridworld6x6v2'
 fname_suffix = ''
 n_episodes = 301
-source_prefix = 'gridworld6x6'
+source_prefix = 'gridworld6x6v2'
 source_suffix = ''
 source_episode = 200
 epsilon = 1.
@@ -120,6 +123,7 @@ def run(arg):
     parameters.update(param_update)
     with open(f'{param_dir}{_fname}.yaml', 'w') as outfile:
         yaml.dump(parameters, outfile, default_flow_style=False)
+    if random_seed: np.random.seed(i)
     env = Env(**parameters['dset_args'])
     env = wrappers.SinglePrecisionWrapper(env)
     env_spec = specs.make_environment_spec(env)
@@ -219,7 +223,7 @@ def run(arg):
         pickle.dump(result, f)
 
 # Load model parameters
-fname_grid, _, _ = selected_models()
+fname_grid, _, _ = load_function()
 source_fnames = [f'{source_prefix}_{f}' for f in fname_grid]
 #fname_grid.append('clean')
 #source_fnames.append(None)
