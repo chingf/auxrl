@@ -30,7 +30,6 @@ class ObservationType(enum.IntEnum):
     AGENT_GOAL_POS = enum.auto()
 
 class Env(dm_env.Environment):
-    VALIDATION_MODE = 0
 
     def __init__(
         self, layout, start_state=None, goal_state=None,

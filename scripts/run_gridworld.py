@@ -104,7 +104,6 @@ def run(arg):
     network = Network(env_spec, device=device, **parameters['network_args'])
     agent = Agent(env_spec, network, device=device, **parameters['agent_args'])
 
-    os.makedirs(fname_nnet_dir, exist_ok=True)
     with open(f'{fname_nnet_dir}goal.txt', 'w') as goalfile:
         goalfile.write(str(env._goal_state))
 
