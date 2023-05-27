@@ -40,6 +40,7 @@ class Env(dm_env.Environment):
         self._discount = discount
         self._state = (width//2, 1)
         self._reward_loc = RewardLoc.LEFT
+        self._goal_state = (1, self._height-2)
         self._last_reward_loc = RewardLoc.RESET
         self._space_label = self.make_space_labels()
         self._agent_loc_map = {}
@@ -104,7 +105,8 @@ class Env(dm_env.Environment):
     def reset(self):
         self._state = (self._width//2, 1)
         self._reward_loc = RewardLoc.LEFT
-        self._last_reward_loc = RewardLoc.RIGHT
+        self._goal_state = (1, self._height-2)
+        self._last_reward_loc = RewardLoc.RESET
         self._num_episode_steps = 0
         return dm_env.TimeStep(
             step_type=dm_env.StepType.FIRST, reward=None, discount=None,
@@ -132,15 +134,15 @@ class Env(dm_env.Environment):
         invalid_move = False
         if self._layout[new_x, new_y] == -1:  # wall
             invalid_move = True
-        #elif self._last_reward_loc == RewardLoc.LEFT:
-        #    if (self._state == left_reward) and (action == 1):
-        #        invalid_move = True
-        #elif self._last_reward_loc == RewardLoc.RIGHT:
-        #    if (self._state == right_reward) and (action == 0):
-        #        invalid_move = True
-        #elif self._last_reward_loc == RewardLoc.RESET:
-        #    if (self._state == reset_reward) and (action != 2):
-        #        invalid_move = True
+        elif self._last_reward_loc == RewardLoc.LEFT:
+            if (self._state == left_reward) and (action == 1):
+                invalid_move = True
+        elif self._last_reward_loc == RewardLoc.RIGHT:
+            if (self._state == right_reward) and (action == 0):
+                invalid_move = True
+        elif self._last_reward_loc == RewardLoc.RESET:
+            if (self._state == reset_reward) and (action != 2):
+                invalid_move = True
 
         # Execute move if valid
         if invalid_move:
@@ -151,23 +153,26 @@ class Env(dm_env.Environment):
             reward = self._reward_val
             discount = self._discount
             self._reward_loc = RewardLoc.RESET
-            self._last_reward_location = RewardLoc.LEFT
-            print('left reward')
+            self._goal_state = reset_reward
+            self._last_reward_loc = RewardLoc.LEFT
         elif new_state == right_reward and self._reward_loc == RewardLoc.RIGHT:
             reward = self._reward_val
             discount = self._discount
             self._reward_loc = RewardLoc.RESET
-            self._last_reward_location = RewardLoc.RIGHT
-            print('right reward')
+            self._goal_state = reset_reward
+            self._last_reward_loc = RewardLoc.RIGHT
         elif new_state == reset_reward and self._reward_loc == RewardLoc.RESET:
             reward = self._reward_val
             discount = self._discount
             if self._last_reward_loc == RewardLoc.RIGHT:
                 self._reward_loc = RewardLoc.LEFT
-            else:
+                self._goal_state = left_reward
+            elif self._last_reward_loc == RewardLoc.LEFT:
                 self._reward_loc = RewardLoc.RIGHT
+                self._goal_state = right_reward
+            else:
+                reward = 0
             self._last_reward_loc = RewardLoc.RESET
-            print('reset reward')
         else: # Just a standard move
             reward = 0.
             discount = self._discount
@@ -175,7 +180,6 @@ class Env(dm_env.Environment):
         self._num_episode_steps += 1
         if (self._max_episode_length is not None and
             self._num_episode_steps >= self._max_episode_length):
-            print('LAST STEP')
             step_type = dm_env.StepType.LAST
         return dm_env.TimeStep(
             step_type=step_type, reward=np.float32(reward),

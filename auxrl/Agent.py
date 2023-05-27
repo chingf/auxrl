@@ -245,7 +245,11 @@ class Agent(acme.Actor):
 
     def load_network(self, path, episode=None, encoder_only=True):
         file_suffix = '' if episode == None else f'_ep{episode}'
-        network_params = torch.load(f'{path}network{file_suffix}.pth')
+        try:
+            network_params = torch.load(f'{path}network{file_suffix}.pth')
+        except:
+            network_params = torch.load(
+                f'{path}network{file_suffix}.pth', map_location=torch.device('cpu')
+                )
         self._network.set_params(network_params, encoder_only)
-
 
