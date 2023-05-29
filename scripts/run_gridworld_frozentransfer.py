@@ -19,14 +19,14 @@ from auxrl.networks.Network import Network
 from auxrl.environments.GridWorld import Env as Env
 from auxrl.utils import run_train_episode, run_eval_episode
 from model_parameters.gridworld import mf_grid, full_grid, selected_models, test
-from model_parameters.gridworld import selected_models_seedparams
+from model_parameters.gridworld import selected_models_noMF
 
 # Experiment Parameters
 job_idx = int(sys.argv[1])
 n_jobs = int(sys.argv[2])
 nn_yaml = sys.argv[3]
 internal_dim = int(sys.argv[4])
-load_function = selected_models_seedparams
+load_function = selected_models_noMF
 random_seed = True
 try:
     n_gpus = (len(os.environ['CUDA_VISIBLE_DEVICES'])+1)/2
@@ -36,19 +36,22 @@ if n_gpus > 1:
     device_num = str(job_idx % n_gpus)
     my_env = os.environ
     my_env["CUDA_VISIBLE_DEVICES"] = device_num
-fname_prefix = 'frozentransfer_gridworld6x6v2'
+fname_prefix = 'frozentransfer_gridworld8x8'
 fname_suffix = ''
-n_episodes = 301
-source_prefix = 'gridworld6x6v2'
+n_episodes = 351
+source_prefix = 'gridworld8x8'
 source_suffix = ''
-source_episode = 200
+source_episode = 250
 epsilon = 1.
+eval_every = 1
+save_net_every = 50
+size_maze = 8
+
+# Less changed args
+random_source = False
 encoder_only = True
 freeze_encoder = True
 n_cpu_jobs = 56 # Only used in event of CPU paralellization
-eval_every = 1
-save_net_every = 50
-size_maze = 6
 
 # Make directories
 if 'SLURM_JOBID' in os.environ.keys():
@@ -76,12 +79,15 @@ def run(arg):
         load_network = None
         prev_pos_goal = None
     else:
-        source_fname_options = [
-            s for s in os.listdir(source_nnet_dir) if \
-            (re.search(f"^({source_fname})_\\d+", s) != None)]
-        source_fname_idx = np.random.choice(len(source_fname_options))
         source_fname_path = f'{source_nnet_dir}'
-        source_fname_path += f'{source_fname_options[source_fname_idx]}/'
+        if random_source:
+            source_fname_options = [
+                s for s in os.listdir(source_nnet_dir) if \
+                (re.search(f"^({source_fname})_\\d+", s) != None)]
+            source_fname_idx = np.random.choice(len(source_fname_options))
+            source_fname_path += f'{source_fname_options[source_fname_idx]}/'
+        else:
+            source_fname_path += f'{source_fname}_{i}/'
         load_network = [f'{source_fname_path}', source_episode]
         with open(f'{source_fname_path}goal.txt', 'r') as goalfile:
             prev_pos_goal = str(goalfile.read())
@@ -97,11 +103,11 @@ def run(arg):
         os.makedirs(_dir, exist_ok=True)
 
     net_exists = np.any(['network_ep' in f for f in os.listdir(fname_nnet_dir)])
-    if net_exists:
-        print(f'Skipping {fname}')
-        return
-    else:
-        print(f'Running {fname}')
+    #if net_exists:
+    #    print(f'Skipping {fname}')
+    #    return
+    #else:
+    #    print(f'Running {fname}')
 
     parameters = {
         'source_network_path': load_network,
@@ -232,7 +238,7 @@ fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
 param_updates = [{}]*len(fname_grid)
 
 # Collect argument combinations
-iters = np.arange(30)
+iters = np.arange(45)
 args = []
 for arg_idx in range(len(fname_grid)):
     for i in iters:
