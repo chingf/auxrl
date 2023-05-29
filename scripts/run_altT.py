@@ -87,12 +87,14 @@ def run(arg):
             'replay_capacity': 20_000, # 100_000
             'epsilon': epsilon,
             'batch_size': 64, 'target_update_frequency': 1000,
-            'train_seq_len': 1},
-        'network_args': {'latent_dim': internal_dim, 'network_yaml': nn_yaml},
-        'dset_args': {'hide_goal': False},
+            'train_seq_len': 5
+            },
+        'network_args': {
+            'latent_dim': internal_dim, 'network_yaml': nn_yaml,
+            'mem_len': 1,
+            },
+        'dset_args': {'hide_goal': True},
         'max_eval_episode_steps': 500,
-#        'mem_len': 2, #TODO
-#        'train_len': 10,
         }
     parameters = flatten(parameters)
     parameters.update(flatten(param_update))

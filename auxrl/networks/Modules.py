@@ -51,7 +51,6 @@ def make_fc(input_dim, out_dim, fc_config):
 
 class Encoder(nn.Module):
     def __init__(self, env_spec, latent_dim, config, mem_len):
-        # TODO self latent tracking
         super().__init__()
         self._env_spec = env_spec
         self._input_shape = env_spec.observations.shape # (C, H, W)
@@ -66,30 +65,39 @@ class Encoder(nn.Module):
             self._feature_size = np.prod(self._input_shape)
         if self._mem_len > 0:
             self._feature_size += self._mem_len*self._latent_dim
+        self._prev_latent = None
         self._fc = make_fc(self._feature_size, self._latent_dim, config['fc'])
-        self._prev_latent = torch.zeros(1, self._latent_dim)
         
-    def forward(self, x, z=None):
+    def forward(self, x, prev_zs=None):
+        """
+        prev_zs is shape (mem_len, latent_dim)
+        """
+
         N, C, H, W = x.shape
         if self._convs is not None:
             x = self._convs(x)
         x = x.view(N, -1)
         x = x.float()
+        prev_zs_provided = prev_zs != None
         if self._mem_len > 0:
-            if z == None:
-                z = self._prev_latent
-            x = torch.hstack((x, z))
+            if not prev_zs_provided:
+                if self._prev_latent == None:
+                    self._prev_latent = torch.zeros(
+                        N, self._mem_len, self._latent_dim)
+                    self._prev_latent = self._prev_latent.to(x.get_device())
+                prev_zs = self._prev_latent
+            prev_zs = prev_zs
+            x = torch.hstack((x, prev_zs.reshape(N, -1)))
         x = self._fc(x)
-        self._prev_latent = x
+        if not prev_zs_provided:
+            self._prev_latent = x
         return x
 
     def get_curr_latent(self):
         return self._prev_latent
 
     def reset(self):
-        self._prev_latent = torch.zeros_like(self._prev_latent)
-
-    # TODO: latent resetting and setting
+        self._prev_latent = None
 
 class T(nn.Module):
     def __init__(

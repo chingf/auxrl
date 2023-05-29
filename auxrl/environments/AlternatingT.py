@@ -155,12 +155,14 @@ class Env(dm_env.Environment):
             self._reward_loc = RewardLoc.RESET
             self._goal_state = reset_reward
             self._last_reward_loc = RewardLoc.LEFT
+            print('Left reward')
         elif new_state == right_reward and self._reward_loc == RewardLoc.RIGHT:
             reward = self._reward_val
             discount = self._discount
             self._reward_loc = RewardLoc.RESET
             self._goal_state = reset_reward
             self._last_reward_loc = RewardLoc.RIGHT
+            print('Right reward')
         elif new_state == reset_reward and self._reward_loc == RewardLoc.RESET:
             reward = self._reward_val
             discount = self._discount
@@ -173,6 +175,7 @@ class Env(dm_env.Environment):
             else:
                 reward = 0
             self._last_reward_loc = RewardLoc.RESET
+            print('Reset reward')
         else: # Just a standard move
             reward = 0.
             discount = self._discount

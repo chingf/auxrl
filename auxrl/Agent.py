@@ -49,7 +49,9 @@ class Agent(acme.Actor):
         self._mem_len = network._mem_len
         self._replay_seq_len = pred_len
         if network._mem_len > 0:
-            self._replay_seq_len += max(network._mem_len + train_seq_len)
+            if train_seq_len < self._mem_len:
+                raise ValueError('Training length should be longer than mem')
+            self._replay_seq_len += train_seq_len
         if self._pred_TD:
             if self._replay_seq_len != 2:
                 warnings.warn('Overriding replay length to 2 for predictive TD loss!')
@@ -124,15 +126,20 @@ class Agent(acme.Actor):
         onehot_actions = torch.as_tensor(onehot_actions, device=self._device).float()
 
         # Burn in latents for POMDP
-        if self._mem_len > 0: # TODO
-            import pdb; pdb.set_trace()
-            saved_z = torch.as_tensor(
-                transitions.latent, device=device).float() # (N, 1, Z)
-            _zs = torch.tensor(zs[:, :self._mem_len]).to(device).float()
-            for t in range(self._mem_len, states_val.shape[1]):
-                Es = self.crar.encoder(states_val[:, t], zs=_zs)
-                _zs = torch.hstack((_zs[:,1:], Es.unsqueeze(1)))
-            Esp = self.crar.encoder(next_states_val[:,-1], zs=_zs)
+        if self._mem_len > 0:
+            _zs = np.array([
+                t.latent.astype(np.float32) for t in \
+                transitions_seq[:self._mem_len]])
+            _zs = torch.as_tensor(_zs).squeeze(2) # (mem_len, N, Z)
+            _zs = torch.swapaxes(_zs, 0, 1) # (N, mem_len, Z)
+            _zs = _zs.to(device)
+
+            for t in range(self._mem_len, self._replay_seq_len):
+                _obs_t = torch.tensor( # (N,C,H,W)
+                    transitions_seq[t].obs.astype(np.float32)).to(device)
+                z = self._network.encoder(_obs_t, prev_zs=_zs)
+                _zs = torch.hstack((_zs[:,1:], z.unsqueeze(1)))
+            next_z = self._network.encoder(next_obs, prev_zs=_zs)
         else:
             next_z = self._network.encoder(next_obs)
             z = self._network.encoder(obs)
@@ -184,22 +191,28 @@ class Agent(acme.Actor):
         # Q Loss
         if self._n_updates%self._target_update_frequency == 0: # Update target network
             self._target_network.set_params(self._network.get_params())
-        if self._mem_len > 0: # TODO
-            raise ValueError('Proper POMDP latents not yet done.')
-            _zs = torch.tensor(zs[:,:self._mem_len]).to(self.device)
-            for t in range(self._mem_len, states_val.shape[1]):
-                Esp_target = self.crar_target.encoder(states_val[:, t], zs=_zs)
-                _zs = torch.hstack((_zs[:,1:], Esp_target.unsqueeze(1)))
-            Esp_target = self.crar_target.encoder(
-                next_states_val[:,-1], zs=_zs)
-            next_q_target = self.crar_target.Q(Esp_target)
+        if self._mem_len > 0:
+            _zs = np.array([
+                t.latent.astype(np.float32) for t in \
+                transitions_seq[:self._mem_len]])
+            _zs = torch.as_tensor(_zs).squeeze(2) # (mem_len, N, Z)
+            _zs = torch.swapaxes(_zs, 0, 1) # (N, mem_len, Z)
+            _zs = _zs.to(device)
+            for t in range(self._mem_len, self._replay_seq_len):
+                _obs_t = torch.tensor( # (N,C,H,W)
+                    transitions_seq[t].obs.astype(np.float32)).to(device)
+                _zs = torch.hstack((
+                    _zs[:,1:],
+                    self._target_network.encoder(_obs_t, prev_zs=_zs).unsqueeze(1)
+                    ))
+            target_next_z = self._target_network.encoder(next_obs, prev_zs=_zs)
         else:
-            target_next_q = self._target_network.Q( # (N, A)
-                self._target_network.encoder(next_obs))
-            next_q = self._network.Q(next_z)
-            argmax_next_q = torch.argmax(next_q, axis=1)
-            max_next_q = target_next_q[
-                np.arange(self._batch_size), argmax_next_q].reshape((-1,1))
+            target_next_z = self._target_network.encoder(next_obs) # (N, z)
+        target_next_q = self._target_network.Q(target_next_z)  # (N, a)
+        next_q = self._network.Q(next_z)
+        argmax_next_q = torch.argmax(next_q, axis=1)
+        max_next_q = target_next_q[
+            np.arange(self._batch_size), argmax_next_q].reshape((-1,1))
         Q_target = r + self._discount_factor*max_next_q
         q_vals = self._network.Q(z)
         q_vals = q_vals[np.arange(self._batch_size), a.squeeze()]
