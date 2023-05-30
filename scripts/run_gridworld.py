@@ -49,7 +49,9 @@ n_iters = 5
 continual_transfer = False
 
 # Make directories
-if 'SLURM_JOBID' in os.environ.keys():
+if os.environ['USER'] == 'chingfang':
+    engram_dir = '/Volumes/aronov-locker/Ching/rl/' # Local Path
+elif 'SLURM_JOBID' in os.environ.keys():
     engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
 else:
     engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
