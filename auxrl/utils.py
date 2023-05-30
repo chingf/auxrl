@@ -60,7 +60,7 @@ def run_train_episode(
 
 def run_eval_episode(
     env: dm_env.Environment, agent: acme.Actor, n_test_episodes: int=1,
-    verbose: bool=False):
+    verbose: bool=False, max_episode_steps=None):
     all_episode_steps = []
     all_episode_return = []
     for _t in range(n_test_episodes):
@@ -75,6 +75,9 @@ def run_eval_episode(
             timestep = env.step(action)
             episode_steps += 1
             episode_return += timestep.reward
+            if (max_episode_steps != None) and (episode_steps >= max_episode_steps):
+                break
+
         all_episode_steps.append(episode_steps)
         all_episode_return.append(episode_return)
     all_episode_steps = np.mean(all_episode_steps)
