@@ -29,23 +29,23 @@ internal_dim = int(sys.argv[4])
 
 # Experiment Parameters
 load_function = selected_models_noMF
-fname_prefix = 'testtransfer_-3'
+fname_prefix = 'froz_tmp' #'frozentransfer_gridworld8x8_-3'
 fname_suffix = ''
-n_episodes = 201
-source_prefix = 'gridworld8x8'
+n_episodes = 301
+source_prefix = 'tmp' #'gridworld8x8'
 source_suffix = ''
 source_episode = 250
 epsilon = 1.
 eval_every = 1
 save_net_every = 50
 size_maze = 8
-n_iters = 4
+n_iters = 45
 
 # Less changed args
 random_seed = True
 random_source = False
-encoder_only = False
-freeze_encoder = False
+encoder_only = True
+freeze_encoder = True
 n_cpu_jobs = 56 # Only used in event of CPU paralellization
 
 

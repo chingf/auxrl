@@ -37,7 +37,7 @@ if n_gpus > 1:
     device_num = str(job_idx % n_gpus)
     my_env = os.environ
     my_env["CUDA_VISIBLE_DEVICES"] = device_num
-fname_prefix = 'gridworld8x8'
+fname_prefix = 'tmp' #'gridworld8x8_largeencoder'
 fname_suffix = ''
 n_episodes = 251
 n_cpu_jobs = 56
@@ -45,6 +45,7 @@ eval_every = 1
 save_net_every = 50
 epsilon = 1.
 size_maze = 8
+n_iters = 5
 continual_transfer = False
 
 # Make directories
@@ -206,7 +207,7 @@ assert(len(fname_grid) == len(param_updates))
 fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
 
 # Collect argument combination45iters = np.arange(30)
-iters = np.arange(45)
+iters = np.arange(n_iters)
 args = []
 for arg_idx in range(len(fname_grid)):
     for i in iters:
