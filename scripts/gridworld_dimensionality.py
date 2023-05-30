@@ -28,10 +28,10 @@ import torch
 #torch.cuda.is_available = lambda : False
 
 ## Arguments
-internal_dim = 10
-generic_exp_name = 'gridworld6x6'
+internal_dim = 8
+generic_exp_name = 'gridworld8x8'
 network_yaml = 'dm'
-source_episode = 200
+source_episode = 250
 selected_fnames, _, _ = selected_models(include_pos_sample_only=True)
 selected_fnames = [f'{generic_exp_name}_{f}' for f in selected_fnames]
 

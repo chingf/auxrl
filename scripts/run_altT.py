@@ -26,17 +26,31 @@ job_idx = int(sys.argv[1])
 n_jobs = int(sys.argv[2])
 nn_yaml = sys.argv[3]
 internal_dim = int(sys.argv[4])
+
+# If manual GPU setting
+if len(sys.argv) > 5:
+    gpu_override = str(sys.argv[5])
+else:
+    gpu_override = None
+
+# CPU vs GPU running
 try:
     n_gpus = (len(os.environ['CUDA_VISIBLE_DEVICES'])+1)/2
 except:
     n_gpus = 0
+
+# Now set GPU
 if n_gpus > 1:
-    device_num = str(job_idx % n_gpus)
+    if gpu_override == None:
+        device_num = str(job_idx % n_gpus)
+    else:
+        device_num = gpu_override
     my_env = os.environ
     my_env["CUDA_VISIBLE_DEVICES"] = device_num
-fname_prefix = 'tmp'
+
+fname_prefix = 'tmp_tlen8_-3' #'altT_eps0.4_tlen5'
 fname_suffix = ''
-n_episodes = 201
+n_episodes = 51
 n_cpu_jobs = 56
 eval_every = 5
 save_net_every = 5
@@ -83,11 +97,11 @@ def run(arg):
         'n_episodes': n_episodes,
         'n_test_episodes': 1,
         'agent_args': {
-            'loss_weights': loss_weights, 'lr': 1e-4, # Volume loss?
+            'loss_weights': loss_weights, 'lr': 1e-3, # Volume loss?
             'replay_capacity': 20_000, # 100_000
             'epsilon': epsilon,
             'batch_size': 64, 'target_update_frequency': 1000,
-            'train_seq_len': 5
+            'train_seq_len': 8
             },
         'network_args': {
             'latent_dim': internal_dim, 'network_yaml': nn_yaml,
@@ -194,15 +208,15 @@ def run(arg):
         pickle.dump(result, f)
 
 # Load model parameters
-fname_grid = ['mf', '1',]
+fname_grid = ['mf', 'g0_-2_entro0',]
 loss_weights_grid = [
-    [0, 0, 0, 1, 0], 
-    [1E-1, 1E-2, 1E-2, 1, 0],]
+    [0, 0, 0, 1], 
+    [1E-2, 1E0, 1E0, 1],]
 param_updates = [{}, {}]
 fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
 
 # Collect argument combinations
-iters = np.arange(30)
+iters = np.arange(5)
 args = []
 for arg_idx in range(len(fname_grid)):
     for i in iters:

@@ -21,24 +21,17 @@ from auxrl.utils import run_train_episode, run_eval_episode
 from model_parameters.gridworld import mf_grid, full_grid, selected_models, test
 from model_parameters.gridworld import selected_models_noMF
 
-# Experiment Parameters
+# Command-line args
 job_idx = int(sys.argv[1])
 n_jobs = int(sys.argv[2])
 nn_yaml = sys.argv[3]
 internal_dim = int(sys.argv[4])
+
+# Experiment Parameters
 load_function = selected_models_noMF
-random_seed = True
-try:
-    n_gpus = (len(os.environ['CUDA_VISIBLE_DEVICES'])+1)/2
-except:
-    n_gpus = 0
-if n_gpus > 1:
-    device_num = str(job_idx % n_gpus)
-    my_env = os.environ
-    my_env["CUDA_VISIBLE_DEVICES"] = device_num
-fname_prefix = 'frozentransfer_gridworld8x8'
+fname_prefix = 'testtransfer_-3'
 fname_suffix = ''
-n_episodes = 351
+n_episodes = 201
 source_prefix = 'gridworld8x8'
 source_suffix = ''
 source_episode = 250
@@ -46,12 +39,36 @@ epsilon = 1.
 eval_every = 1
 save_net_every = 50
 size_maze = 8
+n_iters = 4
 
 # Less changed args
+random_seed = True
 random_source = False
-encoder_only = True
-freeze_encoder = True
+encoder_only = False
+freeze_encoder = False
 n_cpu_jobs = 56 # Only used in event of CPU paralellization
+
+
+# If manual GPU setting
+if len(sys.argv) > 5:
+    gpu_override = str(sys.argv[5])
+else:
+    gpu_override = None
+
+# CPU vs GPU
+try:
+    n_gpus = (len(os.environ['CUDA_VISIBLE_DEVICES'])+1)/2
+except:
+    n_gpus = 0
+
+# Now set GPU
+if n_gpus > 1:
+    if gpu_override == None:
+        device_num = str(job_idx % n_gpus)
+    else:
+        device_num = gpu_override
+    my_env = os.environ
+    my_env["CUDA_VISIBLE_DEVICES"] = device_num
 
 # Make directories
 if 'SLURM_JOBID' in os.environ.keys():
@@ -117,7 +134,7 @@ def run(arg):
         'n_episodes': n_episodes,
         'n_test_episodes': 5,
         'agent_args': {
-            'loss_weights': loss_weights, 'lr': 1e-4,
+            'loss_weights': loss_weights, 'lr': 1e-3,
             'replay_capacity': 100_000, 'epsilon': epsilon,
             'batch_size': 64, 'target_update_frequency': 1000,
             'train_seq_len': 1},
@@ -238,7 +255,7 @@ fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
 param_updates = [{}]*len(fname_grid)
 
 # Collect argument combinations
-iters = np.arange(45)
+iters = np.arange(n_iters)
 args = []
 for arg_idx in range(len(fname_grid)):
     for i in iters:
