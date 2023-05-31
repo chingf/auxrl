@@ -30,18 +30,18 @@ nn_yaml = sys.argv[3]
 internal_dim = int(sys.argv[4])
 
 # Experiment Parameters
-load_function = test_full #selected_models_noMF
-fname_prefix = 'full_tmp' #'fulltransfer_gridworld8x8_-3'
+load_function = selected_models_noMF
+fname_prefix = 'fulltransfer_gridworld8x8_largeencoder'
 fname_suffix = ''
 n_episodes = 201
-source_prefix = 'tmp' #'gridworld8x8'
+source_prefix = 'gridworld8x8_largeencoder'
 source_suffix = ''
-source_episode = 250
+source_episode = 200
 epsilon = 1.
 eval_every = 1
 save_net_every = 50
 size_maze = 8
-n_iters = 5
+n_iters = 15
 
 # Less changed args
 random_seed = True

@@ -39,7 +39,7 @@ epsilon = 1.
 eval_every = 1
 save_net_every = 50
 size_maze = 8
-n_iters = 45
+n_iters = 5
 
 # Less changed args
 random_seed = True
@@ -249,6 +249,7 @@ def run(arg):
 
 # Load model parameters
 fname_grid, _, _ = load_function()
+fname_grid.extend(['entro-1', 'entro1'])
 source_fnames = [f'{source_prefix}_{f}' for f in fname_grid]
 #fname_grid.append('clean')
 #source_fnames.append(None)

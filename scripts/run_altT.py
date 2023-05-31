@@ -48,13 +48,13 @@ if n_gpus > 1:
     my_env = os.environ
     my_env["CUDA_VISIBLE_DEVICES"] = device_num
 
-fname_prefix = 'altT_eps0.4_tlen8'
+fname_prefix = 'altT_eps0.8_tlen8'
 fname_suffix = ''
 n_episodes = 36
 n_cpu_jobs = 56
 eval_every = 5
 save_net_every = 5
-epsilon = 0.4
+epsilon = 0.8
 
 # Make directories
 if os.environ['USER'] == 'chingfang':

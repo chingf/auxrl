@@ -19,15 +19,15 @@ from auxrl.Agent import Agent
 from auxrl.networks.Network import Network
 from auxrl.environments.GridWorld import Env as Env
 from auxrl.utils import run_train_episode, run_eval_episode
-from model_parameters.gridworld import mf_grid, full_grid, selected_models, test
-from model_parameters.gridworld import selected_models_noMF
+from model_parameters.gridworld import mf_grid, full_grid, selected_models
+from model_parameters.gridworld import selected_models_noMF, test_full
 
 # Experiment Parameters
 job_idx = int(sys.argv[1])
 n_jobs = int(sys.argv[2])
 nn_yaml = sys.argv[3]
 internal_dim = int(sys.argv[4])
-load_function = selected_models_noMF
+load_function = test_full
 random_seed = True
 try:
     n_gpus = (len(os.environ['CUDA_VISIBLE_DEVICES'])+1)/2
@@ -37,15 +37,15 @@ if n_gpus > 1:
     device_num = str(job_idx % n_gpus)
     my_env = os.environ
     my_env["CUDA_VISIBLE_DEVICES"] = device_num
-fname_prefix = 'tmp' #'gridworld8x8_largeencoder'
+fname_prefix = 'gridworld8x8_largeencoder'
 fname_suffix = ''
-n_episodes = 251
+n_episodes = 201
 n_cpu_jobs = 56
 eval_every = 1
 save_net_every = 50
 epsilon = 1.
 size_maze = 8
-n_iters = 5
+n_iters = 15
 continual_transfer = False
 
 # Make directories

@@ -1,17 +1,37 @@
-def test():
+def test_full():
     fname_grid = [
+        'entro-1',
+        'entro1',
+        'entro_0',
         'g0_-2_entro-1',
         'g0.25_-3_entro-1',
         'g0.5_-3_entro-1',
-        'g0.8_-4_entro-1'
+        'g0.8_-4_entro-1',
+        'g0_-2_entro0',
+        'g0.25_-3_entro0',
+        'g0.5_-3_entro0',
+        'g0.8_-4_entro0',
         ]
     loss_weights_grid = [
+        [0, 1E-1, 1E-1, 1],
+        [0, 1E1, 1E1, 1],
+        [0, 1E0, 1E0, 1],
         [1E-2, 1E-1, 1E-1, 1],
         [1E-3, 1E-1, 1E-1, 1],
         [1E-3, 1E-1, 1E-1, 1],
         [1E-4, 1E-1, 1E-1, 1],
+        [1E-2, 1E0, 1E0, 1],
+        [1E-3, 1E0, 1E0, 1],
+        [1E-3, 1E0, 1E0, 1],
+        [1E-4, 1E0, 1E0, 1],
         ]
     param_updates = [
+        {}, {},
+        {},
+        {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.}},
+        {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.25}},
+        {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.5}},
+        {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.8}},
         {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.}},
         {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.25}},
         {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.5}},
