@@ -48,13 +48,13 @@ if n_gpus > 1:
     my_env = os.environ
     my_env["CUDA_VISIBLE_DEVICES"] = device_num
 
-fname_prefix = 'altT_eps0.8_tlen8'
+fname_prefix = 'altT_eps0.4_tlen8_mlen6'
 fname_suffix = ''
-n_episodes = 36
+n_episodes = 30
 n_cpu_jobs = 56
 eval_every = 5
 save_net_every = 5
-epsilon = 0.8
+epsilon = 0.4
 
 # Make directories
 if os.environ['USER'] == 'chingfang':
@@ -107,7 +107,7 @@ def run(arg):
             },
         'network_args': {
             'latent_dim': internal_dim, 'network_yaml': nn_yaml,
-            'mem_len': 1,
+            'mem_len': 6,
             },
         'dset_args': {'hide_goal': True},
         'max_eval_episode_steps': 500,
@@ -218,7 +218,7 @@ param_updates = [{}, {}]
 fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
 
 # Collect argument combinations
-iters = np.arange(5)
+iters = np.arange(10)
 args = []
 for arg_idx in range(len(fname_grid)):
     for i in iters:
