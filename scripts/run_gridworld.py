@@ -37,7 +37,7 @@ if n_gpus > 1:
     device_num = str(job_idx % n_gpus)
     my_env = os.environ
     my_env["CUDA_VISIBLE_DEVICES"] = device_num
-fname_prefix = 'gridworld8x8_largeencoder'
+fname_prefix = 'gridworld8x8'
 fname_suffix = ''
 n_episodes = 201
 n_cpu_jobs = 56
