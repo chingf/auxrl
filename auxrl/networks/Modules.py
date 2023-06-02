@@ -89,8 +89,9 @@ class Encoder(nn.Module):
             prev_zs = prev_zs
             x = torch.hstack((x, prev_zs.reshape(N, -1)))
         x = self._fc(x)
-        if not prev_zs_provided:
-            self._prev_latent = x
+        if (self._mem_len > 0) and (not prev_zs_provided):
+            self._prev_latent = torch.hstack((
+                self._prev_latent[:,1:], x.unsqueeze(1)))
         return x
 
     def get_curr_latent(self):
