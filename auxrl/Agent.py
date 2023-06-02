@@ -82,7 +82,9 @@ class Agent(acme.Actor):
         self._network.encoder.reset()
         self._target_network.encoder.reset()
 
-    def select_action(self, obs, force_greedy=False, verbose=False):
+    def select_action(
+        self, obs, force_greedy=False, verbose=False, return_latent=False
+        ):
         """ Epsilon-greedy action selection. """
 
         with torch.no_grad():
@@ -96,7 +98,10 @@ class Agent(acme.Actor):
         else:
             action = torch.randint(
                 low=0, high=self._n_actions , size=(1,), dtype=torch.int64)
-        return action
+        if return_latent:
+            return action, z
+        else:
+            return action
 
     def get_curr_latent(self):
         return self._network.encoder.get_curr_latent()
@@ -127,11 +132,8 @@ class Agent(acme.Actor):
 
         # Burn in latents for POMDP
         if self._mem_len > 0:
-            _zs = np.array([
-                t.latent.astype(np.float32) for t in \
-                transitions_seq[:self._mem_len]])
-            _zs = torch.as_tensor(_zs).squeeze(2) # (mem_len, N, Z)
-            _zs = torch.swapaxes(_zs, 0, 1) # (N, mem_len, Z)
+            _zs = np.array(transitions_seq[self._mem_len].latent.astype(np.float32))
+            _zs = torch.as_tensor(_zs).squeeze(1) # (mem_len, N, Z)
             _zs = _zs.to(device)
 
             for t in range(self._mem_len, self._replay_seq_len):
@@ -165,7 +167,7 @@ class Agent(acme.Actor):
             #terminal_mask = (1-transitions.terminal).astype(np.float32) # (N,)
             total_scale_term = 1
             #T_target_scale = torch.ones(self._batch_size)
-            for t in np.arange(1, self._pred_len): # TODO
+            for t in np.arange(1, self._pred_len):
                 _obs = torch.tensor(transitions_seq[t].next_obs.astype(np.float32))
                 _z = self._network.encoder(_obs.to(device))
                 scale_term = self._pred_gamma**t
@@ -192,11 +194,8 @@ class Agent(acme.Actor):
         if self._n_updates%self._target_update_frequency == 0: # Update target network
             self._target_network.set_params(self._network.get_params())
         if self._mem_len > 0:
-            _zs = np.array([
-                t.latent.astype(np.float32) for t in \
-                transitions_seq[:self._mem_len]])
-            _zs = torch.as_tensor(_zs).squeeze(2) # (mem_len, N, Z)
-            _zs = torch.swapaxes(_zs, 0, 1) # (N, mem_len, Z)
+            _zs = np.array(transitions_seq[self._mem_len].latent.astype(np.float32))
+            _zs = torch.as_tensor(_zs).squeeze(1) # (mem_len, N, Z)
             _zs = _zs.to(device)
             for t in range(self._mem_len, self._replay_seq_len):
                 _obs_t = torch.tensor( # (N,C,H,W)
