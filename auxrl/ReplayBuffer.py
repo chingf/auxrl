@@ -28,12 +28,15 @@ class ReplayBuffer(object):
     def add(
         self, action: int, timestep: dm_env.TimeStep, latent: torch.tensor):
 
+        if latent != None:
+            latent = latent.cpu().numpy()
+
         transition = Transitions(
             obs=self._prev_obs, action=action.cpu().numpy(),
             reward=timestep.reward,
             discount=timestep.discount, next_obs=timestep.observation,
             terminal=timestep.last(),
-            latent=latent.cpu().numpy())
+            latent=latent)
         self.buffer.append(transition)
         self._prev_obs = timestep.observation
 
