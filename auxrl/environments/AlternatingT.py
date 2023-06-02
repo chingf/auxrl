@@ -7,8 +7,6 @@ import dm_env
 import enum
 
 from acme import specs
-from acme import wrappers
-from acme.utils import tree_utils
 
 class RewardLoc(enum.IntEnum):
     RIGHT = enum.auto()
