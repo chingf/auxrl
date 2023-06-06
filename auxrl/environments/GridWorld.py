@@ -35,7 +35,7 @@ class Env(dm_env.Environment):
         self, layout, start_state=None, goal_state=None,
         observation_type=ObservationType.GRID, discount=1.,
         penalty_for_walls=0., reward_goal=1., hide_goal=True,
-        max_episode_length=150, prev_goal_state=None):
+        max_episode_length=150, prev_goal_state=None, shuffle_obs=False):
 
         """Build a grid environment.
 
@@ -67,11 +67,14 @@ class Env(dm_env.Environment):
         else:
             self._layout = np.array(layout)
         self._layout_dims = self._layout.shape
+        self._number_of_states = np.prod(self._layout_dims)
+        if shuffle_obs:
+            self._shuffle_indices = np.arange(self._number_of_states)
+            np.random.shuffle(self._shuffle_indices)
         if start_state is None:
             start_state = self._sample_start()
         self._start_state = start_state
         self._state = self._start_state
-        self._number_of_states = np.prod(np.shape(self._layout))
         self._discount = discount
         self._penalty_for_walls = penalty_for_walls
         self._reward_goal = reward_goal
@@ -79,6 +82,7 @@ class Env(dm_env.Environment):
         self._observation_type = observation_type
         self._max_episode_length = max_episode_length
         self._prev_goal_state = prev_goal_state
+        self._shuffle_obs = shuffle_obs
         if self._prev_goal_state != None:
             self._new_goal_state_gap = min(min(self._layout_dims)//3, 3)
         self._num_episode_steps = 0
@@ -180,11 +184,15 @@ class Env(dm_env.Environment):
             obs[self._state] = 1 # Place agent
             return obs
         elif self._observation_type is ObservationType.GRID:
-            obs = np.zeros((1,) + self._layout.shape, dtype=np.float32)
+            obs = np.zeros((1,) + self._layout_dims, dtype=np.float32)
             obs[0, ...] = (self._layout < 0)*(-1)
             obs[0, self._state[0], self._state[1]] = 1
             if not self._hide_goal:
                 obs[0, self._goal_state[0], self._goal_state[1]] = 5
+            if self._shuffle_obs:
+                obs = obs.flatten()
+                obs = obs[self._shuffle_indices]
+                obs = obs.reshape((1,) + self._layout_dims)
             return obs
         elif self._observation_type is ObservationType.AGENT_GOAL_POS:
             return np.array(self._state + self._goal_state, dtype=np.float32)
