@@ -30,11 +30,11 @@ nn_yaml = sys.argv[3]
 internal_dim = int(sys.argv[4])
 
 # Experiment Parameters
-load_function = selected_models_noMF
-fname_prefix = 'fulltransfer_gridworld8x8_largeencoder'
+load_function = test_full
+fname_prefix = 'fulltransfer_gridworld8x8'
 fname_suffix = ''
 n_episodes = 201
-source_prefix = 'gridworld8x8_largeencoder'
+source_prefix = 'gridworld8x8'
 source_suffix = ''
 source_episode = 200
 epsilon = 1.
