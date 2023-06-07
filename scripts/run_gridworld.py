@@ -27,7 +27,7 @@ job_idx = int(sys.argv[1])
 n_jobs = int(sys.argv[2])
 nn_yaml = sys.argv[3]
 internal_dim = int(sys.argv[4])
-load_function = mf_grid
+load_function = selected_models
 random_seed = True
 try:
     n_gpus = (len(os.environ['CUDA_VISIBLE_DEVICES'])+1)/2
@@ -37,7 +37,7 @@ if n_gpus > 1:
     device_num = str(job_idx % n_gpus)
     my_env = os.environ
     my_env["CUDA_VISIBLE_DEVICES"] = device_num
-fname_prefix = 'gridworld8x8'
+fname_prefix = 'gridworld8x8_shuffobs'
 fname_suffix = ''
 n_episodes = 251
 n_cpu_jobs = 56
@@ -47,6 +47,7 @@ epsilon = 1.
 size_maze = 8
 n_iters = 45
 continual_transfer = False
+shuffle = True
 
 # Make directories
 if os.environ['USER'] == 'chingfang':
@@ -97,7 +98,7 @@ def run(arg):
             'batch_size': 64, 'target_update_frequency': 1000,
             'train_seq_len': 1},
         'network_args': {'latent_dim': internal_dim, 'network_yaml': nn_yaml},
-        'dset_args': {'layout': size_maze, 'shuffle_obs': False}
+        'dset_args': {'layout': size_maze, 'shuffle_obs': shuffle}
         }
     parameters = flatten(parameters)
     parameters.update(flatten(param_update))

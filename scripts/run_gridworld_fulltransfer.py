@@ -30,8 +30,8 @@ nn_yaml = sys.argv[3]
 internal_dim = int(sys.argv[4])
 
 # Experiment Parameters
-load_function = mf_grid #selected_models
-fname_prefix = 'fulltransfer_gridworld8x8'
+load_function = selected_models
+fname_prefix = 'fulltransfer_gridworld8x8_shuffobs'
 fname_suffix = ''
 n_episodes = 201
 source_prefix = 'gridworld8x8'
@@ -42,6 +42,7 @@ eval_every = 1
 save_net_every = 50
 size_maze = 8
 n_iters = 45
+shuffle = True
 
 # Less changed args
 random_seed = True
@@ -145,7 +146,7 @@ def run(arg):
             'latent_dim': internal_dim, 'network_yaml': nn_yaml,
             'freeze_encoder': freeze_encoder},
         'dset_args': {
-            'layout': size_maze, 'shuffle_obs': False, 'prev_goal_state': prev_pos_goal}
+            'layout': size_maze, 'shuffle_obs': shuffle, 'prev_goal_state': prev_pos_goal}
         }
     parameters = flatten(parameters)
     parameters.update(flatten(param_update))
