@@ -34,6 +34,7 @@ network_yaml = 'dm'
 source_episode = 250
 selected_fnames, _, _ = selected_models(include_pos_sample_only=True)
 selected_fnames = [f'{generic_exp_name}_{f}' for f in selected_fnames]
+random_net = False
 
 # Set up paths
 device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
@@ -113,7 +114,8 @@ for model_name in os.listdir(nnets_dir):
     with open(f'{model_nnet_dir}goal.txt', 'r') as goalfile: # Setting of goal
         goal_state = str(goalfile.read())
         goal_state = [int(goal_state[1]), int(goal_state[-2])]
-    agent.load_network(model_nnet_dir, source_episode, False)
+    agent.load_network(
+        model_nnet_dir, source_episode, False, shuffle=random_net)
 
     # Get latents
     all_possib_inp = [] 
@@ -159,7 +161,8 @@ for model_name in os.listdir(nnets_dir):
 
 repr_df = pd.DataFrame(repr_dict)
 dim_df = pd.DataFrame(dim_dict)
-with open(f'{analysis_dir}representation_df.p', 'wb') as f:
+suffix = 'randomnet_' if randomnet else ''
+with open(f'{analysis_dir}{suffix}representation_df.p', 'wb') as f:
     pickle.dump(repr_df, f)
-with open(f'{analysis_dir}dimensionality_df.p', 'wb') as f:
+with open(f'{analysis_dir}{suffix}dimensionality_df.p', 'wb') as f:
     pickle.dump(dim_df, f)

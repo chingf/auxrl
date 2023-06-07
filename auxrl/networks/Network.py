@@ -25,7 +25,8 @@ class Network(object):
 
     def __init__(
         self, env_spec, latent_dim, network_yaml, yaml_mods={},
-        mem_len=0, device=torch.device('cpu'), freeze_encoder=False):
+        mem_len=0, eligibility_gamma=None,
+        device=torch.device('cpu'), freeze_encoder=False):
 
         self._env_spec = env_spec
         self._n_actions = env_spec.actions.num_values
@@ -33,6 +34,7 @@ class Network(object):
         self._network_yaml = network_yaml
         self._yaml_mods = yaml_mods
         self._mem_len = mem_len
+        self._eligibility_gamma = eligibility_gamma
         self._device = device
         self._freeze_encoder = freeze_encoder
 
@@ -42,7 +44,9 @@ class Network(object):
             update(config, self._yaml_mods)
 
         self.encoder = Encoder(
-            env_spec, latent_dim, config['encoder'], mem_len).to(device)
+            env_spec, latent_dim, config['encoder'], mem_len,
+            eligibility_gamma=eligibility_gamma
+            ).to(device)
         if self._freeze_encoder:
             for p in self.encoder.parameters():
                 p.requires_grad = False
@@ -56,7 +60,15 @@ class Network(object):
             }
         return params
 
-    def set_params(self, params, encoder_only=False):
+    def set_params(self, params, encoder_only=False, shuffle=False):
+        if shuffle:
+            modules = ['encoder', 'Q', 'T']
+            for m in modules:
+                for k in params[m].keys():
+                    idx = torch.randperm(params[m][k].nelement())
+                    params[m][k] = params[m][k].view(-1)[
+                        idx].view(params[m][k].size())
+
         self.encoder.load_state_dict(params['encoder'])
         if not encoder_only:
             self.Q.load_state_dict(params['Q'])
@@ -73,6 +85,6 @@ class Network(object):
     def copy(self):
         duplicate = Network(
             self._env_spec, self._latent_dim, self._network_yaml, self._yaml_mods,
-            self._mem_len, self._device, self._freeze_encoder)
+            self._mem_len, self._eligibility_gamma, self._device, self._freeze_encoder)
         return duplicate
 
