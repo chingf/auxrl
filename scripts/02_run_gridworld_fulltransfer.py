@@ -30,18 +30,18 @@ nn_yaml = sys.argv[3]
 internal_dim = int(sys.argv[4])
 
 # Experiment Parameters
-load_function = selected_models
+load_function = test_full
 fname_prefix = 'fulltransfer_gridworld8x8_shuffobs'
 fname_suffix = ''
-n_episodes = 201
-source_prefix = 'gridworld8x8'
+n_episodes = 301
+source_prefix = 'gridworld8x8_shuffobs'
 source_suffix = ''
-source_episode = 250
+source_episode = 300
 epsilon = 1.
 eval_every = 1
 save_net_every = 50
 size_maze = 8
-n_iters = 45
+n_iters = 20
 shuffle = True
 
 # Less changed args
@@ -157,6 +157,11 @@ def run(arg):
     env = Env(**parameters['dset_args'])
     env = wrappers.SinglePrecisionWrapper(env)
     env_spec = specs.make_environment_spec(env)
+    with open(f'{fname_nnet_dir}goal.txt', 'w') as goalfile:
+        goalfile.write(str(env._goal_state))
+    if parameters['dset_args']['shuffle_obs']:
+        with open(f'{fname_nnet_dir}shuffle_indices.txt', 'w') as goalfile:
+            goalfile.write(str(env._shuffle_indices))
     network = Network(env_spec, device=device, **parameters['network_args'])
     agent = Agent(env_spec, network, device=device, **parameters['agent_args'])
 
@@ -169,11 +174,6 @@ def run(arg):
         return
 
     os.makedirs(fname_nnet_dir, exist_ok=True)
-    with open(f'{fname_nnet_dir}goal.txt', 'w') as goalfile:
-        goalfile.write(str(env._goal_state))
-    if parameters['dset_args']['shuffle_obs']:
-        with open(f'{fname_nnet_dir}shuffle_indices.txt', 'w') as goalfile:
-            goalfile.write(str(env._shuffle_indices))
 
     result = {}
     result['episode'] = []

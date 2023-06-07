@@ -1,54 +1,53 @@
 #!/bin/bash 
 
-python run_gridworld.py -1 1 dm 2
-python run_gridworld_fulltransfer.py -1 1 dm 2
-
-python run_gridworld.py -1 1 dm 3
-python run_gridworld_fulltransfer.py -1 1 dm 3 
+python 01_run_gridworld.py -1 1 dm 6
+python 02_run_gridworld_fulltransfer.py -1 1 dm 6
 #
-python run_gridworld.py -1 1 dm 4
-python run_gridworld_fulltransfer.py -1 1 dm 4
+#python 01_run_gridworld.py -1 1 dm 7
+#python 02_run_gridworld_fulltransfer.py -1 1 dm 7
 #
-#python run_gridworld.py -1 1 dm 5
-#python run_gridworld_fulltransfer.py -1 1 dm 5
+python 01_run_gridworld.py -1 1 dm 8
+python 02_run_gridworld_fulltransfer.py -1 1 dm 8
 #
-#python run_gridworld.py -1 1 dm 6
-#python run_gridworld_fulltransfer.py -1 1 dm 6
+#python 01_run_gridworld.py -1 1 dm 9
+#python 02_run_gridworld_fulltransfer.py -1 1 dm 9
 #
-#python run_gridworld.py -1 1 dm 7
-#python run_gridworld_fulltransfer.py -1 1 dm 7
+python 01_run_gridworld.py -1 1 dm 10
+python 02_run_gridworld_fulltransfer.py -1 1 dm 10
 #
-#python run_gridworld.py -1 1 dm 8
-#python run_gridworld_fulltransfer.py -1 1 dm 8
 #
-#python run_gridworld.py -1 1 dm 9
-#python run_gridworld_fulltransfer.py -1 1 dm 9
 #
-#python run_gridworld.py -1 1 dm 10
-#python run_gridworld_fulltransfer.py -1 1 dm 10
+python 01_run_gridworld.py -1 1 dm 2
+python 02_run_gridworld_fulltransfer.py -1 1 dm 2
 #
-#python run_gridworld.py -1 1 dm 11
-#python run_gridworld_fulltransfer.py -1 1 dm 11
+#python 01_run_gridworld.py -1 1 dm 3
+#python 02_run_gridworld_fulltransfer.py -1 1 dm 3 
 #
-#python run_gridworld.py -1 1 dm 12
-#python run_gridworld_fulltransfer.py -1 1 dm 12
+python 01_run_gridworld.py -1 1 dm 4
+python 02_run_gridworld_fulltransfer.py -1 1 dm 4
 #
-#python run_gridworld.py -1 1 dm 13
-#python run_gridworld_fulltransfer.py -1 1 dm 13
+#python 01_run_gridworld.py -1 1 dm 5
+#python 02_run_gridworld_fulltransfer.py -1 1 dm 5
 #
-#python run_gridworld.py -1 1 dm 14
-#python run_gridworld_fulltransfer.py -1 1 dm 14
 #
-#python run_gridworld.py -1 1 dm 15
-#python run_gridworld_fulltransfer.py -1 1 dm 15
 #
-#python run_gridworld.py -1 1 dm 16
-#python run_gridworld_fulltransfer.py -1 1 dm 16
-
-#python run_gridworld.py -1 1 dm 17
-#python run_gridworld_fulltransfer.py -1 1 dm 17
-
-#python run_gridworld.py -1 1 dm 18
-#python run_gridworld_fulltransfer.py -1 1 dm 18
+#python 01_run_gridworld.py -1 1 dm 11
+#python 02_run_gridworld_fulltransfer.py -1 1 dm 11
+#
+python 01_run_gridworld.py -1 1 dm 12
+python 02_run_gridworld_fulltransfer.py -1 1 dm 12
+#
+#python 01_run_gridworld.py -1 1 dm 13
+#python 02_run_gridworld_fulltransfer.py -1 1 dm 13
+#
+python 01_run_gridworld.py -1 1 dm 14
+python 02_run_gridworld_fulltransfer.py -1 1 dm 14
+#
+#python 01_run_gridworld.py -1 1 dm 15
+#python 02_run_gridworld_fulltransfer.py -1 1 dm 15
+#
+python 01_run_gridworld.py -1 1 dm 16
+python 02_run_gridworld_fulltransfer.py -1 1 dm 16
+#
 
 wait
