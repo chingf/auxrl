@@ -255,7 +255,8 @@ class Agent(acme.Actor):
         file_suffix = '' if episode == None else f'_ep{episode}'
         torch.save(network_params, f'{path}network{file_suffix}.pth')
 
-    def load_network(self, path, episode=None, encoder_only=True):
+    def load_network(
+        self, path, episode=None, encoder_only=True, shuffle=False):
         file_suffix = '' if episode == None else f'_ep{episode}'
         try:
             network_params = torch.load(f'{path}network{file_suffix}.pth')
@@ -263,5 +264,5 @@ class Agent(acme.Actor):
             network_params = torch.load(
                 f'{path}network{file_suffix}.pth', map_location=torch.device('cpu')
                 )
-        self._network.set_params(network_params, encoder_only)
+        self._network.set_params(network_params, encoder_only, shuffle=shuffle)
 
