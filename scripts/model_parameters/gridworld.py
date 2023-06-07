@@ -40,14 +40,14 @@ def test_full():
     return fname_grid, loss_weights_grid, param_updates
 
 def mf_grid():
-    fname_grid = ['mf_-1', 'mf_1', 'mf_2', 'mf_3']
+    fname_grid = ['mf_0']#['mf_-1', 'mf_1', 'mf_2']
     loss_weights_grid = [
-        [0,0,0,1E-1],
-        [0,0,0,1E1],
-        [0,0,0,1E2],
-        [0,0,0,1E3],
+        [0,0,0,1E0],
+        #[0,0,0,1E-1],
+        #[0,0,0,1E1],
+        #[0,0,0,1E2],
         ]
-    param_updates = [{}, {}, {}, {}]
+    param_updates = [{}]
     return fname_grid, loss_weights_grid, param_updates
 
 def selected_models_noMF():

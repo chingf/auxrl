@@ -30,18 +30,18 @@ nn_yaml = sys.argv[3]
 internal_dim = int(sys.argv[4])
 
 # Experiment Parameters
-load_function = test_full
+load_function = mf_grid #selected_models
 fname_prefix = 'fulltransfer_gridworld8x8'
 fname_suffix = ''
 n_episodes = 201
 source_prefix = 'gridworld8x8'
 source_suffix = ''
-source_episode = 200
+source_episode = 250
 epsilon = 1.
 eval_every = 1
 save_net_every = 50
 size_maze = 8
-n_iters = 15
+n_iters = 45
 
 # Less changed args
 random_seed = True
@@ -123,11 +123,11 @@ def run(arg):
         os.makedirs(_dir, exist_ok=True)
 
     net_exists = np.any(['network_ep' in f for f in os.listdir(fname_nnet_dir)])
-    #if net_exists:
-    #    print(f'Skipping {fname}')
-    #    return
-    #else:
-    #    print(f'Running {fname}')
+    if net_exists:
+        print(f'Skipping {fname}')
+        #return
+    else:
+        print(f'Running {fname}')
 
     parameters = {
         'source_network_path': load_network,
@@ -144,7 +144,8 @@ def run(arg):
         'network_args': {
             'latent_dim': internal_dim, 'network_yaml': nn_yaml,
             'freeze_encoder': freeze_encoder},
-        'dset_args': {'layout': size_maze, 'prev_goal_state': prev_pos_goal,}
+        'dset_args': {
+            'layout': size_maze, 'shuffle_obs': False, 'prev_goal_state': prev_pos_goal}
         }
     parameters = flatten(parameters)
     parameters.update(flatten(param_update))
@@ -169,6 +170,9 @@ def run(arg):
     os.makedirs(fname_nnet_dir, exist_ok=True)
     with open(f'{fname_nnet_dir}goal.txt', 'w') as goalfile:
         goalfile.write(str(env._goal_state))
+    if parameters['dset_args']['shuffle_obs']:
+        with open(f'{fname_nnet_dir}shuffle_indices.txt', 'w') as goalfile:
+            goalfile.write(str(env._shuffle_indices))
 
     result = {}
     result['episode'] = []

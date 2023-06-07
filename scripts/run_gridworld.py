@@ -27,7 +27,7 @@ job_idx = int(sys.argv[1])
 n_jobs = int(sys.argv[2])
 nn_yaml = sys.argv[3]
 internal_dim = int(sys.argv[4])
-load_function = test_full
+load_function = mf_grid
 random_seed = True
 try:
     n_gpus = (len(os.environ['CUDA_VISIBLE_DEVICES'])+1)/2
@@ -39,13 +39,13 @@ if n_gpus > 1:
     my_env["CUDA_VISIBLE_DEVICES"] = device_num
 fname_prefix = 'gridworld8x8'
 fname_suffix = ''
-n_episodes = 201
+n_episodes = 251
 n_cpu_jobs = 56
 eval_every = 1
 save_net_every = 50
 epsilon = 1.
 size_maze = 8
-n_iters = 15
+n_iters = 45
 continual_transfer = False
 
 # Make directories
@@ -82,7 +82,7 @@ def run(arg):
     net_exists = np.any(['network_ep' in f for f in os.listdir(fname_nnet_dir)])
     if net_exists:
         print(f'Skipping {fname}')
-        return
+        #return
     else:
         print(f'Running {fname}')
 
@@ -97,7 +97,7 @@ def run(arg):
             'batch_size': 64, 'target_update_frequency': 1000,
             'train_seq_len': 1},
         'network_args': {'latent_dim': internal_dim, 'network_yaml': nn_yaml},
-        'dset_args': {'layout': size_maze}
+        'dset_args': {'layout': size_maze, 'shuffle_obs': False}
         }
     parameters = flatten(parameters)
     parameters.update(flatten(param_update))
@@ -112,6 +112,9 @@ def run(arg):
 
     with open(f'{fname_nnet_dir}goal.txt', 'w') as goalfile:
         goalfile.write(str(env._goal_state))
+    if parameters['dset_args']['shuffle_obs']:
+        with open(f'{fname_nnet_dir}shuffle_indices.txt', 'w') as goalfile:
+            goalfile.write(str(env._shuffle_indices))
 
     result = {}
     result['episode'] = []
