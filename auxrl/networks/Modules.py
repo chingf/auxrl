@@ -50,12 +50,16 @@ def make_fc(input_dim, out_dim, fc_config):
     return nn.Sequential(*fc)
 
 class Encoder(nn.Module):
-    def __init__(self, env_spec, latent_dim, config, mem_len):
+    def __init__(
+        self, env_spec, latent_dim, config, mem_len, eligibility_gamma=None
+        ):
+
         super().__init__()
         self._env_spec = env_spec
         self._input_shape = env_spec.observations.shape # (C, H, W)
         self._latent_dim = latent_dim
         self._mem_len = mem_len
+        self._eligibility_gamma = eligibility_gamma
         if config['convs'] != None:
             self._convs = make_convs(self._input_shape, config['convs'])
             self._feature_size = compute_feature_size(
@@ -86,7 +90,12 @@ class Encoder(nn.Module):
                         N, self._mem_len, self._latent_dim)
                     self._prev_latent = self._prev_latent.to(x.get_device())
                 prev_zs = self._prev_latent
-            prev_zs = prev_zs
+
+            if self._eligibility_gamma != None:
+                for t in range(self._mem_len):
+                    scaling = self._eligibility_gamma**(t+1)
+                    prev_zs[:, t, :] = prev_zs[:, t, :] * scaling
+
             x = torch.hstack((x, prev_zs.reshape(N, -1)))
         x = self._fc(x)
         if (self._mem_len > 0) and (not prev_zs_provided):
