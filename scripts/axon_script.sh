@@ -3,122 +3,80 @@
 trap "exit" INT TERM ERR
 trap "kill 0" EXIT
 
-# Internal dim 4
-for JOB_IDX in {0..11}
+# Internal dim 13
+for JOB_IDX in {0..5}
 do
-    python run_gridworld.py $JOB_IDX 12 dm_large_q 4 &
+    python 01_run_gridworld.py $JOB_IDX 6 dm_large_q 13 &
 done
-
 wait
 
-for JOB_IDX in {0..11}
+for JOB_IDX in {0..5}
 do
-    python run_gridworld_fulltransfer.py $JOB_IDX 12 dm_large_q 4 &
+    python 02_run_gridworld_frozentransfer.py $JOB_IDX 6 dm_large_q 13 &
 done
-
 wait
 
-# Internal dim 5
-for JOB_IDX in {0..11}
+# Internal dim 14
+for JOB_IDX in {0..5}
 do
-    python run_gridworld.py $JOB_IDX 12 dm_large_q 5 &
+    python 01_run_gridworld.py $JOB_IDX 6 dm_large_q 14 &
 done
-
 wait
 
-for JOB_IDX in {0..11}
+for JOB_IDX in {0..5}
 do
-    python run_gridworld_fulltransfer.py $JOB_IDX 12 dm_large_q 5 &
+    python 02_run_gridworld_frozentransfer.py $JOB_IDX 6 dm_large_q 14 &
 done
-
 wait
 
-# Internal dim 6
-for JOB_IDX in {0..11}
+# Internal dim 15
+for JOB_IDX in {0..5}
 do
-    python run_gridworld.py $JOB_IDX 12 dm_large_q 6 &
+    python 01_run_gridworld.py $JOB_IDX 6 dm_large_q 15 &
 done
-
 wait
 
-for JOB_IDX in {0..11}
+for JOB_IDX in {0..5}
 do
-    python run_gridworld_fulltransfer.py $JOB_IDX 12 dm_large_q 6 &
+    python 02_run_gridworld_frozentransfer.py $JOB_IDX 6 dm_large_q 15 &
 done
-
 wait
 
-# Internal dim 7
-for JOB_IDX in {0..11}
+# Internal dim 16
+for JOB_IDX in {0..5}
 do
-    python run_gridworld.py $JOB_IDX 12 dm_large_q 7 &
+    python 01_run_gridworld.py $JOB_IDX 6 dm_large_q 16 &
 done
-
 wait
 
-for JOB_IDX in {0..11}
+for JOB_IDX in {0..5}
 do
-    python run_gridworld_fulltransfer.py $JOB_IDX 12 dm_large_q 7 &
+    python 02_run_gridworld_frozentransfer.py $JOB_IDX 6 dm_large_q 16 &
 done
-
 wait
 
-# Internal dim 3
-for JOB_IDX in {0..11}
+# Internal dim 17
+for JOB_IDX in {0..5}
 do
-    python run_gridworld.py $JOB_IDX 12 dm_large_q 3 &
+    python 01_run_gridworld.py $JOB_IDX 6 dm_large_q 17 &
 done
-
 wait
 
-for JOB_IDX in {0..11}
+for JOB_IDX in {0..5}
 do
-    python run_gridworld_fulltransfer.py $JOB_IDX 12 dm_large_q 3 &
+    python 02_run_gridworld_frozentransfer.py $JOB_IDX 6 dm_large_q 17 &
 done
-
 wait
 
-# Internal dim 8
-for JOB_IDX in {0..11}
+# Internal dim 18
+for JOB_IDX in {0..5}
 do
-    python run_gridworld.py $JOB_IDX 12 dm_large_q 8 &
+    python 01_run_gridworld.py $JOB_IDX 6 dm_large_q 18 &
 done
-
 wait
 
-for JOB_IDX in {0..11}
+for JOB_IDX in {0..5}
 do
-    python run_gridworld_fulltransfer.py $JOB_IDX 12 dm_large_q 8 &
+    python 02_run_gridworld_frozentransfer.py $JOB_IDX 6 dm_large_q 18 &
 done
-
-wait
-
-# Internal dim 9
-for JOB_IDX in {0..11}
-do
-    python run_gridworld.py $JOB_IDX 12 dm_large_q 9 &
-done
-
-wait
-
-for JOB_IDX in {0..11}
-do
-    python run_gridworld_fulltransfer.py $JOB_IDX 12 dm_large_q 9 &
-done
-
-wait
-
-# Internal dim 10
-for JOB_IDX in {0..11}
-do
-    python run_gridworld.py $JOB_IDX 12 dm_large_q 10 &
-done
-
-wait
-
-for JOB_IDX in {0..11}
-do
-    python run_gridworld_fulltransfer.py $JOB_IDX 12 dm_large_q 10 &
-done
-
 wait
