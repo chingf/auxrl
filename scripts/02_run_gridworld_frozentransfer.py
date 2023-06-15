@@ -28,18 +28,18 @@ nn_yaml = sys.argv[3]
 internal_dim = int(sys.argv[4])
 
 # Experiment Parameters
-load_function = selected_models_noMF
-fname_prefix = 'froz_tmp' #'frozentransfer_gridworld8x8_-3'
+load_function = selected_models
+fname_prefix = 'frozentransfer_gridworld8x8'
 fname_suffix = ''
-n_episodes = 301
-source_prefix = 'tmp' #'gridworld8x8'
+n_episodes = 201
+source_prefix = 'gridworld8x8'
 source_suffix = ''
 source_episode = 250
 epsilon = 1.
 eval_every = 1
 save_net_every = 50
 size_maze = 8
-n_iters = 5
+n_iters = 20
 
 # Less changed args
 random_seed = True
@@ -47,7 +47,6 @@ random_source = False
 encoder_only = True
 freeze_encoder = True
 n_cpu_jobs = 56 # Only used in event of CPU paralellization
-
 
 # If manual GPU setting
 if len(sys.argv) > 5:
@@ -249,7 +248,6 @@ def run(arg):
 
 # Load model parameters
 fname_grid, _, _ = load_function()
-fname_grid.extend(['entro-1', 'entro1'])
 source_fnames = [f'{source_prefix}_{f}' for f in fname_grid]
 #fname_grid.append('clean')
 #source_fnames.append(None)
