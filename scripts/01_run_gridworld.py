@@ -45,7 +45,7 @@ eval_every = 1
 save_net_every = 50
 epsilon = 1.
 size_maze = 8
-n_iters = 20
+n_iters = 35
 continual_transfer = False
 shuffle = True
 
@@ -83,7 +83,7 @@ def run(arg):
     net_exists = np.any(['network_ep' in f for f in os.listdir(fname_nnet_dir)])
     if net_exists:
         print(f'Skipping {fname}')
-        #return
+        return
     else:
         print(f'Running {fname}')
 
