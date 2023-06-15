@@ -1,3 +1,21 @@
+def no_q():
+    fname_grid = [
+        'entro_0',
+        'g0_-2_entro0',
+        'g0.5_-3_entro0',
+        ]
+    loss_weights_grid = [
+        [0, 1E0, 1E0, 0],
+        [1E-2, 1E0, 1E0, 0],
+        [1E-3, 1E0, 1E0, 0],
+        ]
+    param_updates = [
+        {},
+        {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.}},
+        {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.5}},
+        ]
+    return fname_grid, loss_weights_grid, param_updates
+
 def test_full():
     fname_grid = [
         'mf0',
