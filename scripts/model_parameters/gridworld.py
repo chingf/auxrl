@@ -1,8 +1,8 @@
 def no_q():
     fname_grid = [
-        'entro_0',
-        'g0_-2_entro0',
-        'g0.5_-3_entro0',
+        'noQ_entro0',
+        'noQ_g0_-2_entro0',
+        'noQ_g0.5_-3_entro0',
         ]
     loss_weights_grid = [
         [0, 1E0, 1E0, 0],
