@@ -88,6 +88,7 @@ class Env(dm_env.Environment):
         self._num_episode_steps = 0
         goal_state = self._sample_goal()
         self.goal_state = goal_state
+        self.transitions_swapped = False
 
     def _sample_start(self):
         """Randomly sample starting state."""
@@ -228,7 +229,18 @@ class Env(dm_env.Environment):
             new_state = (x, y+1)
         else:
             raise ValueError('Invalid action')
-    
+       
+        # Transitions may be warped to test the predictions of the DiCarlo paper
+        if self.transitions_swapped:
+            if (self._state==self._b) and (action==self._bf_action):
+                new_state = self._f
+            elif (self._state==self._c) and (action==self._ce_action):
+                new_state = self._e
+            elif (self._state==self._e) and (action==self._ec_action):
+                new_state = self._c
+            elif (self._state==self._f) and (action==self._fb_action):
+                new_state = self._b
+
         new_x, new_y = new_state
         step_type = dm_env.StepType.MID
         if self._layout[new_x, new_y] == -1:  # wall
@@ -306,6 +318,16 @@ class Env(dm_env.Environment):
     def plot_greedy_policy(self, q):
         greedy_actions = np.argmax(q, axis=2)
         self.plot_policy(greedy_actions)
+
+    def swap_transitions(self, swap_params):
+        self._b = swap_params['b']
+        self._c = swap_params['c']
+        self._e = swap_params['e']
+        self._f = swap_params['f']
+        self._bf_action = swap_params['bf_action']
+        self._fb_action = swap_params['fb_action']
+        self._ec_action = swap_params['ec_action']
+        self._ce_action = swap_params['ce_action']
 
 def build_gridworld_task(
     task, discount=0.9, penalty_for_walls=-5,
