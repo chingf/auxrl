@@ -155,30 +155,26 @@ class Agent(acme.Actor):
             _z = self._network.encoder(_obs.to(device))
             _onehot_actions = np.zeros((self._batch_size, self._n_actions))
             _onehot_actions[np.arange(self._batch_size), _a] = 1
-            _onehot_actions = torch.as_tensor(_onehot_actions, device=self._device).float()
+            _onehot_actions = torch.as_tensor(
+                _onehot_actions, device=self._device).float()
             _z_and_action = torch.cat([_z, _onehot_actions], dim=1)
             _Tz = self._network.T(_z_and_action)
             with torch.no_grad():
                 _next_Tz = self._network.T(z_and_action)
             T_target = z + self._pred_gamma * _next_Tz
             loss_pos_sample = torch.mean(torch.norm(_Tz - T_target, dim=1))
-        else:
+        else: # Manual truncation of prediction sequence
             T_target = next_z
-            #terminal_mask = (1-transitions.terminal).astype(np.float32) # (N,)
             total_scale_term = 1
-            #T_target_scale = torch.ones(self._batch_size)
             for t in np.arange(1, self._pred_len):
                 _obs = torch.tensor(transitions_seq[t].next_obs.astype(np.float32))
                 _z = self._network.encoder(_obs.to(device))
                 scale_term = self._pred_gamma**t
                 total_scale_term += scale_term
-                scale_term = scale_term #* torch.tensor(terminal_mask)
-                T_target = T_target + _z * scale_term#[:, None]
+                T_target = T_target + _z * scale_term
                 terminal = transitions_seq[t].terminal
-                #terminal_mask = ((1-terminal) + terminal_mask) == 2 # (N,)
-                #terminal_mask = terminal_mask.astype(np.float32)
             if self._pred_len > 1 and self._pred_scale:
-                T_target = T_target / total_scale_term #T_target_scale.to(device)[:,None]
+                T_target = T_target / total_scale_term
             loss_pos_sample = torch.mean(torch.norm(Tz - T_target, dim=1))
 
         # Negative Sample Loss (entropy)
@@ -190,8 +186,8 @@ class Agent(acme.Actor):
             -self._entropy_temp * torch.norm(z - next_z, dim=1)
             ))
 
-        # Q Loss
-        if self._n_updates%self._target_update_frequency == 0: # Update target network
+        # Q Loss and target network update
+        if self._n_updates%self._target_update_frequency == 0:
             self._target_network.set_params(self._network.get_params())
         if self._mem_len > 0:
             _zs = np.array(transitions_seq[self._mem_len].latent.astype(np.float32))
