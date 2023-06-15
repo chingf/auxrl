@@ -18,7 +18,7 @@ from auxrl.Agent import Agent
 from auxrl.networks.Network import Network
 from auxrl.environments.GridWorld import Env as Env
 from auxrl.utils import run_train_episode, run_eval_episode
-from model_parameters.gridworld import mf_grid, full_grid, selected_models, test
+from model_parameters.gridworld import mf_grid, full_grid, selected_models
 from model_parameters.gridworld import selected_models_noMF
 
 # Command-line args
