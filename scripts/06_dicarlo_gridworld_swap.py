@@ -22,6 +22,7 @@ from auxrl.environments.GridWorld import Env as Env
 from auxrl.utils import run_train_episode, run_eval_episode
 from model_parameters.gridworld import mf_grid, full_grid, selected_models, test_full
 from model_parameters.gridworld import selected_models_noMF
+from model_parameters.dicarlo_swap import param_set_1
 
 """
 Simulates the Nuo/Dicarlo swap experiment with gridworld environment and
@@ -51,6 +52,7 @@ size_maze = 8
 n_iters = 15
 
 # Less changed args
+swap_params = param_set_1()
 random_seed = True
 shuffle = True
 encoder_only = False
@@ -99,9 +101,10 @@ def cpu_parallel():
 
 def run(arg):
     _fname, source_fname, loss_weights, param_update, i = arg
-    if f'_fname_{i}' not in swap_params.keys():
+    swap_param_key = f'{source_fname[len(source_prefix)+1:]}_{i}'
+    if swap_param_key not in swap_params.keys():
         return
-    _swap_params = swap_params[f'_fname_{i}'] # TODO; or source_fname ?
+    _swap_params = swap_params[swap_param_key]
     print(_fname)
     print(loss_weights)
 
