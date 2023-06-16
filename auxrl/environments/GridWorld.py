@@ -324,10 +324,25 @@ class Env(dm_env.Environment):
         self._c = swap_params['c']
         self._e = swap_params['e']
         self._f = swap_params['f']
-        self._bf_action = swap_params['bf_action']
-        self._fb_action = swap_params['fb_action']
-        self._ec_action = swap_params['ec_action']
-        self._ce_action = swap_params['ce_action']
+        self._bf_action = self.invert_action(self._b, self._c)
+        self._fb_action = self.invert_action(self._f, self._e)
+        self._ec_action = self.invert_action(self._e, self._f)
+        self._ce_action = self.invert_action(self._c, self._b)
+
+    def invert_action(self, state1, state2):
+        """ Returns the action responsible for transition from state1 to state2"""
+        x_diff = state2[0] - state1[0]
+        y_diff = state2[1] - state1[1]
+        if x_diff == -1 and y_diff == 0:
+            return 0 # left
+        elif x_diff == 1 and y_diff == 0:
+            return 1 # right
+        elif x_diff == 0 and y_diff == -1:
+            return 2 # up
+        elif x_diff == 0 and y_diff == 1:
+            return 3 #down
+        else:
+            raise ValueError('Not a valid transition')
 
 def build_gridworld_task(
     task, discount=0.9, penalty_for_walls=-5,
