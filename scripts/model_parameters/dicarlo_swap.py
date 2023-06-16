@@ -29,7 +29,7 @@ def param_set_1():
         'a': (6,3), 'b': (7,3), 'c': (8,3), 'd': (1,8), 'e': (2,8), 'f': (3,8),
         'chosen_unit': 2, 'goal_loc': (2,7)}
     params['noQ_entro0_4'] = {
-        'a': (3,4), 'b': (4,4), 'c': (5,4), 'd': (1,7), 'e': (1,8), 'f': (2,8),
+        'd': (1,7), 'e': (1,8), 'f': (2,8), 'a': (3,4), 'b': (4,4), 'c': (5,4),
         'chosen_unit': 14, 'goal_loc': (8,7)}
 
     # Rewardless and one-step positive sampling only
