@@ -72,7 +72,7 @@ class Encoder(nn.Module):
         self._prev_latent = None
         self._fc = make_fc(self._feature_size, self._latent_dim, config['fc'])
         
-    def forward(self, x, prev_zs=None):
+    def forward(self, x, prev_zs=None, save_conv_activity=False):
         """
         prev_zs is shape (mem_len, latent_dim)
         """
@@ -80,6 +80,8 @@ class Encoder(nn.Module):
         N, C, H, W = x.shape
         if self._convs is not None:
             x = self._convs(x)
+            if save_conv_activity:
+                self._prev_conv_activity = x.detach()
         x = x.view(N, -1)
         x = x.float()
         prev_zs_provided = prev_zs != None

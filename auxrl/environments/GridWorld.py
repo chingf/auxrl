@@ -88,6 +88,7 @@ class Env(dm_env.Environment):
         self._num_episode_steps = 0
         goal_state = self._sample_goal()
         self.goal_state = goal_state
+        self.transitions_swapped = False
 
     def _sample_start(self):
         """Randomly sample starting state."""
@@ -228,7 +229,18 @@ class Env(dm_env.Environment):
             new_state = (x, y+1)
         else:
             raise ValueError('Invalid action')
-    
+       
+        # Transitions may be warped to test the predictions of the DiCarlo paper
+        if self.transitions_swapped:
+            if (self._state==self._b) and (action==self._bf_action):
+                new_state = self._f
+            elif (self._state==self._c) and (action==self._ce_action):
+                new_state = self._e
+            elif (self._state==self._e) and (action==self._ec_action):
+                new_state = self._c
+            elif (self._state==self._f) and (action==self._fb_action):
+                new_state = self._b
+
         new_x, new_y = new_state
         step_type = dm_env.StepType.MID
         if self._layout[new_x, new_y] == -1:  # wall
@@ -306,6 +318,31 @@ class Env(dm_env.Environment):
     def plot_greedy_policy(self, q):
         greedy_actions = np.argmax(q, axis=2)
         self.plot_policy(greedy_actions)
+
+    def swap_transitions(self, swap_params):
+        self._b = swap_params['b']
+        self._c = swap_params['c']
+        self._e = swap_params['e']
+        self._f = swap_params['f']
+        self._bf_action = self.invert_action(self._b, self._c)
+        self._fb_action = self.invert_action(self._f, self._e)
+        self._ec_action = self.invert_action(self._e, self._f)
+        self._ce_action = self.invert_action(self._c, self._b)
+
+    def invert_action(self, state1, state2):
+        """ Returns the action responsible for transition from state1 to state2"""
+        x_diff = state2[0] - state1[0]
+        y_diff = state2[1] - state1[1]
+        if x_diff == -1 and y_diff == 0:
+            return 0 # left
+        elif x_diff == 1 and y_diff == 0:
+            return 1 # right
+        elif x_diff == 0 and y_diff == -1:
+            return 2 # up
+        elif x_diff == 0 and y_diff == 1:
+            return 3 #down
+        else:
+            raise ValueError('Not a valid transition')
 
 def build_gridworld_task(
     task, discount=0.9, penalty_for_walls=-5,
