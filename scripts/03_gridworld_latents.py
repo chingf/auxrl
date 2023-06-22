@@ -34,8 +34,6 @@ generic_exp_name = str(sys.argv[2]) #'gridworld8x8'
 network_yaml = str(sys.argv[3]) #'dm'
 source_episode = int(sys.argv[4]) #250
 selected_fnames = None
-#selected_fnames, _, _ = selected_models(include_pos_sample_only=True)
-#selected_fnames = [f'{generic_exp_name}_{f}' for f in selected_fnames]
 random_net = False
 
 # Set up paths
@@ -138,6 +136,7 @@ for model_name in os.listdir(nnets_dir):
         shuffle_indices = re.split('\[|\]|\s|\n', shuffle_indices)
         shuffle_indices = [int(i) for i in shuffle_indices if i != '']
         shuffle_indices = np.array(shuffle_indices)
+    env._shuffle_indices = shuffle_indices
 
     # Get latents
     all_possib_inp = [] 
@@ -151,10 +150,6 @@ for model_name in os.listdir(nnets_dir):
             if env._layout[_x, _y] != -1:
                 env._start_state = env._state = (_x, _y)
                 obs = env.get_obs()
-                if shuffle_obs:
-                    obs_shape = obs.shape
-                    obs = obs.flatten()[shuffle_indices]
-                    obs = obs.reshape(obs_shape)
                 all_possib_inp.append(obs)
                 _quadrant = 0 if _x < maze_width//2 else 2
                 _quadrant += (0 if _y < maze_height//2 else 1)
