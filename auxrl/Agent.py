@@ -127,7 +127,7 @@ class Agent(acme.Actor):
         next_obs = torch.tensor(
             transitions.next_obs.astype(np.float32)).to(device)
         onehot_actions = np.zeros((self._batch_size, self._n_actions))
-        onehot_actions[np.arange(self._batch_size), a] = 1
+        onehot_actions[np.arange(self._batch_size), a.squeeze()] = 1
         onehot_actions = torch.as_tensor(onehot_actions, device=self._device).float()
 
         # Burn in latents for POMDP
@@ -151,18 +151,22 @@ class Agent(acme.Actor):
         # Positive Sample Loss (transition predictions)
         if self._pred_TD:
             _obs = torch.tensor(transitions_seq[0].obs.astype(np.float32))
+            _next_obs = torch.tensor(transitions_seq[0].next_obs.astype(np.float32))
             _a = transitions_seq[0].action.astype(int)
             _z = self._network.encoder(_obs.to(device))
+            _next_z = self._network.encoder(_next_obs.to(device))
             _onehot_actions = np.zeros((self._batch_size, self._n_actions))
-            _onehot_actions[np.arange(self._batch_size), _a] = 1
+            _onehot_actions[np.arange(self._batch_size), _a.squeeze()] = 1
             _onehot_actions = torch.as_tensor(
                 _onehot_actions, device=self._device).float()
             _z_and_action = torch.cat([_z, _onehot_actions], dim=1)
             _Tz = self._network.T(_z_and_action)
             with torch.no_grad():
                 _next_Tz = self._network.T(z_and_action)
-            T_target = z + self._pred_gamma * _next_Tz
-            loss_pos_sample = torch.mean(torch.norm(_Tz - T_target, dim=1))
+            T_target = _next_z + self._pred_gamma * _next_Tz
+            loss_pos_sample = torch.nn.functional.mse_loss(
+                _Tz, T_target, reduction='none')
+            loss_pos_sample = torch.mean(loss_pos_sample)
         else: # Manual truncation of prediction sequence
             T_target = next_z
             total_scale_term = 1
