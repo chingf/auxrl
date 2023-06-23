@@ -136,7 +136,7 @@ for model_name in os.listdir(nnets_dir):
         shuffle_indices = re.split('\[|\]|\s|\n', shuffle_indices)
         shuffle_indices = [int(i) for i in shuffle_indices if i != '']
         shuffle_indices = np.array(shuffle_indices)
-    env._shuffle_indices = shuffle_indices
+        env._shuffle_indices = shuffle_indices
 
     # Get latents
     all_possib_inp = [] 
