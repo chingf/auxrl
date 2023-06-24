@@ -179,15 +179,17 @@ class Env(dm_env.Environment):
     def action_spec(self):
         return specs.DiscreteArray(4, dtype=int, name='action')
 
-    def get_obs(self):
+    def get_obs(self, state=None):
+        if state == None:
+            state = self._state
         if self._observation_type is ObservationType.AGENT_ONEHOT:
             obs = np.zeros(self._layout.shape, dtype=np.float32)
-            obs[self._state] = 1 # Place agent
+            obs[state] = 1 # Place agent
             return obs
         elif self._observation_type is ObservationType.GRID:
             obs = np.zeros((1,) + self._layout_dims, dtype=np.float32)
             obs[0, ...] = (self._layout < 0)*(-1)
-            obs[0, self._state[0], self._state[1]] = 1
+            obs[0, state[0], state[1]] = 1
             if not self._hide_goal:
                 obs[0, self._goal_state[0], self._goal_state[1]] = 5
             if self._shuffle_obs:
@@ -196,9 +198,9 @@ class Env(dm_env.Environment):
                 obs = obs.reshape((1,) + self._layout_dims)
             return obs
         elif self._observation_type is ObservationType.AGENT_GOAL_POS:
-            return np.array(self._state + self._goal_state, dtype=np.float32)
+            return np.array(state + self._goal_state, dtype=np.float32)
         elif self._observation_type is ObservationType.STATE_INDEX:
-            x, y = self._state
+            x, y = state
             return y * self._layout.shape[1] + x
 
     def reset(self, reset_start=True, reset_goal=False):
@@ -320,14 +322,46 @@ class Env(dm_env.Environment):
         self.plot_policy(greedy_actions)
 
     def swap_transitions(self, swap_params):
+        self._a = swap_params['a']
         self._b = swap_params['b']
         self._c = swap_params['c']
+        self._d = swap_params['d']
         self._e = swap_params['e']
         self._f = swap_params['f']
         self._bf_action = self.invert_action(self._b, self._c)
         self._fb_action = self.invert_action(self._f, self._e)
         self._ec_action = self.invert_action(self._e, self._f)
         self._ce_action = self.invert_action(self._c, self._b)
+
+    def get_timestep_pairs_of_swapped_transitions(self):
+        pairs = []
+        a = dm_env.TimeStep(
+            step_type=dm_env.StepType.MID, reward=0., discount=self._discount,
+            observation=self.get_obs(state=self._a))
+        b = dm_env.TimeStep(
+            step_type=dm_env.StepType.MID, reward=0., discount=self._discount,
+            observation=self.get_obs(state=self._b))
+        c = dm_env.TimeStep(
+            step_type=dm_env.StepType.MID, reward=0., discount=self._discount,
+            observation=self.get_obs(state=self._c))
+        d = dm_env.TimeStep(
+            step_type=dm_env.StepType.MID, reward=0., discount=self._discount,
+            observation=self.get_obs(state=self._d))
+        e = dm_env.TimeStep(
+            step_type=dm_env.StepType.MID, reward=0., discount=self._discount,
+            observation=self.get_obs(state=self._e))
+        f = dm_env.TimeStep(
+            step_type=dm_env.StepType.MID, reward=0., discount=self._discount,
+            observation=self.get_obs(state=self._f))
+        pairs.append([a, b, self.invert_action(self._b, self._a)])
+        pairs.append([b, a, self.invert_action(self._a, self._b)])
+        pairs.append([b, f, self._bf_action])
+        pairs.append([f, b, self._fb_action])
+        pairs.append([d, e, self.invert_action(self._e, self._d)])
+        pairs.append([e, d, self.invert_action(self._d, self._e)])
+        pairs.append([e, c, self._ec_action])
+        pairs.append([c, e, self._ce_action])
+        return pairs
 
     def invert_action(self, state1, state2):
         """ Returns the action responsible for transition from state1 to state2"""
