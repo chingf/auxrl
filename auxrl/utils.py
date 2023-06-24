@@ -85,6 +85,42 @@ def run_eval_episode(
     print(f'[EVAL] {all_episode_return} score over {all_episode_steps} steps.')
     return all_episode_return, all_episode_steps
 
+def run_modified_transition(
+    environment: dm_env.Environment, agent: acme.Actor, max_timestep=20):
+    """
+    Each episode is itself a loop which interacts first with the environment to
+    get an observation and then give that observation to the agent in order to
+    retrieve an action.
+    
+    Args:
+      environment: dm_env.Environment used to generate trajectories.
+      agent: acme.Actor for selecting actions in the run loop.
+    """
+    
+    episode_steps = 0
+    episode_return = 0
+    summed_episode_losses = []
+    
+    timestep = environment.reset()
+    timestep_pairs = environment.get_timestep_pairs_of_swapped_transitions()
+    n_iters = (agent._batch_size // len(timestep_pairs)) + 1
+    for _ in range(n_iters):
+        for timestep, next_timestep, action in timestep_pairs:
+            agent._replay_buffer.add_artificial_transition(
+                timestep, next_timestep, action)
+    
+    while (not timestep.last()) and (episode_steps < max_timestep):
+        episode_losses = agent.update()
+        if summed_episode_losses == []:
+            summed_episode_losses = episode_losses
+        else:
+            for i in range(len(summed_episode_losses)):
+                summed_episode_losses[i] += episode_losses[i]
+        episode_steps += 1
+    
+    avg_episode_losses = [l/episode_steps for l in summed_episode_losses]
+    return avg_episode_losses, episode_return, episode_steps
+
 #def display_video(frames: Sequence[np.ndarray],
 #                  filename: str = 'temp.mp4',
 #                  frame_rate: int = 12):

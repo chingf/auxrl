@@ -19,10 +19,9 @@ from acme import wrappers
 from auxrl.Agent import Agent
 from auxrl.networks.Network import Network
 from auxrl.environments.GridWorld import Env as Env
-from auxrl.utils import run_train_episode, run_eval_episode
-from model_parameters.gridworld import mf_grid, full_grid, selected_models, test_full
-from model_parameters.gridworld import selected_models_noMF
-from model_parameters.dicarlo_swap import param_set_1
+from auxrl.utils import run_train_episode, run_eval_episode, run_modified_transition
+from model_parameters.gridworld import *
+from model_parameters.dicarlo_swap import *
 
 """
 Simulates the Nuo/Dicarlo swap experiment with gridworld environment and
@@ -38,21 +37,21 @@ nn_yaml = sys.argv[3]
 internal_dim = int(sys.argv[4])
 
 # Experiment Parameters
-load_function = test_full
-source_prefix = 'gridworld8x8_shuffobs'
+load_function = all_psamples
+source_prefix = 'postbug_gridworld8x8_shuffobs'
 source_suffix = ''
-source_episode = 300
+source_episode = 600
 fname_prefix = f'dicarlo_swap_{source_prefix}'
 fname_suffix = ''
-n_episodes = 301
+n_episodes = 1
 epsilon = 1.
 eval_every = 1
-save_net_every = 50
+save_net_every = 1
 size_maze = 8
 n_iters = 15
 
 # Less changed args
-swap_params = param_set_1()
+swap_params = postbug_contig()
 random_seed = True
 shuffle = True
 encoder_only = False
@@ -127,11 +126,11 @@ def run(arg):
         os.makedirs(_dir, exist_ok=True)
 
     net_exists = np.any(['network_ep' in f for f in os.listdir(fname_nnet_dir)])
-    if net_exists:
-        print(f'Skipping {fname}')
-        return
-    else:
-        print(f'Running {fname}')
+    #if net_exists:
+    #    print(f'Skipping {fname}')
+    #    return
+    #else:
+    #    print(f'Running {fname}')
 
     parameters = {
         'source_network_path': load_network,
@@ -201,7 +200,8 @@ def run(arg):
 
     for episode in range(n_episodes):
         start = time.time()
-        losses, score, steps_per_episode = run_train_episode(env, agent)
+        losses, score, steps_per_episode = run_modified_transition(
+            env, agent, max_timestep=2)
         end = time.time()
         sec_per_step_SUM += (end-start)
         sec_per_step_NUM += steps_per_episode
