@@ -20,8 +20,7 @@ from auxrl.Agent import Agent
 from auxrl.networks.Network import Network
 from auxrl.environments.GridWorld import Env as Env
 from auxrl.utils import run_train_episode, run_eval_episode
-from model_parameters.gridworld import mf_grid, full_grid, selected_models, test_full
-from model_parameters.gridworld import selected_models_noMF
+from model_parameters.gridworld import *
 
 # Command-line args
 job_idx = int(sys.argv[1])
@@ -30,21 +29,21 @@ nn_yaml = sys.argv[3]
 internal_dim = int(sys.argv[4])
 
 # Experiment Parameters
-load_function = test_full
-fname_prefix = 'fulltransfer_gridworld8x8_shuffobs'
-fname_suffix = ''
-n_episodes = 301
-source_prefix = 'gridworld8x8_shuffobs'
-source_suffix = ''
-source_episode = 300
+load_function = selected_models
+n_episodes = 351
+source_prefix = 'new_gridworld8x8'
+fname_prefix = f'fulltransfer_{source_prefix}'
+source_episode = 350
 epsilon = 1.
+n_iters = 17
+shuffle = False
+
+# Less changed args
 eval_every = 1
 save_net_every = 50
 size_maze = 8
-n_iters = 35
-shuffle = True
-
-# Less changed args
+source_suffix = ''
+fname_suffix = ''
 random_seed = True
 random_source = False
 encoder_only = False
@@ -136,7 +135,7 @@ def run(arg):
         'encoder_only': encoder_only, 'freeze_encoder': freeze_encoder,
         'fname': fname,
         'n_episodes': n_episodes,
-        'n_test_episodes': 5,
+        'n_test_episodes': 10,
         'agent_args': {
             'loss_weights': loss_weights, 'lr': 1e-3,
             'replay_capacity': 100_000, 'epsilon': epsilon,

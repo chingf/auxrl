@@ -19,16 +19,32 @@ from auxrl.Agent import Agent
 from auxrl.networks.Network import Network
 from auxrl.environments.GridWorld import Env as Env
 from auxrl.utils import run_train_episode, run_eval_episode
-from model_parameters.gridworld import mf_grid, full_grid, selected_models
-from model_parameters.gridworld import selected_models_noMF, test_full
+from model_parameters.gridworld import *
 
-# Experiment Parameters
+# Command-line args
 job_idx = int(sys.argv[1])
 n_jobs = int(sys.argv[2])
 nn_yaml = sys.argv[3]
 internal_dim = int(sys.argv[4])
+
+# Experiment Parameters
 load_function = selected_models
+fname_prefix = 'new_gridworld8x8'
+n_episodes = 351
+epsilon = 1.
+n_iters = 17
+shuffle = False
+
+# Less used params
 random_seed = True
+size_maze = 8
+fname_suffix = ''
+n_cpu_jobs = 56
+eval_every = 1
+save_net_every = 50
+continual_transfer = False
+
+# GPU selection
 try:
     n_gpus = (len(os.environ['CUDA_VISIBLE_DEVICES'])+1)/2
 except:
@@ -37,17 +53,6 @@ if n_gpus > 1:
     device_num = str(job_idx % n_gpus)
     my_env = os.environ
     my_env["CUDA_VISIBLE_DEVICES"] = device_num
-fname_prefix = 'gridworld8x8'
-fname_suffix = ''
-n_episodes = 251
-n_cpu_jobs = 56
-eval_every = 1
-save_net_every = 50
-epsilon = 1.
-size_maze = 8
-n_iters = 35
-continual_transfer = False
-shuffle = False
 
 # Make directories
 if os.environ['USER'] == 'chingfang':
@@ -90,7 +95,7 @@ def run(arg):
     parameters = {
         'fname': fname,
         'n_episodes': n_episodes,
-        'n_test_episodes': 5,
+        'n_test_episodes': 10,
         'continual_transfer': continual_transfer,
         'agent_args': {
             'loss_weights': loss_weights, 'lr': 1e-4,
