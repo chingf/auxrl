@@ -40,6 +40,17 @@ class ReplayBuffer(object):
         self.buffer.append(transition)
         self._prev_obs = timestep.observation
 
+    def add_artificial_transition(
+        self, timestep: dm_env.TimeStep, next_timestep: dm_env.TimeStep,
+        action: int):
+        transition = Transitions(
+            obs=timestep.observation, action=action,
+            reward=next_timestep.reward,
+            discount=next_timestep.discount, next_obs=next_timestep.observation,
+            terminal=next_timestep.last(),
+            latent=None)
+        self.buffer.append(transition)
+
     def sample_deque(self, indices):
         batch_as_list = [None for _ in range(indices.size)]
         for buffer_i, val in enumerate(self.buffer):
