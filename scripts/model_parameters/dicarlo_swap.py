@@ -1,3 +1,16 @@
+def postbug_contig():
+    params = {}
+
+    # Rewardless and p/n sampling
+    params['noq_g0_-2_entro-1_0'] = {
+        'a': (1,2), 'b': (1,1), 'c': (2,1), 'd': (8,7), 'e': (8,8), 'f': (7,8),
+        'chosen_unit': 2}
+
+    params['g0_-2_entro-1_3'] = {
+        'a': (8,1), 'b': (8,2), 'c': (8,3), 'd': (5,6), 'e': (5,7), 'f': (5,8),
+        'chosen_unit': 3}
+
+    return params
 
 def param_set_1():
     """
