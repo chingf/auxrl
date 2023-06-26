@@ -172,4 +172,20 @@ def selected_models():
         ]
     return fname_grid, loss_weights_grid, param_updates
 
-
+def mix():
+    fname_grid = [
+        'mf0',
+        'entro-1',
+        'noq_entro-1',
+        ]
+    loss_weights_grid = [
+        [0, 0, 0, 1],
+        [0, 1E-1, 1E-1, 1],
+        [0, 1E-1, 1E-1, 0],
+        ]
+    param_updates = [
+        {},
+        {},
+        {}
+        ]
+    return fname_grid, loss_weights_grid, param_updates
