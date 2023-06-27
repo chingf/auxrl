@@ -28,12 +28,12 @@ nn_yaml = sys.argv[3]
 internal_dim = int(sys.argv[4])
 
 # Experiment Parameters
-load_function = selected_models
-fname_prefix = 'new_gridworld8x8'
-n_episodes = 351
+load_function = dswap
+fname_prefix = 'postbug_gridworld8x8_shuffobs'
+n_episodes = 601
 epsilon = 1.
-n_iters = 17
-shuffle = False
+n_iters = 15
+shuffle = True
 
 # Less used params
 random_seed = True

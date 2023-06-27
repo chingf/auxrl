@@ -37,7 +37,7 @@ nn_yaml = sys.argv[3]
 internal_dim = int(sys.argv[4])
 
 # Experiment Parameters
-load_function = all_psamples
+load_function = dswap
 source_prefix = 'postbug_gridworld8x8_shuffobs'
 source_suffix = ''
 source_episode = 600

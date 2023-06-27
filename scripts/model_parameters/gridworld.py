@@ -189,3 +189,47 @@ def mix():
         {}
         ]
     return fname_grid, loss_weights_grid, param_updates
+
+def dswap():
+    fname_grid = [
+        'noq_g0_-2_entro-2',
+        'noq_g0_-2_entro-1',
+        'g0_-2_entro-1',
+        'g0.25_-2_entro-2',
+        'g0.5_-3_entro-2',
+        'g0.8_-3_entro-2'
+        ]
+    loss_weights_grid = [
+        [1E-2, 1E-2, 1E-2, 0],
+        [1E-2, 1E-1, 1E-1, 0],
+        [1E-2, 1E-1, 1E-1, 1],
+        [1E-2, 1E-2, 1E-2, 1],
+        [1E-3, 1E-2, 1E-2, 1],
+        [1E-3, 1E-2, 1E-2, 1],
+        ]
+    param_updates = [
+        {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.}},
+        {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.}},
+        {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.}},
+        {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.25}},
+        {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.5}},
+        {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.8}},
+        ]
+
+    fname_grid.extend([
+        'mf0',
+        'entro-1',
+        'noq_entro-1',
+        ])
+    loss_weights_grid.extend([
+        [0, 0, 0, 1],
+        [0, 1E-1, 1E-1, 1],
+        [0, 1E-1, 1E-1, 0],
+        ])
+    param_updates.extend([
+        {},
+        {},
+        {}
+        ])
+    return fname_grid, loss_weights_grid, param_updates
+
