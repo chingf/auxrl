@@ -26,11 +26,11 @@ import torch
 #torch.cuda.is_available = lambda : False
 
 ## Arguments
-internal_dim = 32 
-generic_exp_name = 'altT_eps0.4_tlen8_mlen6'
+internal_dim = 24
+generic_exp_name = 'new_altT_eps0.4_tlen9_mlen5'
 network_yaml = 'dm'
-source_episode = 25
-selected_fnames = ['mf', 'g0_-2_entro0',]
+source_episode = 60
+selected_fnames = ['g0_-2_entro-2',]
 selected_fnames = [f'{generic_exp_name}_{f}' for f in selected_fnames]
 
 # Set up paths
@@ -56,7 +56,9 @@ repr_dict = {
     'y': [],
     'last_reward_loc': [],
     'reward_loc': [],
-    'final_reward': []
+    'final_reward': [],
+    'condn_label': [],
+    'maze_side': [],
     }
 
 # Iterate through models
@@ -78,6 +80,7 @@ for model_name in os.listdir(nnets_dir):
     parameters['internal_dim'] = internal_dim
     env = Env(**parameters['dset_args'])
     env_spec = specs.make_environment_spec(env)
+    midwidth = env._width//2
     network = Network(env_spec, device=device, **parameters['network_args'])
     agent = Agent(env_spec, network, device=device, **parameters['agent_args'])
     agent.load_network(model_nnet_dir, source_episode, False)
@@ -90,6 +93,8 @@ for model_name in os.listdir(nnets_dir):
         n_total_steps = 100
 
         latents = []; xs = []; ys = []; last_reward_locs = []; reward_locs = [];
+        condn_labels = []; maze_side = [];
+
         while not timestep.last():
             if episode_steps >= n_total_steps: # Stop at some number of steps
                 break
@@ -101,6 +106,9 @@ for model_name in os.listdir(nnets_dir):
             ys.append(y)
             last_reward_locs.append(env._last_reward_loc)
             reward_locs.append(env._reward_loc)
+            condn_labels.append(env._space_label[x, y])
+            maze_side.append(x - midwidth)
+
             timestep = env.step(action)
             episode_steps += 1
             episode_return += timestep.reward
@@ -113,8 +121,10 @@ for model_name in os.listdir(nnets_dir):
         repr_dict['y'].extend(ys)
         repr_dict['last_reward_loc'].extend(last_reward_locs)
         repr_dict['reward_loc'].extend(reward_locs)
+        repr_dict['condn_label'].extend(condn_labels)
+        repr_dict['maze_side'].extend(maze_side)
         repr_dict['final_reward'].extend([episode_return]*n_total_steps)
 
 repr_df = pd.DataFrame(repr_dict)
-with open(f'{analysis_dir}representation_df.p', 'wb') as f:
+with open(f'{analysis_dir}representation_df_ep{source_episode}.p', 'wb') as f:
     pickle.dump(repr_df, f)
