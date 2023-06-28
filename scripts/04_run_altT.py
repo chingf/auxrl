@@ -19,7 +19,7 @@ from auxrl.Agent import Agent
 from auxrl.networks.Network import Network
 from auxrl.environments.AlternatingT import Env as Env
 from auxrl.utils import run_train_episode, run_eval_episode
-from model_parameters.gridworld import mf_grid, full_grid, selected_models
+from model_parameters.gridworld import *
 
 # Experiment Parameters
 job_idx = int(sys.argv[1])
@@ -48,13 +48,18 @@ if n_gpus > 1:
     my_env = os.environ
     my_env["CUDA_VISIBLE_DEVICES"] = device_num
 
-fname_prefix = 'altT_eps0.4_tlen8_mlen6'
-fname_suffix = ''
-n_episodes = 30
+# Experiment Parameters
+load_function = altT_g0
+fname_prefix = 'new_altT_eps0.4_tlen9_mlen5'
+n_episodes = 61
+n_iters = 15
+epsilon = 0.4
+
+# Less used params
 n_cpu_jobs = 56
 eval_every = 5
 save_net_every = 5
-epsilon = 0.4
+fname_suffix = ''
 
 # Make directories
 if os.environ['USER'] == 'chingfang':
@@ -90,7 +95,7 @@ def run(arg):
     net_exists = np.any(['network_ep' in f for f in os.listdir(fname_nnet_dir)])
     if net_exists:
         print(f'Skipping {fname}')
-        #return
+        return
     else:
         print(f'Running {fname}')
 
@@ -103,11 +108,11 @@ def run(arg):
             'replay_capacity': 20_000, # 100_000
             'epsilon': epsilon,
             'batch_size': 64, 'target_update_frequency': 1000,
-            'train_seq_len': 8
+            'train_seq_len': 9
             },
         'network_args': {
             'latent_dim': internal_dim, 'network_yaml': nn_yaml,
-            'mem_len': 6,
+            'mem_len': 5, 'eligibility_gamma': 0.8
             },
         'dset_args': {'hide_goal': True},
         'max_eval_episode_steps': 500,
@@ -210,15 +215,13 @@ def run(arg):
         pickle.dump(result, f)
 
 # Load model parameters
-fname_grid = ['mf', 'g0_-2_entro0',]
-loss_weights_grid = [
-    [0, 0, 0, 1], 
-    [1E-2, 1E0, 1E0, 1],]
-param_updates = [{}, {}]
+fname_grid, loss_weights_grid, param_updates = load_function()
+assert(len(fname_grid) == len(loss_weights_grid))
+assert(len(fname_grid) == len(param_updates))
 fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
 
 # Collect argument combinations
-iters = np.arange(10)
+iters = np.arange(n_iters)
 args = []
 for arg_idx in range(len(fname_grid)):
     for i in iters:
