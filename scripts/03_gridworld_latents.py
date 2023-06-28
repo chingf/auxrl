@@ -207,9 +207,9 @@ repr_df = pd.DataFrame(repr_dict)
 T_df = pd.DataFrame(T_dict)
 dim_df = pd.DataFrame(dim_dict)
 suffix = 'randomnet_' if random_net else ''
-with open(f'{analysis_dir}{suffix}representation_df.p', 'wb') as f:
+with open(f'{analysis_dir}{suffix}representation_df_ep{source_episode}.p', 'wb') as f:
     pickle.dump(repr_df, f)
-with open(f'{analysis_dir}{suffix}dimensionality_df.p', 'wb') as f:
+with open(f'{analysis_dir}{suffix}dimensionality_df_ep{source_episode}.p', 'wb') as f:
     pickle.dump(dim_df, f)
-with open(f'{analysis_dir}{suffix}transition_df.p', 'wb') as f:
+with open(f'{analysis_dir}{suffix}transition_df_ep{source_episode}.p', 'wb') as f:
     pickle.dump(T_df, f)
