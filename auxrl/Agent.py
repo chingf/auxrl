@@ -167,19 +167,11 @@ class Agent(acme.Actor):
             loss_pos_sample = torch.nn.functional.mse_loss(
                 _Tz, T_target, reduction='none')
             loss_pos_sample = torch.mean(loss_pos_sample)
-        else: # Manual truncation of prediction sequence
+        else:
             T_target = next_z
-            total_scale_term = 1
-            for t in np.arange(1, self._pred_len):
-                _obs = torch.tensor(transitions_seq[t].next_obs.astype(np.float32))
-                _z = self._network.encoder(_obs.to(device))
-                scale_term = self._pred_gamma**t
-                total_scale_term += scale_term
-                T_target = T_target + _z * scale_term
-                terminal = transitions_seq[t].terminal
-            if self._pred_len > 1 and self._pred_scale:
-                T_target = T_target / total_scale_term
-            loss_pos_sample = torch.mean(torch.norm(Tz - T_target, dim=1))
+            loss_pos_sample = torch.nn.functional.mse_loss(
+                Tz, T_target, reduction='none')
+            loss_pos_sample = torch.mean(loss_pos_sample)
 
         # Negative Sample Loss (entropy)
         rolled = torch.roll(z, 1, dims=0)
