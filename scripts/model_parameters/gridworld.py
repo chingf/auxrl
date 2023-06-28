@@ -172,22 +172,22 @@ def selected_models():
         ]
     return fname_grid, loss_weights_grid, param_updates
 
-def mix():
-    fname_grid = [
-        'mf0',
-        'entro-1',
-        'noq_entro-1',
-        ]
+def g0():
+    fname_grid = ['noq_g0_-2_entro-2', 'g0_-2_entro-2',]
     loss_weights_grid = [
-        [0, 0, 0, 1],
-        [0, 1E-1, 1E-1, 1],
-        [0, 1E-1, 1E-1, 0],
+        [1E-2, 1E-2, 1E-2, 0],
+        [1E-2, 1E-2, 1E-2, 1]
         ]
     param_updates = [
-        {},
-        {},
-        {}
+        {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.}},
+        {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.}},
         ]
+    return fname_grid, loss_weights_grid, param_updates
+
+def altT_g0():
+    fname_grid = ['g0_-2_entro-2',]
+    loss_weights_grid = [[1E-2, 1E-2, 1E-2, 1],]
+    param_updates = [{}]
     return fname_grid, loss_weights_grid, param_updates
 
 def dswap():
