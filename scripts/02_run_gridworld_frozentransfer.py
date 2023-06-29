@@ -9,6 +9,8 @@ import matplotlib.pyplot as plt
 import os
 import time
 import shortuuid
+from flatten_dict import flatten
+from flatten_dict import unflatten
 import torch
 
 from acme import specs
@@ -18,8 +20,7 @@ from auxrl.Agent import Agent
 from auxrl.networks.Network import Network
 from auxrl.environments.GridWorld import Env as Env
 from auxrl.utils import run_train_episode, run_eval_episode
-from model_parameters.gridworld import mf_grid, full_grid, selected_models
-from model_parameters.gridworld import selected_models_noMF
+from model_parameters.gridworld import *
 
 # Command-line args
 job_idx = int(sys.argv[1])
@@ -29,24 +30,25 @@ internal_dim = int(sys.argv[4])
 
 # Experiment Parameters
 load_function = selected_models
-fname_prefix = 'frozentransfer_gridworld8x8'
-fname_suffix = ''
-n_episodes = 201
-source_prefix = 'gridworld8x8'
-source_suffix = ''
-source_episode = 250
+n_episodes = 351
+source_prefix = 'new_gridworld8x8_shuffobs'
+fname_prefix = f'frozentransfer_{source_prefix}'
+source_episode = 600
 epsilon = 1.
+n_iters = 15
+shuffle = False
+
+# Less changed args
 eval_every = 1
 save_net_every = 50
 size_maze = 8
-n_iters = 20
-
-# Less changed args
+source_suffix = ''
+fname_suffix = ''
 random_seed = True
 random_source = False
 encoder_only = True
 freeze_encoder = True
-n_cpu_jobs = 56 # Only used in event of CPU paralellization
+n_cpu_jobs = 6 # Only used in event of CPU paralellization
 
 # If manual GPU setting
 if len(sys.argv) > 5:
@@ -92,6 +94,8 @@ def cpu_parallel():
 
 def run(arg):
     _fname, source_fname, loss_weights, param_update, i = arg
+    print(_fname)
+    print(loss_weights)
     source_nnet_dir = f'{engram_dir}nnets/{source_dir}'
     if source_fname is None:
         load_network = None
@@ -121,11 +125,11 @@ def run(arg):
         os.makedirs(_dir, exist_ok=True)
 
     net_exists = np.any(['network_ep' in f for f in os.listdir(fname_nnet_dir)])
-    #if net_exists:
-    #    print(f'Skipping {fname}')
-    #    return
-    #else:
-    #    print(f'Running {fname}')
+    if net_exists:
+        print(f'Skipping {fname}')
+        return
+    else:
+        print(f'Running {fname}')
 
     parameters = {
         'source_network_path': load_network,
@@ -133,7 +137,7 @@ def run(arg):
         'encoder_only': encoder_only, 'freeze_encoder': freeze_encoder,
         'fname': fname,
         'n_episodes': n_episodes,
-        'n_test_episodes': 5,
+        'n_test_episodes': 10,
         'agent_args': {
             'loss_weights': loss_weights, 'lr': 1e-3,
             'replay_capacity': 100_000, 'epsilon': epsilon,
@@ -142,24 +146,35 @@ def run(arg):
         'network_args': {
             'latent_dim': internal_dim, 'network_yaml': nn_yaml,
             'freeze_encoder': freeze_encoder},
-        'dset_args': {'layout': size_maze, 'prev_goal_state': prev_pos_goal,}
+        'dset_args': {
+            'layout': size_maze, 'shuffle_obs': shuffle, 'prev_goal_state': prev_pos_goal}
         }
-    parameters.update(param_update)
+    parameters = flatten(parameters)
+    parameters.update(flatten(param_update))
+    parameters = unflatten(parameters)
     with open(f'{param_dir}{_fname}.yaml', 'w') as outfile:
         yaml.dump(parameters, outfile, default_flow_style=False)
     if random_seed: np.random.seed(i)
     env = Env(**parameters['dset_args'])
     env = wrappers.SinglePrecisionWrapper(env)
     env_spec = specs.make_environment_spec(env)
-    network = Network(env_spec, device=device, **parameters['network_args'])
-    agent = Agent(env_spec, network, device=device, **parameters['agent_args'])
-    if load_network is not None:
-        print('Loading network')
-        agent.load_network(load_network[0], load_network[1], encoder_only)
-
-    os.makedirs(fname_nnet_dir, exist_ok=True)
     with open(f'{fname_nnet_dir}goal.txt', 'w') as goalfile:
         goalfile.write(str(env._goal_state))
+    if parameters['dset_args']['shuffle_obs']:
+        with open(f'{fname_nnet_dir}shuffle_indices.txt', 'w') as goalfile:
+            goalfile.write(str(env._shuffle_indices))
+    network = Network(env_spec, device=device, **parameters['network_args'])
+    agent = Agent(env_spec, network, device=device, **parameters['agent_args'])
+
+    try:
+        if load_network is not None:
+            print('Loading network')
+            agent.load_network(load_network[0], load_network[1], encoder_only)
+    except:
+        print(f'ERROR LOADING {load_network[0]}, {load_network[1]}')
+        return
+
+    os.makedirs(fname_nnet_dir, exist_ok=True)
 
     result = {}
     result['episode'] = []
@@ -247,13 +262,9 @@ def run(arg):
         pickle.dump(result, f)
 
 # Load model parameters
-fname_grid, _, _ = load_function()
+fname_grid, loss_weights_grid, param_updates = load_function()
 source_fnames = [f'{source_prefix}_{f}' for f in fname_grid]
-#fname_grid.append('clean')
-#source_fnames.append(None)
-loss_weights_grid = [[0., 0., 0., 1]] * len(fname_grid)
 fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
-param_updates = [{}]*len(fname_grid)
 
 # Collect argument combinations
 iters = np.arange(n_iters)
