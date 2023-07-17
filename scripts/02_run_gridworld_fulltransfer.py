@@ -30,13 +30,13 @@ internal_dim = int(sys.argv[4])
 
 # Experiment Parameters
 load_function = selected_models
-n_episodes = 351
-source_prefix = 'new_gridworld8x8'
+n_episodes = 601
+source_prefix = 'new_gridworld8x8_shuffobs'
 fname_prefix = f'fulltransfer_{source_prefix}'
-source_episode = 350
+source_episode = 600
 epsilon = 1.
-n_iters = 17
-shuffle = False
+n_iters = 15
+shuffle = True
 
 # Less changed args
 eval_every = 1

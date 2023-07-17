@@ -29,8 +29,8 @@ nn_yaml = sys.argv[3]
 internal_dim = int(sys.argv[4])
 
 # Experiment Parameters
-load_function = selected_models
-n_episodes = 351
+load_function = all_psamples
+n_episodes = 401
 source_prefix = 'new_gridworld8x8_shuffobs'
 fname_prefix = f'frozentransfer_{source_prefix}'
 source_episode = 600
@@ -48,7 +48,7 @@ random_seed = True
 random_source = False
 encoder_only = True
 freeze_encoder = True
-n_cpu_jobs = 6 # Only used in event of CPU paralellization
+n_cpu_jobs = 56 # Only used in event of CPU paralellization
 
 # If manual GPU setting
 if len(sys.argv) > 5:
