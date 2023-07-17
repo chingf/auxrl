@@ -49,10 +49,10 @@ if n_gpus > 1:
     my_env["CUDA_VISIBLE_DEVICES"] = device_num
 
 # Experiment Parameters
-load_function = altT_g0
-fname_prefix = 'new_altT_eps0.4_tlen9_mlen5'
+load_function = altT
+fname_prefix = 'new_altT_eps0.4_tlen8_mlen1'
 n_episodes = 61
-n_iters = 15
+n_iters = 20
 epsilon = 0.4
 
 # Less used params
@@ -108,11 +108,11 @@ def run(arg):
             'replay_capacity': 20_000, # 100_000
             'epsilon': epsilon,
             'batch_size': 64, 'target_update_frequency': 1000,
-            'train_seq_len': 9
+            'train_seq_len': 8
             },
         'network_args': {
             'latent_dim': internal_dim, 'network_yaml': nn_yaml,
-            'mem_len': 5, 'eligibility_gamma': 0.8
+            'mem_len': 1 #, 'eligibility_gamma': 0.8
             },
         'dset_args': {'hide_goal': True},
         'max_eval_episode_steps': 500,

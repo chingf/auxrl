@@ -105,6 +105,7 @@ def run(arg):
         return
     _swap_params = swap_params[swap_param_key]
     print(_fname)
+    print(f'Iteration {i}')
     print(loss_weights)
 
     source_nnet_dir = f'{engram_dir}nnets/{source_dir}'

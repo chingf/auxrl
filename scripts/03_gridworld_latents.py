@@ -69,10 +69,18 @@ def get_n_components(var_ratio):
     var_curve = np.cumsum(var_ratio)
     return np.argwhere(var_curve > 0.9)[0].item()
 
+def get_participation_ratio(pca):
+    c = pca.get_covariance()
+    lambdas, _ = np.linalg.eig(c)
+    numerator = np.sum(lambdas)**2
+    denominator = np.sum(np.square(lambdas))
+    return numerator/denominator
+
 # Collecting dimensionality measures
 dim_dict = {
     'model': [],
     'iteration': [],
+    'participation_ratio': [],
     'gini': [],
     'auc': [],
     'entro': [],
@@ -183,7 +191,6 @@ for model_name in os.listdir(nnets_dir):
     latents = latents.cpu().numpy()
     pca = PCA()
     reduced_latents = pca.fit_transform(latents)
-    reduced_latents = reduced_latents[:, :3]
     var_ratio = pca.explained_variance_ratio_
 
     repr_dict['model'].extend([fname]*n_states)
@@ -197,6 +204,7 @@ for model_name in os.listdir(nnets_dir):
         
     dim_dict['model'].append(fname)
     dim_dict['iteration'].append(iteration)
+    dim_dict['participation_ratio'].append(get_participation_ratio(pca))
     dim_dict['gini'].append(get_gini(var_ratio))
     dim_dict['auc'].append(get_auc(var_ratio))
     dim_dict['entro'].append(get_entro(var_ratio))
