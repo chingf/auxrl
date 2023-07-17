@@ -27,10 +27,10 @@ import torch
 
 ## Arguments
 internal_dim = 24
-generic_exp_name = 'new_altT_eps0.4_tlen9_mlen5'
+generic_exp_name = 'new_altT_eps0.4_tlen8_mlen1'
 network_yaml = 'dm'
 source_episode = 60
-selected_fnames = ['g0_-2_entro-2',]
+selected_fnames = ['g0_-2_entro-2', 'mf0']
 selected_fnames = [f'{generic_exp_name}_{f}' for f in selected_fnames]
 
 # Set up paths

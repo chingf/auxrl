@@ -184,10 +184,15 @@ def g0():
         ]
     return fname_grid, loss_weights_grid, param_updates
 
-def altT_g0():
-    fname_grid = ['g0_-2_entro-2',]
-    loss_weights_grid = [[1E-2, 1E-2, 1E-2, 1],]
-    param_updates = [{}]
+def altT():
+    fname_grid = [
+        'mf0',
+        'g0_-2_entro-2',]
+    loss_weights_grid = [
+        [0, 0, 0, 1],
+        [1E-2, 1E-2, 1E-2, 1],]
+    param_updates = [
+        {}, {}]
     return fname_grid, loss_weights_grid, param_updates
 
 def dswap():
