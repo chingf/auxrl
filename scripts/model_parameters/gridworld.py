@@ -118,33 +118,6 @@ def mf_grid():
     param_updates = [{}, {}, {}, {}]
     return fname_grid, loss_weights_grid, param_updates
 
-def all_psamples():
-    fname_grid = [
-        'noq_g0_-2_entro-2',
-        'noq_g0_-2_entro-1',
-        'g0_-2_entro-1',
-        'g0.25_-2_entro-2',
-        'g0.5_-3_entro-2',
-        'g0.8_-3_entro-2'
-        ]
-    loss_weights_grid = [
-        [1E-2, 1E-2, 1E-2, 0],
-        [1E-2, 1E-1, 1E-1, 0],
-        [1E-2, 1E-1, 1E-1, 1],
-        [1E-2, 1E-2, 1E-2, 1],
-        [1E-3, 1E-2, 1E-2, 1],
-        [1E-3, 1E-2, 1E-2, 1],
-        ]
-    param_updates = [
-        {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.}},
-        {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.}},
-        {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.}},
-        {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.25}},
-        {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.5}},
-        {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.8}},
-        ]
-    return fname_grid, loss_weights_grid, param_updates
-
 def selected_models():
     fname_grid = [
         'mf0',
@@ -165,6 +138,27 @@ def selected_models():
     param_updates = [
         {},
         {},
+        {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.}},
+        {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.25}},
+        {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.5}},
+        {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.8}},
+        ]
+    return fname_grid, loss_weights_grid, param_updates
+
+def all_psamples():
+    fname_grid = [
+        'g0_-2_entro-2',
+        'g0.25_-3_entro-1',
+        'g0.5_-3_entro-1',
+        'g0.8_-4_entro0'
+        ]
+    loss_weights_grid = [
+        [1E-2, 1E-2, 1E-2, 1],
+        [1E-3, 1E-1, 1E-1, 1],
+        [1E-3, 1E-1, 1E-1, 1],
+        [1E-4, 1E0, 1E0, 1],
+        ]
+    param_updates = [
         {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.}},
         {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.25}},
         {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.5}},
