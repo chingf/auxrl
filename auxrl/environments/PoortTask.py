@@ -55,7 +55,7 @@ class Env(dm_env.Environment):
     def reset(self):
         self.curr_state = np.random.choice(self.n_approach_states)
         self.trial_type = np.random.choice([TrialType.VERTICAL, TrialType.ANGLED])
-        if True: #self.eval_mode:
+        if self.eval_mode:
             self.trial_type = TrialType.VERTICAL
         return dm_env.TimeStep(
             step_type=dm_env.StepType.FIRST, reward=None, discount=None,
@@ -83,11 +83,11 @@ class Env(dm_env.Environment):
 
     def step(self, action):
         if self.curr_state == self.n_total_states - 1:
-            if action == Action.FORWARD:
+            if (action+1) == Action.FORWARD:
                 new_state = self.curr_state + 1
                 reward = 0
                 step_type = dm_env.StepType.LAST
-            elif action == Action.BACKWARD:
+            elif (action+1) == Action.BACKWARD:
                 new_state = max(0, self.curr_state - 1)
                 reward = 0
                 step_type = dm_env.StepType.MID
@@ -97,9 +97,9 @@ class Env(dm_env.Environment):
                 step_type = dm_env.StepType.LAST
                 print('rewarded')
         else:
-            if action == Action.FORWARD:
+            if (action+1) == Action.FORWARD:
                 new_state = self.curr_state + 1
-            elif action == Action.BACKWARD:
+            elif (action+1) == Action.BACKWARD:
                 new_state = max(0, self.curr_state - 1)
             else:
                 new_state = self.curr_state
