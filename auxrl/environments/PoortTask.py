@@ -26,12 +26,13 @@ class Env(dm_env.Environment):
     """
 
     def __init__(
-        self, n_approach_states=5, n_grating_states=10,
+        self, n_approach_states=5, n_grating_states=10, flip_vertical=False
         ):
 
         self.n_approach_states = n_approach_states
         self.n_grating_states = n_grating_states
         self.n_total_states = n_approach_states + n_grating_states
+        self.flip_vertical = flip_vertical
         self.eval_mode = False
         self.create_stimuli()
         self.layout_dims = (1,) + self.base_vertical_state.shape
@@ -44,13 +45,16 @@ class Env(dm_env.Environment):
         stimulus_size = (period, period*n_periods)
         self.approach_states = np.random.choice(
             2, size=(self.n_approach_states,)+stimulus_size)
-        self.base_vertical_state = np.zeros(stimulus_size)
-        for start in np.arange(0, (period*n_periods)-vert_stripe_width, vert_stripe_width*2):
-            self.base_vertical_state[:, start:start+vert_stripe_width] = 1
         self.base_angled_state = np.diag(np.ones(period))
         self.base_angled_state += np.diag(np.ones(period-1), k=1)
         self.base_angled_state += np.diag(np.ones(period-1), k=-1)
         self.base_angled_state = np.tile(self.base_angled_state, (1, n_periods))
+        if self.flip_vertical:
+            self.base_vertical_state = np.flip(self.base_angled_state, axis=0)
+        else:
+            self.base_vertical_state = np.zeros(stimulus_size)
+            for start in np.arange(0, (period*n_periods)-vert_stripe_width, vert_stripe_width*2):
+                self.base_vertical_state[:, start:start+vert_stripe_width] = 1
 
     def reset(self):
         self.curr_state = np.random.choice(self.n_approach_states)

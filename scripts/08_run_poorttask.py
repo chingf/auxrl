@@ -30,7 +30,7 @@ internal_dim = int(sys.argv[4])
 # Experiment Parameters
 load_function = poort
 fname_prefix = 'poorttask'
-n_episodes = 501
+n_episodes = 301
 epsilon = 1.
 n_iters = 10
 
@@ -38,7 +38,7 @@ n_iters = 10
 random_seed = True
 n_cpu_jobs = 56
 eval_every = 1
-save_net_every = 1
+save_net_every = 50
 
 # GPU selection
 try:
@@ -193,7 +193,7 @@ def run(arg):
         else:
             result['valid_score'].append(None)
             result['valid_steps_per_ep'].append(None)
-        if episode % save_net_every == 0:
+        if (episode % save_net_every == 0) or (episode < 15):
             agent.save_network(fname_nnet_dir, episode)
 
     # Save pickle

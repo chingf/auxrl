@@ -3,9 +3,8 @@
 trap "exit" INT TERM ERR
 trap "kill 0" EXIT
 
-for EP in {0..3}
+for JOB_IDX in {0..7}
 do
-    python 03_gridworld_latents.py 16 dicarlo_swap_postbug_gridworld8x8_shuffobs dm $EP
+    python 08_run_poorttask.py $JOB_IDX 8 dm 24 &
 done
-
 wait
