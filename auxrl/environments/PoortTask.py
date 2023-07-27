@@ -26,13 +26,15 @@ class Env(dm_env.Environment):
     """
 
     def __init__(
-        self, n_approach_states=5, n_grating_states=10, flip_vertical=False
+        self, n_approach_states=5, n_grating_states=10, flip_vertical=False,
+        time_cost=0
         ):
 
         self.n_approach_states = n_approach_states
         self.n_grating_states = n_grating_states
         self.n_total_states = n_approach_states + n_grating_states
         self.flip_vertical = flip_vertical
+        self.time_cost = time_cost
         self.eval_mode = False
         self.create_stimuli()
         self.layout_dims = (1,) + self.base_vertical_state.shape
@@ -89,17 +91,19 @@ class Env(dm_env.Environment):
         if self.curr_state == self.n_total_states - 1:
             if (action+1) == Action.FORWARD:
                 new_state = self.curr_state + 1
-                reward = 0
+                reward = self.time_cost
                 step_type = dm_env.StepType.LAST
             elif (action+1) == Action.BACKWARD:
                 new_state = max(0, self.curr_state - 1)
-                reward = 0
+                reward = self.time_cost
                 step_type = dm_env.StepType.MID
             else:
                 new_state = self.curr_state + 1
-                reward = self.trial_type == TrialType.VERTICAL
+                if self.trial_type == TrialType.VERTICAL:
+                    reward = 1
+                else:
+                    reward = -1
                 step_type = dm_env.StepType.LAST
-                print('rewarded')
         else:
             if (action+1) == Action.FORWARD:
                 new_state = self.curr_state + 1
@@ -107,7 +111,7 @@ class Env(dm_env.Environment):
                 new_state = max(0, self.curr_state - 1)
             else:
                 new_state = self.curr_state
-            reward = 0
+            reward = self.time_cost
             step_type = dm_env.StepType.MID
         self.curr_state = new_state
         discount =  1.
