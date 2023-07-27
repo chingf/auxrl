@@ -22,7 +22,7 @@ from acme.utils import tree_utils
 from acme.utils import loggers
 
 def run_train_episode(
-    environment: dm_env.Environment, agent: acme.Actor):
+    environment: dm_env.Environment, agent: acme.Actor, clip_norm: float=-1.):
     """
     Each episode is itself a loop which interacts first with the environment to
     get an observation and then give that observation to the agent in order to
@@ -46,7 +46,7 @@ def run_train_episode(
         timestep = environment.step(action)
         agent.observe(
             action, next_timestep=timestep, latent=agent.get_curr_latent())
-        episode_losses = agent.update()
+        episode_losses = agent.update(clip_norm=clip_norm)
         if summed_episode_losses == []:
             summed_episode_losses = episode_losses
         else:
