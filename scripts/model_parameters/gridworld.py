@@ -1,3 +1,25 @@
+def mf0():
+    fname_grid = ['mf0']
+    loss_weights_grid = [[0,0,0,1E0],]
+    param_updates = [{},]
+    return fname_grid, loss_weights_grid, param_updates
+
+def poort():
+    fname_grid = [
+        'mf0',
+        'g0_-2_entro-3',
+        'noq_g0_-1_entro-2',
+        ]
+    loss_weights_grid = [
+        [0, 0, 0, 1],
+        [1E-2, 1E-3, 1E-3, 1],
+        [1E-1, 1E-2, 1E-2, 0],
+        ]
+    param_updates = [
+        {}, {}, {}
+        ]
+    return fname_grid, loss_weights_grid, param_updates
+
 def no_q():
     fname_grid = [
         'noQ_g0.5_-3_entro-3',
@@ -163,18 +185,6 @@ def all_psamples():
         {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.25}},
         {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.5}},
         {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.8}},
-        ]
-    return fname_grid, loss_weights_grid, param_updates
-
-def g0():
-    fname_grid = ['noq_g0_-2_entro-2', 'g0_-2_entro-2',]
-    loss_weights_grid = [
-        [1E-2, 1E-2, 1E-2, 0],
-        [1E-2, 1E-2, 1E-2, 1]
-        ]
-    param_updates = [
-        {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.}},
-        {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.}},
         ]
     return fname_grid, loss_weights_grid, param_updates
 
