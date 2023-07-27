@@ -29,7 +29,8 @@ internal_dim = int(sys.argv[4])
 
 # Experiment Parameters
 load_function = poort
-fname_prefix = 'poorttask'
+fname_prefix = 'poorttask_flipped_clipnorm.01'
+clip_norm = .05
 n_episodes = 301
 epsilon = 1.
 n_iters = 10
@@ -100,7 +101,9 @@ def run(arg):
         'network_args': {
             'latent_dim': internal_dim, 'network_yaml': nn_yaml,
             },
-        'dset_args': {'n_approach_states': 5, 'n_grating_states': 5}
+        'dset_args': {
+            'n_approach_states': 5, 'n_grating_states': 5,
+            'flip_vertical': True}
         }
     parameters = flatten(parameters)
     parameters.update(flatten(param_update))
@@ -134,7 +137,8 @@ def run(arg):
 
     for episode in range(n_episodes):
         start = time.time()
-        losses, score, steps_per_episode = run_train_episode(env, agent)
+        losses, score, steps_per_episode = run_train_episode(
+            env, agent, clip_norm=clip_norm)
         end = time.time()
         sec_per_step_SUM += (end-start)
         sec_per_step_NUM += steps_per_episode

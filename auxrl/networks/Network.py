@@ -82,6 +82,9 @@ class Network(object):
             trainable_params.extend(self.encoder.parameters())
         return trainable_params
 
+    def get_encoder_params(self):
+        return self.encoder.parameters()
+
     def copy(self):
         duplicate = Network(
             self._env_spec, self._latent_dim, self._network_yaml, self._yaml_mods,
