@@ -26,14 +26,16 @@ job_idx = int(sys.argv[1])
 n_jobs = int(sys.argv[2])
 nn_yaml = sys.argv[3]
 internal_dim = int(sys.argv[4])
+clip_norm = float(sys.argv[5])
 
 # Experiment Parameters
 load_function = poort
-fname_prefix = 'poorttask_flipped_clipnorm.01'
-clip_norm = .05
+fname_prefix = 'poorttask_flipped'
+if clip_norm != -1:
+    fname_prefix += f'_clipnorm{clip_norm}'
 n_episodes = 301
 epsilon = 1.
-n_iters = 10
+n_iters = 15
 
 # Less used params
 random_seed = True

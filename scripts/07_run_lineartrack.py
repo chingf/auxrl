@@ -28,11 +28,11 @@ nn_yaml = sys.argv[3]
 internal_dim = int(sys.argv[4])
 
 # Experiment Parameters
-load_function = g0
+load_function = lineartrack
 fname_prefix = 'lineartrack'
 n_episodes = 601
 epsilon = 1.
-n_iters = 10
+n_iters = 35
 shuffle = False
 
 # Less used params

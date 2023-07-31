@@ -140,6 +140,21 @@ def mf_grid():
     param_updates = [{}, {}, {}, {}]
     return fname_grid, loss_weights_grid, param_updates
 
+def lineartrack():
+    fname_grid = [
+        'g0_-2_entro-2',
+        'noq_g0_-2_entro-2',
+        ]
+    loss_weights_grid = [
+        [1E-2, 1E-2, 1E-2, 1],
+        [1E-2, 1E-2, 1E-2, 0],
+        ]
+    param_updates = [
+        {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.}},
+        {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.}},
+        ]
+    return fname_grid, loss_weights_grid, param_updates
+
 def selected_models():
     fname_grid = [
         'mf0',
