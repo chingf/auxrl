@@ -26,14 +26,27 @@ job_idx = int(sys.argv[1])
 n_jobs = int(sys.argv[2])
 nn_yaml = sys.argv[3]
 internal_dim = int(sys.argv[4])
+if len(sys.argv) > 5:
+    if sys.argv[5] == 'shuffle':
+        shuffle = True
+    else:
+        raise ValueError('Unrecognized flag')
+else:
+    shuffle = False
 
 # Experiment Parameters
-load_function = dswap
-fname_prefix = 'postbug_gridworld8x8_shuffobs'
-n_episodes = 601
+if shuffle:
+    load_function = selected_models_grid_shuffle
+else:
+    load_function = selected_models_grid
+fname_prefix = 'new_gridworld8x8'
 epsilon = 1.
-n_iters = 15
-shuffle = True
+n_iters = 30
+if shuffle:
+    fname_prefix += '_shuffobs'
+    n_episodes = 601
+else:
+    n_episodes = 351
 
 # Less used params
 random_seed = True

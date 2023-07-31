@@ -27,16 +27,24 @@ job_idx = int(sys.argv[1])
 n_jobs = int(sys.argv[2])
 nn_yaml = sys.argv[3]
 internal_dim = int(sys.argv[4])
+if len(sys.argv) > 5:
+    if sys.argv[5] == 'shuffle':
+        shuffle = True
+    else:
+        raise ValueError('Unrecognized flag')
+else:
+    shuffle = False
 
 # Experiment Parameters
-load_function = all_psamples
+load_function = selected_models_grid_shuffle
 n_episodes = 401
-source_prefix = 'new_gridworld8x8_shuffobs'
+source_prefix = 'new_gridworld8x8'
+if shuffle:
+    source_prefix += '_shuffobs'
 fname_prefix = f'frozentransfer_{source_prefix}'
 source_episode = 600
 epsilon = 1.
-n_iters = 15
-shuffle = False
+n_iters = 30
 
 # Less changed args
 eval_every = 1
