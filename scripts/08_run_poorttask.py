@@ -17,7 +17,7 @@ from acme import wrappers
 
 from auxrl.Agent import Agent
 from auxrl.networks.Network import Network
-from auxrl.environments.LinearTrack import Env as Env
+from auxrl.environments.PoortTask import Env as Env
 from auxrl.utils import run_train_episode, run_eval_episode
 from model_parameters.gridworld import *
 
@@ -26,23 +26,22 @@ job_idx = int(sys.argv[1])
 n_jobs = int(sys.argv[2])
 nn_yaml = sys.argv[3]
 internal_dim = int(sys.argv[4])
+clip_norm = float(sys.argv[5])
 
 # Experiment Parameters
-load_function = lineartrack
-fname_prefix = 'lineartrack'
-n_episodes = 601
+load_function = poort
+fname_prefix = 'poorttask_flipped'
+if clip_norm != -1:
+    fname_prefix += f'_clipnorm{clip_norm}'
+n_episodes = 301
 epsilon = 1.
-n_iters = 35
-shuffle = False
+n_iters = 15
 
 # Less used params
 random_seed = True
-size_maze = 8
-fname_suffix = ''
-n_cpu_jobs = 6
+n_cpu_jobs = 56
 eval_every = 1
 save_net_every = 50
-continual_transfer = False
 
 # GPU selection
 try:
@@ -61,7 +60,7 @@ elif 'SLURM_JOBID' in os.environ.keys():
     engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
 else:
     engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
-exp_dir = f'{fname_prefix}_{nn_yaml}_dim{internal_dim}{fname_suffix}/'
+exp_dir = f'{fname_prefix}_{nn_yaml}_dim{internal_dim}/'
 for d in ['pickles/', 'nnets/', 'figs/', 'params/']:
     os.makedirs(f'{engram_dir}{d}{exp_dir}', exist_ok=True)
 pickle_dir = f'{engram_dir}pickles/{exp_dir}/'
@@ -86,7 +85,7 @@ def run(arg):
         os.makedirs(_dir, exist_ok=True)
 
     net_exists = np.any(['network_ep' in f for f in os.listdir(fname_nnet_dir)])
-    if net_exists:
+    if False: #net_exists:
         print(f'Skipping {fname}')
         return
     else:
@@ -96,14 +95,17 @@ def run(arg):
         'fname': fname,
         'n_episodes': n_episodes,
         'n_test_episodes': 10,
-        'continual_transfer': continual_transfer,
         'agent_args': {
-            'loss_weights': loss_weights, 'lr': 1e-4,
+            'loss_weights': loss_weights, 'lr': 1e-5,
             'replay_capacity': 20_000, 'epsilon': epsilon,
             'batch_size': 64, 'target_update_frequency': 1000,
-            'train_seq_len': 1},
-        'network_args': {'latent_dim': internal_dim, 'network_yaml': nn_yaml},
-        'dset_args': {'layout': size_maze, 'shuffle_obs': shuffle}
+            },
+        'network_args': {
+            'latent_dim': internal_dim, 'network_yaml': nn_yaml,
+            },
+        'dset_args': {
+            'n_approach_states': 5, 'n_grating_states': 5,
+            'flip_vertical': True}
         }
     parameters = flatten(parameters)
     parameters.update(flatten(param_update))
@@ -115,12 +117,6 @@ def run(arg):
     env_spec = specs.make_environment_spec(env)
     network = Network(env_spec, device=device, **parameters['network_args'])
     agent = Agent(env_spec, network, device=device, **parameters['agent_args'])
-
-    with open(f'{fname_nnet_dir}goal.txt', 'w') as goalfile:
-        goalfile.write(str(env._goal_state))
-    if parameters['dset_args']['shuffle_obs']:
-        with open(f'{fname_nnet_dir}shuffle_indices.txt', 'w') as goalfile:
-            goalfile.write(str(env._shuffle_indices))
 
     result = {}
     result['episode'] = []
@@ -142,11 +138,9 @@ def run(arg):
     goal_reset_episode = n_episodes//2 + 1
 
     for episode in range(n_episodes):
-        if continual_transfer and (episode == goal_reset_episode):
-            env.reset(reset_goal=True)
-            agent._replay_buffer.flush()
         start = time.time()
-        losses, score, steps_per_episode = run_train_episode(env, agent)
+        losses, score, steps_per_episode = run_train_episode(
+            env, agent, clip_norm=clip_norm)
         end = time.time()
         sec_per_step_SUM += (end-start)
         sec_per_step_NUM += steps_per_episode
@@ -165,8 +159,10 @@ def run(arg):
             sec_per_step = sec_per_step_SUM/sec_per_step_NUM
             print(f'[TRAIN SUMMARY] {500*sec_per_step} sec/ 500 steps')
             print(f'{sec_per_step_NUM} training steps elapsed.')
+            env.eval_mode = True
             score, steps_per_episode = run_eval_episode(
-                env, agent, parameters['n_test_episodes'])
+                env, agent, parameters['n_test_episodes'], max_episode_steps=20)
+            env.eval_mode = False
             result['valid_score'].append(score)
             result['valid_steps_per_ep'].append(steps_per_episode)
             # Save plots tracking training progress
@@ -203,7 +199,7 @@ def run(arg):
         else:
             result['valid_score'].append(None)
             result['valid_steps_per_ep'].append(None)
-        if episode % save_net_every == 0:
+        if (episode % save_net_every == 0) or (episode < 15):
             agent.save_network(fname_nnet_dir, episode)
 
     # Save pickle

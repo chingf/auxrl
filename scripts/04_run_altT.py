@@ -50,7 +50,7 @@ if n_gpus > 1:
 
 # Experiment Parameters
 load_function = altT
-fname_prefix = 'new_altT_eps0.4_tlen8_mlen1'
+fname_prefix = 'new_altT_eps0.4_tlen8_mlen4_zsum'
 n_episodes = 61
 n_iters = 20
 epsilon = 0.4
@@ -112,7 +112,7 @@ def run(arg):
             },
         'network_args': {
             'latent_dim': internal_dim, 'network_yaml': nn_yaml,
-            'mem_len': 1 #, 'eligibility_gamma': 0.8
+            'mem_len': 4, 'eligibility_gamma': 0.8, 'encoder_mem_concat': 1
             },
         'dset_args': {'hide_goal': True},
         'max_eval_episode_steps': 500,

@@ -106,7 +106,7 @@ class Agent(acme.Actor):
     def get_curr_latent(self):
         return self._network.encoder.get_curr_latent()
 
-    def update(self):
+    def update(self, clip_norm=-1):
         if not self._replay_buffer.is_ready(
             self._batch_size, self._replay_seq_len):
             return [0,0,0,0,0]
@@ -216,6 +216,9 @@ class Agent(acme.Actor):
             + self._loss_weights[2] * loss_neg_random \
             + self._loss_weights[3] * loss_Q
         all_losses.backward()
+        if clip_norm != -1:
+            nn.utils.clip_grad_norm_(
+                self._network.get_encoder_params(), clip_norm)
         self._optimizer.step()
         self._n_updates += 1
 

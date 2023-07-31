@@ -23,12 +23,11 @@ from auxrl.utils import run_train_episode, run_eval_episode
 from model_parameters.gridworld import selected_models
 
 import torch
-#torch.cuda.is_available = lambda : False
 
 ## Arguments
-internal_dim = 24
-generic_exp_name = 'new_altT_eps0.4_tlen8_mlen1'
-network_yaml = 'dm'
+internal_dim = 32
+generic_exp_name = 'new_altT_eps0.4_tlen8_mlen4_zsum'
+network_yaml = 'dm_small_encoder'
 source_episode = 60
 selected_fnames = ['g0_-2_entro-2', 'mf0']
 selected_fnames = [f'{generic_exp_name}_{f}' for f in selected_fnames]
