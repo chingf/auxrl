@@ -1,5 +1,7 @@
 #!/bin/bash 
 
-python 07_run_lineartrack.py -1 1 dm 16
+python 04_lsi_len1.py -1 1 dm_small_encoder_large_q 64
+python 04_lsi_len1.py -1 1 dm_small_encoder_large_q 96
+python 04_lsi_len1.py -1 1 dm_small_encoder_large_q 32
 
 wait

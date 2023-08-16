@@ -32,7 +32,7 @@ class Agent(acme.Actor):
         env_spec: specs.EnvironmentSpec, network: Network,
         loss_weights: list=[0,0,0,1], lr: float=1e-4,
         pred_TD: bool=False, pred_gamma: float=0.,
-        pred_len: int=1, pred_scale: bool=False, # Only used if not pred_TD
+        pred_len: int=1, pred_scale: bool=False, # Only used if not pred_TD,
         replay_capacity: int=1_000_000, epsilon: float=1.,
         batch_size: int=32, target_update_frequency: int=1000,
         device: torch.device=torch.device('cpu'), train_seq_len: int=1,
@@ -49,8 +49,10 @@ class Agent(acme.Actor):
         self._mem_len = network._mem_len
         self._replay_seq_len = pred_len
         if network._mem_len > 0:
+            if self._pred_len > 1:
+                raise ValueError('Incompatible mem/pred len.')
             if train_seq_len < self._mem_len:
-                raise ValueError('Training length should be longer than mem')
+                raise ValueError('Training length is too short.')
             self._replay_seq_len += train_seq_len
         if self._pred_TD:
             if self._replay_seq_len != 2:
@@ -74,9 +76,6 @@ class Agent(acme.Actor):
         self._optimizer = torch.optim.Adam(
             self._network.get_trainable_params(), lr=lr)
         self._n_updates = 0
-
-        if (network._mem_len > 0) and (self._pred_len > 1):
-            raise ValueError('Incompatible mem/pred len')
 
     def reset(self):
         self._network.encoder.reset()

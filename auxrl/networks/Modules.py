@@ -90,7 +90,9 @@ class Encoder(nn.Module):
                 if self._prev_latent == None:
                     self._prev_latent = torch.zeros(
                         N, self._mem_len, self._latent_dim)
-                    self._prev_latent = self._prev_latent.to(x.get_device())
+                    x_device = x.get_device()
+                    if x_device != -1:
+                        self._prev_latent = self._prev_latent.to(x_device)
                 prev_zs = self._prev_latent
 
             if self._eligibility_gamma != None:

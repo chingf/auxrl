@@ -20,16 +20,16 @@ from auxrl.Agent import Agent
 from auxrl.networks.Network import Network
 from auxrl.environments.AlternatingT import Env as Env
 from auxrl.utils import run_train_episode, run_eval_episode
-from model_parameters.gridworld import selected_models
+from model_parameters.gridworld import *
 
 import torch
 
-## Arguments
-internal_dim = 32
-generic_exp_name = 'new_altT_eps0.4_tlen8_mlen4_zsum'
-network_yaml = 'dm_small_encoder'
-source_episode = 60
-selected_fnames = ['g0_-2_entro-2', 'mf0']
+## Experiment Parameters
+generic_exp_name = sys.argv[1] # altT
+network_yaml = sys.argv[2] # dm
+internal_dim = int(sys.argv[3]) # 32
+source_episode = int(sys.argv[4]) # 60
+selected_fnames, _, _ = altT()
 selected_fnames = [f'{generic_exp_name}_{f}' for f in selected_fnames]
 
 # Set up paths
@@ -38,6 +38,7 @@ if 'SLURM_JOBID' in os.environ.keys():
     engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
 else:
     engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
+engram_dir = './'
 exp_name = f'{generic_exp_name}_{network_yaml}_dim{internal_dim}'
 latents_dir = f'{engram_dir}latents/{exp_name}/'
 nnets_dir = f'{engram_dir}nnets/{exp_name}/'
