@@ -71,7 +71,10 @@ def run_eval_episode(
             action = agent.select_action(
                 timestep.observation, force_greedy=True, verbose=verbose)
             if verbose:
-                env.plot_state()
+                #env.plot_state()
+                plt.figure()
+                plt.imshow(timestep.observation.squeeze(), vmin=-1, vmax=4.5)
+                plt.show()
             timestep = env.step(action)
             episode_steps += 1
             episode_return += timestep.reward

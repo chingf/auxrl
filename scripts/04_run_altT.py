@@ -50,20 +50,25 @@ if n_gpus > 1:
 
 # Experiment Parameters
 load_function = altT
-fname_prefix = 'new_altT_eps0.4_tlen8_mlen4_zsum'
 n_episodes = 61
-n_iters = 20
+n_iters = 1
 epsilon = 0.4
+mem_len = 0
+mem_gamma = 0
+tcm_len = 4
+tcm_gamma = 0.9
+fname_prefix = f'altT_eps{epsilon}_mlen{mem_len}_g{mem_gamma}_tcm{tcm_len}_g{tcm_gamma}'
 
 # Less used params
-n_cpu_jobs = 56
+n_cpu_jobs = 1 #56
 eval_every = 5
 save_net_every = 5
 fname_suffix = ''
 
 # Make directories
 if os.environ['USER'] == 'chingfang':
-    engram_dir = '/Volumes/aronov-locker/Ching/rl/' # Local Path
+    #engram_dir = '/Volumes/aronov-locker/Ching/rl/' # Local Path
+    engram_dir = './'
 elif 'SLURM_JOBID' in os.environ.keys():
     engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
 else:
@@ -112,9 +117,12 @@ def run(arg):
             },
         'network_args': {
             'latent_dim': internal_dim, 'network_yaml': nn_yaml,
-            'mem_len': 4, 'eligibility_gamma': 0.8, 'encoder_mem_concat': 1
+            'mem_len': mem_len, 'eligibility_gamma': mem_gamma,
             },
-        'dset_args': {'hide_goal': True},
+        'dset_args': {
+            'hide_goal': True,
+            'temporal_context_len': tcm_len, 'temporal_context_gamma': tcm_gamma,
+            },
         'max_eval_episode_steps': 500,
         }
     parameters = flatten(parameters)

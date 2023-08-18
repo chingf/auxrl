@@ -21,7 +21,8 @@ class Env(dm_env.Environment):
 
     def __init__(
         self, height=6, width=7, hide_goal=True, max_episode_length=2000,
-        obs_noise=0., penalty_for_walls=-1., discount=1., reward_val=5.
+        obs_noise=0., penalty_for_walls=-1., discount=1., reward_val=5.,
+        temporal_context_len=0, temporal_context_gamma=0.9
         ):
 
         if width % 2 == 0: raise ValueError('Maze width must be odd.')
@@ -35,6 +36,8 @@ class Env(dm_env.Environment):
         self._obs_noise = obs_noise
         self._penalty_for_walls = penalty_for_walls
         self._reward_val = reward_val
+        self._tcm_len = temporal_context_len
+        self._tcm_gamma = temporal_context_gamma
         self._discount = discount
         self._state = (width//2, 1)
         self._reward_loc = RewardLoc.LEFT
@@ -43,6 +46,8 @@ class Env(dm_env.Environment):
         self._space_label = self.make_space_labels()
         self._agent_loc_map = {}
         self._num_episode_steps = 0
+        empty_obs = np.zeros((1,) + self._layout_dims, dtype=np.float32)
+        self._prev_obs = [empty_obs for _ in range(self._tcm_len)]
 
     def in_bounds(self, state):
         x, y = state
@@ -98,6 +103,15 @@ class Env(dm_env.Environment):
                 obs[0, reset_reward[0], reset_reward[1]] = 5
         if self._obs_noise > 0.:
             obs = obs + np.random.normal(0, self._obs_noise, size=obs.shape)
+
+        if self._tcm_len > 0:
+            obs_without_tcm = obs.copy()
+            for t in range(self._tcm_len):
+                weight = self._tcm_gamma**(t+1)
+                non_borders = obs >= 0
+                obs[non_borders] += self._prev_obs[-(t+1)][non_borders] * weight
+            self._prev_obs[:self._tcm_len-1] = self._prev_obs[1:]
+            self._prev_obs[-1] = obs_without_tcm
         return obs
 
     def reset(self):
@@ -182,9 +196,10 @@ class Env(dm_env.Environment):
         if (self._max_episode_length is not None and
             self._num_episode_steps >= self._max_episode_length):
             step_type = dm_env.StepType.LAST
+        obs = self.get_obs()
         return dm_env.TimeStep(
             step_type=step_type, reward=np.float32(reward),
-            discount=discount, observation=self.get_obs())
+            discount=discount, observation=obs)
 
     def plot_grid(self, add_start=True):
         plt.figure(figsize=(4, 4))
