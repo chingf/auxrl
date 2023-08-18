@@ -39,6 +39,12 @@ if shuffle:
     load_function = selected_models_grid_shuffle
 else:
     load_function = selected_models_grid
+if nn_yaml == 'dm_large_encoder':
+    print('loading selected models for large encoder')
+    load_function = selected_models_large_encoder
+if nn_yaml == 'dm_large_q':
+    print('loading selected models for large q')
+    load_function = selected_models_large_q
 fname_prefix = 'new_gridworld8x8'
 epsilon = 1.
 n_iters = 30

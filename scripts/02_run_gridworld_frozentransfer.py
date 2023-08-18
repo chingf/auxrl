@@ -37,6 +37,10 @@ else:
 
 # Experiment Parameters
 load_function = selected_models_grid_shuffle
+if nn_yaml == 'dm_large_encoder':
+    load_function = selected_models_large_encoder
+if nn_yaml == 'dm_large_q':
+    load_function = selected_models_large_q
 n_episodes = 401
 source_prefix = 'new_gridworld8x8'
 if shuffle:
