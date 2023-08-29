@@ -23,7 +23,7 @@ from auxrl.Agent import Agent
 from auxrl.networks.Network import Network
 from auxrl.environments.GridWorld import Env as Env
 from auxrl.utils import run_train_episode, run_eval_episode
-from model_parameters.gridworld import selected_models
+from model_parameters.gridworld import *
 
 import torch
 #torch.cuda.is_available = lambda : False
