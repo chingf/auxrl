@@ -26,8 +26,9 @@ job_idx = int(sys.argv[1])
 n_jobs = int(sys.argv[2])
 nn_yaml = sys.argv[3]
 internal_dim = int(sys.argv[4])
-if len(sys.argv) > 5:
-    if sys.argv[5] == 'shuffle':
+epsilon = float(sys.argv[5]) # 1.0
+if len(sys.argv) > 6:
+    if sys.argv[6] == 'shuffle':
         shuffle = True
     else:
         raise ValueError('Unrecognized flag')
@@ -45,12 +46,18 @@ if nn_yaml == 'dm_large_encoder':
 if nn_yaml == 'dm_large_q':
     print('loading selected models for large q')
     load_function = selected_models_large_q
-fname_prefix = 'new_gridworld8x8'
-epsilon = 1.
-n_iters = 30
+fname_prefix = f'new_gridworld8x8_eps{epsilon}'
+n_iters = 45
 if shuffle:
     fname_prefix += '_shuffobs'
-    n_episodes = 601
+    if epsilon < 0.4:
+        n_episodes = 1501
+    elif epsilon < 0.6:
+        n_episodes = 1201
+    elif epsilon < 0.8:
+        n_episodes = 901
+    else:
+        n_episodes = 601
 else:
     n_episodes = 351
 
@@ -104,7 +111,8 @@ def run(arg):
     for _dir in [fname_nnet_dir, fname_fig_dir, fname_pickle_dir]:
         os.makedirs(_dir, exist_ok=True)
 
-    net_exists = np.any(['network_ep' in f for f in os.listdir(fname_nnet_dir)])
+    saved_epoch = int(save_net_every * (n_episodes//save_net_every))
+    net_exists = 'network_ep{saved_epoch}.pth' in os.listdir(fname_nnet_dir)
     if net_exists:
         print(f'Skipping {fname}')
         return
