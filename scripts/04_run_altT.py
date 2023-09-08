@@ -52,12 +52,15 @@ if n_gpus > 1:
 load_function = altT
 n_episodes = 61
 n_iters = 1
-epsilon = 0.4
-mem_len = 0
-mem_gamma = 0
-tcm_len = 4
-tcm_gamma = 0.9
-fname_prefix = f'altT_eps{epsilon}_mlen{mem_len}_g{mem_gamma}_tcm{tcm_len}_g{tcm_gamma}'
+epsilon = 0.6
+mem_len = 1
+mem_gamma = 0.8
+mem_location = 2 # Placement in the MLP afer encoder CNN
+train_seq_len = 6
+tcm_len = 0
+tcm_gamma = 0
+fname_prefix = f'LayerAltT_eps{epsilon}_mlen{mem_len}_g{mem_gamma}_mloc{mem_location}_tcm{tcm_len}_g{tcm_gamma}'
+fname_prefix = f'test_altT'
 
 # Less used params
 n_cpu_jobs = 1 #56
@@ -93,14 +96,13 @@ def run(arg):
     fname = f'{_fname}_{i}'
     fname_nnet_dir = f'{engram_dir}nnets/{exp_dir}/{fname}/'
     fname_fig_dir = f'{engram_dir}figs/{exp_dir}/{fname}/'
-    fname_pickle_dir = f'{engram_dir}pickles/{exp_dir}/{fname}/'
     for _dir in [fname_nnet_dir, fname_fig_dir]:
         os.makedirs(_dir, exist_ok=True)
 
     net_exists = np.any(['network_ep' in f for f in os.listdir(fname_nnet_dir)])
     if net_exists:
         print(f'Skipping {fname}')
-        return
+        #return
     else:
         print(f'Running {fname}')
 
@@ -109,15 +111,16 @@ def run(arg):
         'n_episodes': n_episodes,
         'n_test_episodes': 1,
         'agent_args': {
-            'loss_weights': loss_weights, 'lr': 1e-3, # Volume loss?
+            'loss_weights': loss_weights, 'lr': 1e-4, # Volume loss?
             'replay_capacity': 20_000, # 100_000
             'epsilon': epsilon,
             'batch_size': 64, 'target_update_frequency': 1000,
-            'train_seq_len': 8
+            'train_seq_len': train_seq_len
             },
         'network_args': {
             'latent_dim': internal_dim, 'network_yaml': nn_yaml,
             'mem_len': mem_len, 'eligibility_gamma': mem_gamma,
+            'mem_location': mem_location,
             },
         'dset_args': {
             'hide_goal': True,
@@ -218,8 +221,7 @@ def run(arg):
             agent.save_network(fname_nnet_dir, episode)
 
     # Save pickle
-    unique_id = shortuuid.uuid()
-    with open(f'{pickle_dir}{unique_id}.p', 'wb') as f:
+    with open(f'{pickle_dir}{fname}.p', 'wb') as f:
         pickle.dump(result, f)
 
 # Load model parameters
