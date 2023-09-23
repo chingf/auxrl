@@ -1,0 +1,38 @@
+act: &act ReLU
+none: !!python/none &none None
+
+encoder-convs: &encoder-convs
+  - [Conv2d, auto, 32, { kernel_size: 2 }]
+  - *act
+  - [MaxPool2d, { kernel_size: 2 }]
+
+encoder-fc: &encoder-fc
+  - [Linear, auto, 96]
+  - *act
+  - [Linear, 96, auto]
+
+large-crar-fc: &large-crar-fc
+  - *act
+  - [Linear, auto, 96]
+  - *act
+  - [Linear, 96, 64]
+  - *act
+  - [Linear, 64, 32]
+  - *act
+  - [Linear, 32, auto]
+
+encoder:
+  convs: *encoder-convs
+  fc: *encoder-fc
+  flatten: False
+
+q:
+  convs: *none
+  fc: *large-crar-fc
+
+t:
+  convs: *none
+  fc: *large-crar-fc
+  encode_new_state: False
+  predict_z: True
+

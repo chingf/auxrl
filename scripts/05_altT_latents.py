@@ -38,7 +38,6 @@ if 'SLURM_JOBID' in os.environ.keys():
     engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
 else:
     engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
-engram_dir = './'
 exp_name = f'{generic_exp_name}_{network_yaml}_dim{internal_dim}'
 latents_dir = f'{engram_dir}latents/{exp_name}/'
 nnets_dir = f'{engram_dir}nnets/{exp_name}/'
@@ -52,13 +51,13 @@ repr_dict = {
     'iteration': [],
     'timestep': [],
     'latents': [],
+    'T_output': [],
     'x': [],
     'y': [],
     'last_reward_loc': [],
     'reward_loc': [],
     'final_reward': [],
     'condn_label': [],
-    'maze_side': [],
     }
 
 # Iterate through models
@@ -90,24 +89,31 @@ for model_name in os.listdir(nnets_dir):
         timestep = env.reset()
         episode_steps = 0
         episode_return = 0
-        n_total_steps = 100
+        n_total_steps = 500
 
         latents = []; xs = []; ys = []; last_reward_locs = []; reward_locs = [];
-        condn_labels = []; maze_side = [];
+        condn_labels = []; T_output = []
 
         while not timestep.last():
             if episode_steps >= n_total_steps: # Stop at some number of steps
                 break
             action, latent = agent.select_action(
                 timestep.observation, force_greedy=True, return_latent=True)
+
+            onehot_actions = np.zeros((1, agent._n_actions))
+            onehot_actions[0, action] = 1
+            onehot_actions = torch.as_tensor(onehot_actions, device=device).float()
+            z_and_action = torch.cat([latent, onehot_actions], dim=1)
+            Tz = agent._network.T(z_and_action)
+
             x, y = env._state
-            latents.append(latent.cpu().numpy())
+            latents.append(latent.cpu().numpy().squeeze())
+            T_output.append(Tz.cpu().numpy().squeeze())
             xs.append(x)
             ys.append(y)
             last_reward_locs.append(env._last_reward_loc)
             reward_locs.append(env._reward_loc)
             condn_labels.append(env._space_label[x, y])
-            maze_side.append(x - midwidth)
 
             timestep = env.step(action)
             episode_steps += 1
@@ -117,12 +123,12 @@ for model_name in os.listdir(nnets_dir):
         repr_dict['iteration'].extend([iteration]*n_total_steps)
         repr_dict['timestep'].extend(range(n_total_steps))
         repr_dict['latents'].extend(latents)
+        repr_dict['T_output'].extend(T_output)
         repr_dict['x'].extend(xs)
         repr_dict['y'].extend(ys)
         repr_dict['last_reward_loc'].extend(last_reward_locs)
         repr_dict['reward_loc'].extend(reward_locs)
         repr_dict['condn_label'].extend(condn_labels)
-        repr_dict['maze_side'].extend(maze_side)
         repr_dict['final_reward'].extend([episode_return]*n_total_steps)
 
 repr_df = pd.DataFrame(repr_dict)

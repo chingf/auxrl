@@ -131,16 +131,18 @@ class Agent(acme.Actor):
 
         # Burn in latents for POMDP
         if self._mem_len > 0:
-            _zs = np.array(transitions_seq[self._mem_len].latent.astype(np.float32))
-            _zs = torch.as_tensor(_zs).squeeze(1) # (mem_len, N, Z)
-            _zs = _zs.to(device)
+            _latents = np.array(transitions_seq[self._mem_len].latent.astype(np.float32))
+            _latents = torch.as_tensor(_latents).squeeze(1) # (N, mem_len, latent)
+            _latents = _latents.to(device)
 
             for t in range(self._mem_len, self._replay_seq_len):
                 _obs_t = torch.tensor( # (N,C,H,W)
                     transitions_seq[t].obs.astype(np.float32)).to(device)
-                z = self._network.encoder(_obs_t, prev_zs=_zs)
-                _zs = torch.hstack((_zs[:,1:], z.unsqueeze(1)))
-            next_z = self._network.encoder(next_obs, prev_zs=_zs)
+                z = self._network.encoder(_obs_t, prev_latents=_latents)
+                _latents = torch.hstack((
+                    _latents[:,1:],
+                    self._network.encoder._new_latent.unsqueeze(1)))
+            next_z = self._network.encoder(next_obs, prev_latents=_latents)
         else:
             next_z = self._network.encoder(next_obs)
             z = self._network.encoder(obs)
@@ -175,27 +177,25 @@ class Agent(acme.Actor):
         # Negative Sample Loss (entropy)
         rolled = torch.roll(z, 1, dims=0)
         loss_neg_random = torch.mean(torch.exp(
-            -self._entropy_temp * torch.norm(z - rolled, dim=1)
-            ))
+            -self._entropy_temp * torch.norm(z - rolled, dim=1)))
         loss_neg_neighbor = torch.mean(torch.exp(
-            -self._entropy_temp * torch.norm(z - next_z, dim=1)
-            ))
+            -self._entropy_temp * torch.norm(z - next_z, dim=1)))
 
         # Q Loss and target network update
         if self._n_updates%self._target_update_frequency == 0:
             self._target_network.set_params(self._network.get_params())
         if self._mem_len > 0:
-            _zs = np.array(transitions_seq[self._mem_len].latent.astype(np.float32))
-            _zs = torch.as_tensor(_zs).squeeze(1) # (mem_len, N, Z)
-            _zs = _zs.to(device)
+            _latents = np.array(transitions_seq[self._mem_len].latent.astype(np.float32))
+            _latents = torch.as_tensor(_latents).squeeze(1) # (N, mem_len, latent)
+            _latents = _latents.to(device)
+
             for t in range(self._mem_len, self._replay_seq_len):
                 _obs_t = torch.tensor( # (N,C,H,W)
                     transitions_seq[t].obs.astype(np.float32)).to(device)
-                _zs = torch.hstack((
-                    _zs[:,1:],
-                    self._target_network.encoder(_obs_t, prev_zs=_zs).unsqueeze(1)
-                    ))
-            target_next_z = self._target_network.encoder(next_obs, prev_zs=_zs)
+                z = self._network.encoder(_obs_t, prev_latents=_latents)
+                _latents = torch.hstack((
+                    _latents[:,1:], self._network.encoder._new_latent.unsqueeze(1)))
+            target_next_z = self._network.encoder(next_obs, prev_latents=_latents)
         else:
             target_next_z = self._target_network.encoder(next_obs) # (N, z)
         target_next_q = self._target_network.Q(target_next_z)  # (N, a)

@@ -18,6 +18,7 @@ sns.set(#font='Arial',
             'text.color': 'dimgrey', #e.g. legend
 
             'lines.solid_capstyle': 'round',
+            'lines.linewidth': 2,
             'legend.facecolor': 'white',
             'legend.framealpha':0.8,
 

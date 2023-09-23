@@ -320,10 +320,10 @@ def all_psamples():
 def altT():
     fname_grid = [
         'mf0',
-        'g0_-2_entro-2',]
+        'g0_-2_entro-1',]
     loss_weights_grid = [
         [0, 0, 0, 1],
-        [1E-2, 1E-2, 1E-2, 1],]
+        [1E-2, 1E-1, 1E-1, 1],]
     param_updates = [
         {}, {}]
     return fname_grid, loss_weights_grid, param_updates

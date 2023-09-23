@@ -25,7 +25,7 @@ class Network(object):
 
     def __init__(
         self, env_spec, latent_dim, network_yaml, yaml_mods={},
-        mem_len=0, eligibility_gamma=None,
+        mem_len=0, eligibility_gamma=None, mem_location=0,
         device=torch.device('cpu'), freeze_encoder=False):
 
         self._env_spec = env_spec
@@ -35,6 +35,7 @@ class Network(object):
         self._yaml_mods = yaml_mods
         self._mem_len = mem_len
         self._eligibility_gamma = eligibility_gamma
+        self._mem_location = mem_location
         self._device = device
         self._freeze_encoder = freeze_encoder
 
@@ -42,10 +43,9 @@ class Network(object):
         with open(f'{NETWORK_DIR}/yamls/{self._network_yaml}.yaml') as f:
             config = yaml.load(f, Loader=yaml.FullLoader)
             update(config, self._yaml_mods)
-
         self.encoder = Encoder(
             env_spec, latent_dim, config['encoder'], mem_len,
-            eligibility_gamma=eligibility_gamma
+            eligibility_gamma=eligibility_gamma, mem_location=mem_location,
             ).to(device)
         if self._freeze_encoder:
             for p in self.encoder.parameters():
@@ -88,6 +88,7 @@ class Network(object):
     def copy(self):
         duplicate = Network(
             self._env_spec, self._latent_dim, self._network_yaml, self._yaml_mods,
-            self._mem_len, self._eligibility_gamma, self._device, self._freeze_encoder)
+            self._mem_len, self._eligibility_gamma, self._mem_location,
+            self._device, self._freeze_encoder)
         return duplicate
 

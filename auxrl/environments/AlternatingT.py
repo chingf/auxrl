@@ -49,6 +49,12 @@ class Env(dm_env.Environment):
         empty_obs = np.zeros((1,) + self._layout_dims, dtype=np.float32)
         self._prev_obs = [empty_obs for _ in range(self._tcm_len)]
 
+        ## TODO
+        #self._shuffle_indices = np.arange(self._height*self._width)
+        #np.random.seed(1)
+        #np.random.shuffle(self._shuffle_indices)
+        #np.random.seed()
+
     def in_bounds(self, state):
         x, y = state
         midpoint = self._width//2
@@ -72,10 +78,10 @@ class Env(dm_env.Environment):
     def make_space_labels(self):
         space_labels = np.zeros(self._layout_dims)
         midpoint = self._width//2
-        space_labels[midpoint, self._height-2] = 0 # Decision point
+        space_labels[midpoint, :] = 3 # Central
         space_labels[:midpoint, :] = 1 # Left
         space_labels[midpoint+1:, :] = 2 # Right
-        space_labels[midpoint, :] = 3 # Central
+        space_labels[midpoint, self._height-2] = 0 # Decision point
         space_labels[self._layout == -1] = -1 # Out of bounds
         return space_labels
 
@@ -112,6 +118,11 @@ class Env(dm_env.Environment):
                 obs[non_borders] += self._prev_obs[-(t+1)][non_borders] * weight
             self._prev_obs[:self._tcm_len-1] = self._prev_obs[1:]
             self._prev_obs[-1] = obs_without_tcm
+
+        ## TODO
+        #obs = obs.flatten()
+        #obs = obs[self._shuffle_indices]
+        #obs = obs.reshape((1,) + self._layout_dims)
         return obs
 
     def reset(self):

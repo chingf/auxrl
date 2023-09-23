@@ -51,7 +51,8 @@ def make_fc(input_dim, out_dim, fc_config):
 
 class Encoder(nn.Module):
     def __init__(
-        self, env_spec, latent_dim, config, mem_len, eligibility_gamma=None
+        self, env_spec, latent_dim, config, mem_len,
+        eligibility_gamma=1., mem_location=0
         ):
 
         super().__init__()
@@ -60,6 +61,7 @@ class Encoder(nn.Module):
         self._latent_dim = latent_dim
         self._mem_len = mem_len
         self._eligibility_gamma = eligibility_gamma
+        self._mem_location = mem_location
         if config['convs'] != None:
             self._convs = make_convs(self._input_shape, config['convs'])
             self._feature_size = compute_feature_size(
@@ -67,44 +69,54 @@ class Encoder(nn.Module):
         else:
             self._convs = None
             self._feature_size = np.prod(self._input_shape)
-        if self._mem_len > 0:
-            self._feature_size += self._mem_len*self._latent_dim
         self._prev_latent = None
         self._fc = make_fc(self._feature_size, self._latent_dim, config['fc'])
+        if self._mem_len>0:
+            if 'Linear' not in str(self._fc[self._mem_location]):
+                raise ValueError('Memory location not a linear layer.')
         
-    def forward(self, x, prev_zs=None, save_conv_activity=False):
+    def forward(self, x, prev_latents=None, save_conv_activity=False):
         """
-        prev_zs is shape (mem_len, latent_dim)
+        prev_latents is shape (mem_len, latent_dim)
         """
 
         N, C, H, W = x.shape
+        prev_latents_provided = prev_latents != None
+
+        # Run through convolutional layer
         if self._convs is not None:
             x = self._convs(x)
             if save_conv_activity:
                 self._prev_conv_activity = x.detach()
         x = x.view(N, -1)
         x = x.float()
-        prev_zs_provided = prev_zs != None
-        if self._mem_len > 0:
-            if not prev_zs_provided:
-                if self._prev_latent == None:
-                    self._prev_latent = torch.zeros(
-                        N, self._mem_len, self._latent_dim)
-                    x_device = x.get_device()
-                    if x_device != -1:
-                        self._prev_latent = self._prev_latent.to(x_device)
-                prev_zs = self._prev_latent
 
-            if self._eligibility_gamma != None:
+        # Run through MLP, where there may be residual latents added.
+        # Without residual latents, it would be x = self._fc(x)
+        for idx in range(len(self._fc)):
+            mlp_layer = self._fc[idx]
+            if (self._mem_len > 0) and (self._mem_location==idx):
+                x_device = x.get_device()
+                if not prev_latents_provided:
+                    if self._prev_latent == None:
+                        self._prev_latent = torch.zeros(N, self._mem_len, x.shape[-1]) 
+                        if x_device != -1:
+                            self._prev_latent = self._prev_latent.to(x_device)
+                    prev_latents = self._prev_latent
+
                 for t in range(self._mem_len):
                     scaling = self._eligibility_gamma**(t+1)
-                    prev_zs[:, t, :] = prev_zs[:, t, :] * scaling
+                    prev_latents[:, t, :] = prev_latents[:, t, :] * scaling
+                prev_latents = torch.sum(prev_latents, dim=1) #.detach() #TODO
+                new_latent = x.clone()
+                self._new_latent = new_latent
+                x = x + prev_latents # Residual adding
+            x = mlp_layer(x)
 
-            x = torch.hstack((x, prev_zs.reshape(N, -1)))
-        x = self._fc(x)
-        if (self._mem_len > 0) and (not prev_zs_provided):
+        # Store the current latent state
+        if (self._mem_len > 0) and (not prev_latents_provided):
             self._prev_latent = torch.hstack((
-                self._prev_latent[:,1:], x.unsqueeze(1)))
+                self._prev_latent[:,1:], new_latent.unsqueeze(1)))
         return x
 
     def get_curr_latent(self):
