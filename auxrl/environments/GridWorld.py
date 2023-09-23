@@ -35,7 +35,8 @@ class Env(dm_env.Environment):
         self, layout, start_state=None, goal_state=None,
         observation_type=ObservationType.GRID, discount=1.,
         penalty_for_walls=0., reward_goal=1., hide_goal=True,
-        max_episode_length=150, prev_goal_state=None, shuffle_obs=False):
+        max_episode_length=150, prev_goal_state=None, shuffle_obs=False,
+        add_barrier=False, shuffle_states=False):
 
         """Build a grid environment.
 
@@ -83,12 +84,23 @@ class Env(dm_env.Environment):
         self._max_episode_length = max_episode_length
         self._prev_goal_state = prev_goal_state
         self._shuffle_obs = shuffle_obs
+        self._add_barrier = add_barrier
         if self._prev_goal_state != None:
             self._new_goal_state_gap = min(min(self._layout_dims)//3, 3)
         self._num_episode_steps = 0
         goal_state = self._sample_goal()
         self.goal_state = goal_state
         self.transitions_swapped = False
+        self._shuffle_states = shuffle_states
+        if shuffle_states:
+            self._swap_map = {}
+            initial_state = np.argwhere(self._layout >= 0)
+            swapped_state = initial_state.copy()
+            np.random.shuffle(swapped_state)
+            for idx in range(initial_state.shape[0]):
+                s1 = str(initial_state[idx].tolist())
+                s2 = swapped_state[idx].tolist()
+                self._swap_map[s1] = s2
 
     def _sample_start(self):
         """Randomly sample starting state."""
@@ -111,6 +123,7 @@ class Env(dm_env.Environment):
                 if self.start_state == goal_state:
                     raise ValueError('Collision')
                 if self._prev_goal_state == None:
+                    self._goal_neighbors = self._get_neighbors(goal_state)
                     return goal_state
                 else:
                     prev_x, prev_y = self._prev_goal_state
@@ -121,9 +134,20 @@ class Env(dm_env.Environment):
                     if distance_check:
                         print(f'Previous goal: {self._prev_goal_state}')
                         print(f'New goal: {goal_state}')
+                        self._goal_neighbors = self._get_neighbors(goal_state)
                         return goal_state
         n += 1
         raise ValueError('Failed to sample a goal state.')
+
+    def _get_neighbors(self, state):
+        actions = [[-1,0], [0,-1], [1,0], [0,1]]
+        neighbors = []
+        for action in actions:
+            possible_neighbor = [state[0]+action[0], state[1]+action[1]]
+            if self._layout[possible_neighbor[0], possible_neighbor[1]] == -1:
+                continue
+            neighbors.append(possible_neighbor)
+        return neighbors
 
     @property
     def layout(self):
@@ -187,6 +211,10 @@ class Env(dm_env.Environment):
             obs[state] = 1 # Place agent
             return obs
         elif self._observation_type is ObservationType.GRID:
+            goal_state = self._goal_state
+            if self._shuffle_states:
+                state = self._swap_map[str([state[0], state[1]])]
+                #goal_state = self._swap_map[str(goal_state)]
             obs = np.zeros((1,) + self._layout_dims, dtype=np.float32)
             obs[0, ...] = (self._layout < 0)*(-1)
             obs[0, state[0], state[1]] = 1
@@ -244,8 +272,21 @@ class Env(dm_env.Environment):
                 new_state = self._b
 
         new_x, new_y = new_state
+        if self._add_barrier:
+            if self._layout[new_x, new_y] <= 0: # Barrier is only around goal
+                blocked_by_barrier = False
+            else:
+                invalid_neighbors = self._goal_neighbors[1:]
+                if [x,y] in invalid_neighbors:
+                    blocked_by_barrier = True
+                else:
+                    blocked_by_barrier = False
         step_type = dm_env.StepType.MID
-        if self._layout[new_x, new_y] == -1:  # wall
+        if self._add_barrier and blocked_by_barrier:
+            reward = self._penalty_for_walls
+            discount = self._discount
+            new_state = (x, y)
+        elif self._layout[new_x, new_y] == -1:  # wall
             reward = self._penalty_for_walls
             discount = self._discount
             new_state = (x, y)

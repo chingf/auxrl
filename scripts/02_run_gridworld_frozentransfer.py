@@ -27,9 +27,8 @@ job_idx = int(sys.argv[1])
 n_jobs = int(sys.argv[2])
 nn_yaml = sys.argv[3]
 internal_dim = int(sys.argv[4])
-epsilon = float(sys.argv[5]) # 1.0
-if len(sys.argv) > 6:
-    if sys.argv[6] == 'shuffle':
+if len(sys.argv) > 5:
+    if sys.argv[5] == 'shuffle':
         shuffle = True
     else:
         raise ValueError('Unrecognized flag')
@@ -42,21 +41,12 @@ if nn_yaml == 'dm_large_encoder':
     load_function = selected_models_large_encoder
 if nn_yaml == 'dm_large_q':
     load_function = selected_models_large_q
-source_prefix = f'new_gridworld8x8_eps{epsilon}'
+source_prefix = f'new_gridworld8x8'
 if shuffle:
     source_prefix += '_shuffobs'
-    if epsilon < 0.4:
-        n_episodes = 1501
-    elif epsilon < 0.6:
-        n_episodes = 1201
-    elif epsilon < 0.8:
-        n_episodes = 901
-    else:
-        n_episodes = 601
-else:
-    n_episodes = 601
-fname_prefix = f'frozentransfer_{source_prefix}'
 source_episode = 600
+fname_prefix = f'frozenrandomtransfer_{source_prefix}'
+n_episodes = 601
 n_iters = 45
 
 # Less changed args
@@ -141,12 +131,11 @@ def run(arg):
     fname = f'{_fname}_{i}'
     fname_nnet_dir = f'{engram_dir}nnets/{exp_dir}/{fname}/'
     fname_fig_dir = f'{engram_dir}figs/{exp_dir}/{fname}/'
-    fname_pickle_dir = f'{engram_dir}pickles/{exp_dir}/{fname}/'
-    for _dir in [fname_nnet_dir, fname_fig_dir, fname_pickle_dir]:
+    for _dir in [fname_nnet_dir, fname_fig_dir]:
         os.makedirs(_dir, exist_ok=True)
 
     saved_epoch = int(save_net_every * (n_episodes//save_net_every))
-    net_exists = 'network_ep{saved_epoch}.pth' in os.listdir(fname_nnet_dir)
+    net_exists = f'network_ep{saved_epoch}.pth' in os.listdir(fname_nnet_dir)
     if net_exists:
         print(f'Skipping {fname}')
         return
@@ -162,14 +151,15 @@ def run(arg):
         'n_test_episodes': 10,
         'agent_args': {
             'loss_weights': loss_weights, 'lr': 1e-3,
-            'replay_capacity': 100_000, 'epsilon': epsilon,
+            'replay_capacity': 100_000, 'epsilon': 1.0,
             'batch_size': 64, 'target_update_frequency': 1000,
             'train_seq_len': 1},
         'network_args': {
             'latent_dim': internal_dim, 'network_yaml': nn_yaml,
             'freeze_encoder': freeze_encoder},
         'dset_args': {
-            'layout': size_maze, 'shuffle_obs': shuffle, 'prev_goal_state': prev_pos_goal}
+            'layout': size_maze, 'shuffle_obs': shuffle,
+            'prev_goal_state': prev_pos_goal}
         }
     parameters = flatten(parameters)
     parameters.update(flatten(param_update))
@@ -246,8 +236,8 @@ def run(arg):
             loss_keys = [
                 'train_loss', 'mf_loss', 'neg_random_loss',
                 'neg_neighbor_loss', 'pos_sample_loss']
-            for i, loss_key in enumerate(loss_keys):
-                ax = axs[i%3][i//3]
+            for key_idx, loss_key in enumerate(loss_keys):
+                ax = axs[key_idx%3][key_idx//3]
                 ax.plot(result[loss_key])
                 ax.set_ylabel(loss_key)
             plt.tight_layout()
@@ -279,8 +269,7 @@ def run(arg):
             agent.save_network(fname_nnet_dir, episode)
 
     # Save pickle
-    unique_id = shortuuid.uuid()
-    with open(f'{pickle_dir}{unique_id}.p', 'wb') as f:
+    with open(f'{pickle_dir}{fname}.p', 'wb') as f:
         pickle.dump(result, f)
 
 # Load model parameters
