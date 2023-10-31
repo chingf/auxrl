@@ -169,8 +169,9 @@ class Env(dm_env.Environment):
             self._cifar_images_indices[x] = {}
             for y in range(self._layout_dims[1]):
                 image_index = image_indices[x][y]
-                image = testset[image_index][0]
-                self._cifar_images[x][y] = grayscale(image)
+                image = testset[image_index][0].numpy()
+                image = grayscale(image).astype(np.float32)
+                self._cifar_images[x][y] = image
                 self._cifar_images_indices[x][y] = image_index
 
     @property
@@ -212,7 +213,7 @@ class Env(dm_env.Environment):
                 shape=(1,) + self._layout_dims, dtype=np.float32,
                 name='observation_grid') # (C, H, W)
         elif self._observation_type is ObservationType.CIFAR:
-            return specs.DiscreteArray(
+            return specs.Array(
                 shape=(1,32,32), dtype=np.float32,
                 name='cifar_image')
 
