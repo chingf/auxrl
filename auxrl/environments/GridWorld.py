@@ -12,22 +12,16 @@ from acme.utils import tree_utils
 
 class ObservationType(enum.IntEnum):
     """
-    * STATE_INDEX: int32 index of agent occupied tile.
-    * AGENT_ONEHOT: NxN float32 grid, 1 where the
-      agent is and 0 elsewhere.
     * GRID: NxNx3 float32 grid of feature channels.
       First channel contains walls (1 if wall, 0 otherwise), second the
       agent position (1 if agent, 0 otherwise) and third goal position
       (1 if goal, 0 otherwise)
-    * AGENT_GOAL_POS: float32 tuple with
-      (agent_y, agent_x, goal_y, goal_x)
+    * CIFAR: Randomly selected images from the CIFAR10 testset, in grayscale.
 
     """
 
-    STATE_INDEX = enum.auto()
-    AGENT_ONEHOT = enum.auto()
     GRID = enum.auto()
-    AGENT_GOAL_POS = enum.auto()
+    CIFAR = enum.auto()
 
 class Env(dm_env.Environment):
 
@@ -92,6 +86,8 @@ class Env(dm_env.Environment):
         self.goal_state = goal_state
         self.transitions_swapped = False
         self._shuffle_states = shuffle_states
+        if self._observation_type == ObservationType.CIFAR:
+            self._make_cifar_images()
         if shuffle_states:
             self._swap_map = {}
             initial_state = np.argwhere(self._layout >= 0)
@@ -149,6 +145,30 @@ class Env(dm_env.Environment):
             neighbors.append(possible_neighbor)
         return neighbors
 
+    def _make_cifar_images(self):
+        def grayscale(image): # image is [channels, height, width]
+            image = np.transpose(image, (1, 2, 0))
+            weights = np.array([0.2989, 0.5870, 0.1140])
+            grayscale = np.dot(image, weights)
+            return grayscale
+
+        transform = transforms.Compose([transforms.ToTensor()])
+        testset = torchvision.datasets.CIFAR10(root='./cifar_data', train=False,
+            download=True, transform=transform)
+        image_indices = np.random.choice(
+            len(testset), size=self._number_of_states, replace=False
+            ).reshape(self._layout_dims)
+        self._cifar_images = {}
+        self._cifar_images_indices = {}
+        for x in range(self._layout_dims[0]):
+            self._cifar_images[x] = {}
+            self._cifar_images_indices[x] = {}
+            for y in range(self._layout_dims[1]):
+                image_index = image_indices[x][y]
+                image = testset[image_index][0]
+                self._cifar_images[x][y] = grayscale(image)
+                self._cifar_images_indices[x][y] = image_index
+
     @property
     def layout(self):
         return self._layout
@@ -183,22 +203,14 @@ class Env(dm_env.Environment):
         self._goal_state = new_goal
 
     def observation_spec(self):
-        if self._observation_type is ObservationType.AGENT_ONEHOT:
-            return specs.Array(
-                shape=self._layout_dims, dtype=np.float32,
-                name='observation_agent_onehot')
-        elif self._observation_type is ObservationType.GRID:
+        if self._observation_type is ObservationType.GRID:
             return specs.Array(
                 shape=(1,) + self._layout_dims, dtype=np.float32,
                 name='observation_grid') # (C, H, W)
-        elif self._observation_type is ObservationType.AGENT_GOAL_POS:
-            return specs.Array(
-                shape=(4,), dtype=np.float32,
-                name='observation_agent_goal_pos')
-        elif self._observation_type is ObservationType.STATE_INDEX:
+        elif self._observation_type is ObservationType.CIFAR:
             return specs.DiscreteArray(
-                self._number_of_states, dtype=int,
-                name='observation_state_index')
+                shape=(1,32,32), dtype=np.float32,
+                name='cifar_image')
 
     def action_spec(self):
         return specs.DiscreteArray(4, dtype=int, name='action')
@@ -206,15 +218,10 @@ class Env(dm_env.Environment):
     def get_obs(self, state=None):
         if state == None:
             state = self._state
-        if self._observation_type is ObservationType.AGENT_ONEHOT:
-            obs = np.zeros(self._layout.shape, dtype=np.float32)
-            obs[state] = 1 # Place agent
-            return obs
-        elif self._observation_type is ObservationType.GRID:
+        if self._observation_type is ObservationType.GRID:
             goal_state = self._goal_state
             if self._shuffle_states:
                 state = self._swap_map[str([state[0], state[1]])]
-                #goal_state = self._swap_map[str(goal_state)]
             obs = np.zeros((1,) + self._layout_dims, dtype=np.float32)
             obs[0, ...] = (self._layout < 0)*(-1)
             obs[0, state[0], state[1]] = 1
@@ -225,11 +232,9 @@ class Env(dm_env.Environment):
                 obs = obs[self._shuffle_indices]
                 obs = obs.reshape((1,) + self._layout_dims)
             return obs
-        elif self._observation_type is ObservationType.AGENT_GOAL_POS:
-            return np.array(state + self._goal_state, dtype=np.float32)
-        elif self._observation_type is ObservationType.STATE_INDEX:
-            x, y = state
-            return y * self._layout.shape[1] + x
+        elif self._observation_type is ObservationType.CIFAR:
+            img = self._cifar_images[state[0], state[1]]
+            return img 
 
     def reset(self, reset_start=True, reset_goal=False):
         if reset_goal:
@@ -418,64 +423,6 @@ class Env(dm_env.Environment):
             return 3 #down
         else:
             raise ValueError('Not a valid transition')
-
-def build_gridworld_task(
-    task, discount=0.9, penalty_for_walls=-5,
-    observation_type=ObservationType.STATE_INDEX, max_episode_length=200
-    ):
-
-    """ Construct a particular Gridworld layout with start/goal states. """
-
-    tasks_specifications = {
-        'simple': {
-            'layout': [
-                [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
-                [-1, 0, 0, 0, 0, 0, 0, 0, 0, -1],
-                [-1, 0, 0, 0, -1, -1, 0, 0, 0, -1],
-                [-1, 0, 0, 0, -1, -1, 0, 0, 0, -1],
-                [-1, 0, 0, 0, -1, -1, 0, 0, 0, -1],
-                [-1, 0, 0, 0, 0, 0, 0, 0, 0, -1],
-                [-1, 0, 0, 0, 0, 0, 0, 0, 0, -1],
-                [-1, 0, 0, 0, 0, 0, 0, 0, 0, -1],
-                [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
-            ],
-            'start_state': (2, 2),
-            'goal_state': (7, 2)
-        },
-        'obstacle': {
-            'layout': [
-                [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
-                [-1, 0, 0, 0, 0, 0, -1, 0, 0, -1],
-                [-1, 0, 0, 0, -1, 0, 0, 0, 0, -1],
-                [-1, 0, 0, 0, -1, -1, 0, 0, 0, -1],
-                [-1, 0, 0, 0, -1, -1, 0, 0, 0, -1],
-                [-1, 0, 0, 0, 0, 0, 0, 0, 0, -1],
-                [-1, 0, 0, 0, 0, 0, 0, 0, 0, -1],
-                [-1, 0, 0, 0, 0, 0, 0, 0, 0, -1],
-                [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
-            ],
-            'start_state': (2, 2),
-            'goal_state': (2, 8)
-        },
-        'random_goal': {
-            'layout': [
-                [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
-                [-1, 0, 0, 0, 0, 0, 0, 0, 0, -1],
-                [-1, 0, 0, 0, -1, -1, 0, 0, 0, -1],
-                [-1, 0, 0, 0, -1, -1, 0, 0, 0, -1],
-                [-1, 0, 0, 0, -1, -1, 0, 0, 0, -1],
-                [-1, 0, 0, 0, 0, 0, 0, 0, 0, -1],
-                [-1, 0, 0, 0, 0, 0, 0, 0, 0, -1],
-                [-1, 0, 0, 0, 0, 0, 0, 0, 0, -1],
-                [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
-            ],
-            'start_state': (2, 2),
-        },
-    }
-    return GridWorld(
-        discount=discount, penalty_for_walls=penalty_for_walls,
-        observation_type=observation_type,
-        max_episode_length=max_episode_length, **tasks_specifications[task])
 
 def setup_environment(environment):
   """Returns the environment and its spec."""
