@@ -5,8 +5,8 @@ fig_width = 6.4
 fig_height = 4.8
 
 import seaborn as sns
-sns.set(#font='Arial',
-        font_scale=16/12., #default size is 12pt, scale to 16pt
+sns.set(
+        font_scale=10/12., #default size is 12pt, scale to 16pt
         palette='colorblind', #'Set1',
         rc={'axes.axisbelow': True,
             'axes.edgecolor': 'lightgrey',
@@ -18,7 +18,7 @@ sns.set(#font='Arial',
             'text.color': 'dimgrey', #e.g. legend
 
             'lines.solid_capstyle': 'round',
-            'lines.linewidth': 2,
+            'lines.linewidth': 1,
             'legend.facecolor': 'white',
             'legend.framealpha':0.8,
 
@@ -39,3 +39,12 @@ sns.set(#font='Arial',
              'ytick.major.width': .5,
              'ytick.minor.size': 1,
              'ytick.minor.width': .5})
+import matplotlib.pyplot as plt
+plt.rcParams['font.family'] = 'sans-serif'
+plt.rcParams['font.sans-serif'] = ['DejaVu Sans'] + plt.rcParams['font.sans-serif']
+
+import os
+if os.environ['USER'] == 'chingfang':
+    engram_dir = '/Volumes/aronov-locker/Ching/rl/'
+else:
+    engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/'

@@ -333,7 +333,7 @@ class Env(dm_env.Environment):
         self.plot_grid(add_start=False)
         # Add the agent location as a smiley face
         plt.text(
-            self._state[1], self._state[0], '\U0001F603',
+            self._state[1], self._state[0], '\N{SMILING FACE WITH OPEN MOUTH}',
             fontsize=18, ha='center', va='center')
         if return_rgb:
             fig = plt.gcf()
