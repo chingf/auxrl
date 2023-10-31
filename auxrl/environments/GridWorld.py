@@ -6,6 +6,10 @@ import copy
 import dm_env
 import enum
 
+import torch
+import torchvision
+import torchvision.transforms as transforms
+
 from acme import specs
 from acme import wrappers
 from acme.utils import tree_utils
@@ -233,7 +237,8 @@ class Env(dm_env.Environment):
                 obs = obs.reshape((1,) + self._layout_dims)
             return obs
         elif self._observation_type is ObservationType.CIFAR:
-            img = self._cifar_images[state[0], state[1]]
+            img = self._cifar_images[state[0]][state[1]]
+            img = img.reshape((1,) + img.shape)
             return img 
 
     def reset(self, reset_start=True, reset_goal=False):
