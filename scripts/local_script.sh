@@ -1,7 +1,9 @@
 #!/bin/bash 
 
-python 04_lsi_len1.py -1 1 dm_small_encoder_large_q 64
-python 04_lsi_len1.py -1 1 dm_small_encoder_large_q 96
-python 04_lsi_len1.py -1 1 dm_small_encoder_large_q 32
+source ~/.bashrc
+conda activate sr
+python 09_run_gridworld_cifar.py -1 1 dm 12 1.0
+python 09_run_gridworld_cifar.py -1 1 dm 16 1.0
+python 09_run_gridworld_cifar.py -1 1 dm 10 1.0
 
 wait

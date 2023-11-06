@@ -7,7 +7,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 import time
-import shortuuid
 from flatten_dict import flatten
 from flatten_dict import unflatten
 import torch
@@ -30,7 +29,7 @@ epsilon = float(sys.argv[5]) # 1.0
 
 # Experiment Parameters
 load_function = test_full
-fname_prefix = f'cifartest'
+fname_prefix = f'cifar_gridworld_8x8'
 
 # Less used params
 shuffle = False
