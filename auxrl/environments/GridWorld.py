@@ -171,6 +171,7 @@ class Env(dm_env.Environment):
                 image_index = image_indices[x][y]
                 image = testset[image_index][0].numpy()
                 image = grayscale(image).astype(np.float32)
+                image = image/np.mean(image)
                 self._cifar_images[x][y] = image
                 self._cifar_images_indices[x][y] = image_index
 

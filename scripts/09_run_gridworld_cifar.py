@@ -28,7 +28,7 @@ internal_dim = int(sys.argv[4])
 epsilon = float(sys.argv[5]) # 1.0
 
 # Experiment Parameters
-load_function = test_full
+load_function = selected_models_cifar
 fname_prefix = f'cifar_gridworld_8x8'
 
 # Less used params
