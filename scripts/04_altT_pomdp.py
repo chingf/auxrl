@@ -49,29 +49,27 @@ if n_gpus > 1:
     my_env["CUDA_VISIBLE_DEVICES"] = device_num
 
 # Experiment Parameters
-load_function = altT
-n_episodes = 61
-n_iters = 1
-epsilon = 0.8
-mem_len = 0
-mem_gamma = 0
-mem_location = 2 # Placement in the MLP afer encoder CNN
-train_seq_len = 1
-tcm_len = 6
-tcm_gamma = 0.9
-fname_prefix = f'LayerAltT_eps{epsilon}_mlen{mem_len}_g{mem_gamma}_mloc{mem_location}_tcm{tcm_len}_g{tcm_gamma}'
-fname_prefix = f'test2_altT'
+load_function = test_full_mf_g0_only
+n_episodes = 31
+n_iters = 5
+epsilon = 0.5
+mem_len = 1
+mem_gamma = 1.
+mem_location = 2 # Placement in the MLP after encoder CNN
+train_seq_len = 6
+tcm_len = 0
+tcm_gamma = 0.
+fname_prefix = f'altT_pomdp'
 
 # Less used params
-n_cpu_jobs = 1 #56
+n_cpu_jobs = 56
 eval_every = 5
 save_net_every = 5
 fname_suffix = ''
 
 # Make directories
 if os.environ['USER'] == 'chingfang':
-    #engram_dir = '/Volumes/aronov-locker/Ching/rl/' # Local Path
-    engram_dir = './'
+    engram_dir = '/Volumes/aronov-locker/Ching/rl/' # Local Path
 elif 'SLURM_JOBID' in os.environ.keys():
     engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
 else:
@@ -99,10 +97,11 @@ def run(arg):
     for _dir in [fname_nnet_dir, fname_fig_dir]:
         os.makedirs(_dir, exist_ok=True)
 
-    net_exists = np.any(['network_ep' in f for f in os.listdir(fname_nnet_dir)])
+    saved_epoch = int(save_net_every * (n_episodes//save_net_every))
+    net_exists = f'network_ep{saved_epoch}.pth' in os.listdir(fname_nnet_dir)
     if net_exists:
         print(f'Skipping {fname}')
-        #return
+        return
     else:
         print(f'Running {fname}')
 
@@ -111,7 +110,7 @@ def run(arg):
         'n_episodes': n_episodes,
         'n_test_episodes': 1,
         'agent_args': {
-            'loss_weights': loss_weights, 'lr': 1e-5, # Volume loss?
+            'loss_weights': loss_weights, 'lr': 1e-3, # Volume loss?
             'replay_capacity': 20_000, # 100_000
             'epsilon': epsilon,
             'batch_size': 64, 'target_update_frequency': 1000,
@@ -123,7 +122,7 @@ def run(arg):
             'mem_location': mem_location,
             },
         'dset_args': {
-            'hide_goal': True,
+            'hide_goal': True, 'height': 7,
             'temporal_context_len': tcm_len, 'temporal_context_gamma': tcm_gamma,
             },
         'max_eval_episode_steps': 500,

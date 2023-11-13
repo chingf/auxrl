@@ -3,11 +3,9 @@
 trap "exit" INT TERM ERR
 trap "kill 0" EXIT
 
-for JOB_IDX in {0..1}
+for JOB_IDX in {0..7}
 do
-    python 04_run_altT.py $JOB_IDX 2 dm_selq_v3 96 &
+    python 04_altT_pomdp.py $JOB_IDX 8 dm 32 &
 done
 wait
-
-python 05_altT_latents.py test_altT dm_selq_v3 96 30
 
