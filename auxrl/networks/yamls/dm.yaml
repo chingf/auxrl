@@ -12,6 +12,7 @@ encoder-fc: &encoder-fc
   - [Linear, auto, 32]
   - *act
   - [Linear, 32, auto]
+  - [Identity,]
 
 crar-fc: &crar-fc
   - *act

@@ -208,20 +208,38 @@ def test_full_mf_g0_only():
     param_updates = [
         {}, {}, {}, {},
 
-        {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.}},
-        {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.}},
-        {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.}},
-        {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.}},
+        {'agent_args': {'pred_TD': False, 'pred_len': 0, 'pred_gamma': 0.}},
+        {'agent_args': {'pred_TD': False, 'pred_len': 0, 'pred_gamma': 0.}},
+        {'agent_args': {'pred_TD': False, 'pred_len': 0, 'pred_gamma': 0.}},
+        {'agent_args': {'pred_TD': False, 'pred_len': 0, 'pred_gamma': 0.}},
 
-        {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.}},
-        {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.}},
-        {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.}},
-        {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.}},
+        {'agent_args': {'pred_TD': False, 'pred_len': 0, 'pred_gamma': 0.}},
+        {'agent_args': {'pred_TD': False, 'pred_len': 0, 'pred_gamma': 0.}},
+        {'agent_args': {'pred_TD': False, 'pred_len': 0, 'pred_gamma': 0.}},
+        {'agent_args': {'pred_TD': False, 'pred_len': 0, 'pred_gamma': 0.}},
 
-        {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.}},
-        {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.}},
-        {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.}},
-        {'agent_args': {'pred_TD': True, 'pred_len': 2, 'pred_gamma': 0.}},
+        {'agent_args': {'pred_TD': False, 'pred_len': 0, 'pred_gamma': 0.}},
+        {'agent_args': {'pred_TD': False, 'pred_len': 0, 'pred_gamma': 0.}},
+        {'agent_args': {'pred_TD': False, 'pred_len': 0, 'pred_gamma': 0.}},
+        {'agent_args': {'pred_TD': False, 'pred_len': 0, 'pred_gamma': 0.}},
+        ]
+    return fname_grid, loss_weights_grid, param_updates
+
+def test_small_mf_g0_only():
+    fname_grid = [
+        'mf0',
+        'g0_-2_entro-2',
+        'g0_-2_entro-1',
+        ]
+    loss_weights_grid = [
+        [0, 0, 0, 1E-1],
+        [1E-2, 1E-2, 1E-2, 1],
+        [1E-2, 1E-1, 1E-1, 1],
+        ]
+    param_updates = [
+        {},
+        {'agent_args': {'pred_TD': False, 'pred_len': 0, 'pred_gamma': 0.}},
+        {'agent_args': {'pred_TD': False, 'pred_len': 0, 'pred_gamma': 0.}},
         ]
     return fname_grid, loss_weights_grid, param_updates
 
