@@ -162,6 +162,26 @@ def test_full():
         ]
     return fname_grid, loss_weights_grid, param_updates
 
+def test_full_entro_only():
+    fname_grid = [
+        'entro-2',
+        'entro-1',
+        'entro0',
+        'entro1',
+        'entro2',
+        ]
+    loss_weights_grid = [
+        [0, 1E-2, 1E-2, 1E0],
+        [0, 1E-1, 1E-1, 1E0],
+        [0, 1E0, 1E0, 1E0],
+        [0, 1E1, 1E1, 1E0],
+        [0, 1E2, 1E2, 1E0],
+        ]
+    param_updates = [
+        {}, {}, {}, {}, {},
+        ]
+    return fname_grid, loss_weights_grid, param_updates
+
 def test_full_mf_g0_only():
     fname_grid = [
         'mf-1',
