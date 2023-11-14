@@ -45,6 +45,8 @@ def make_fc(input_dim, out_dim, fc_config):
                 fc.append(NN_MAP[layer[0]](layer[1], layer[2]))
         elif layer[0] == "LSTM":
             return NN_MAP[layer[0]](layer[1], layer[2], batch_first=True)
+        elif layer[0] == 'Identity':
+            fc.append(nn.Identity())
         else:
             fc.append(NN_MAP[layer]())
     return nn.Sequential(*fc)
@@ -72,8 +74,9 @@ class Encoder(nn.Module):
         self._prev_latent = None
         self._fc = make_fc(self._feature_size, self._latent_dim, config['fc'])
         if self._mem_len>0:
-            if 'Linear' not in str(self._fc[self._mem_location]):
-                raise ValueError('Memory location not a linear layer.')
+            layer_str = str(self._fc[self._mem_location])
+            if ('Linear' not in layer_str) and ('Identity' not in layer_str):
+                raise ValueError('Memory location not a linear/I layer.')
         
     def forward(self, x, prev_latents=None, save_conv_activity=False):
         """
@@ -115,6 +118,10 @@ class Encoder(nn.Module):
 
         # Store the current latent state
         if (self._mem_len > 0) and (not prev_latents_provided):
+            #if self._mem_len == 1:
+            #    self._prev_latent = torch.hstack((
+            #        self._prev_latent, new_latent.unsqueeze(1)))
+            #else:
             self._prev_latent = torch.hstack((
                 self._prev_latent[:,1:], new_latent.unsqueeze(1)))
         return x
