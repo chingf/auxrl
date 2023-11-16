@@ -51,7 +51,7 @@ if n_gpus > 1:
 # Experiment Parameters
 load_function = test_small_mf_g0_only
 n_episodes = 61
-n_iters = 20
+n_iters = 4
 epsilon = 0.4
 mem_len = 1
 mem_gamma = 1.
@@ -59,7 +59,7 @@ mem_location = 3 # Placement in the MLP after encoder CNN
 train_seq_len = 10
 tcm_len = 0
 tcm_gamma = 0.
-fname_prefix = f'pomdp_test'
+fname_prefix = f'pomdp_test2'
 
 # Less used params
 n_cpu_jobs = 56
@@ -101,7 +101,7 @@ def run(arg):
     net_exists = f'network_ep{saved_epoch}.pth' in os.listdir(fname_nnet_dir)
     if net_exists:
         print(f'Skipping {fname}')
-        return
+        #return
     else:
         print(f'Running {fname}')
 
@@ -110,7 +110,7 @@ def run(arg):
         'n_episodes': n_episodes,
         'n_test_episodes': 1,
         'agent_args': {
-            'loss_weights': loss_weights, 'lr': 1e-4,
+            'loss_weights': loss_weights, 'lr': 1e-3,
             'replay_capacity': 20_000, # 100_000
             'epsilon': epsilon,
             'batch_size': 64, 'target_update_frequency': 1000,

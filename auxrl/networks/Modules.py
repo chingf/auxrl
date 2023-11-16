@@ -132,6 +132,71 @@ class Encoder(nn.Module):
     def reset(self):
         self._prev_latent = None
 
+class RecurrentConcatenationEncoder(nn.Module):
+    def __init__(
+        self, env_spec, latent_dim, config, mem_len, eligibility_gamma=None
+        ):
+
+        super().__init__()
+        self._env_spec = env_spec
+        self._input_shape = env_spec.observations.shape # (C, H, W)
+        self._latent_dim = latent_dim
+        self._mem_len = mem_len
+        self._eligibility_gamma = eligibility_gamma
+        if config['convs'] != None:
+            self._convs = make_convs(self._input_shape, config['convs'])
+            self._feature_size = compute_feature_size(
+                self._input_shape, self._convs)
+        else:
+            self._convs = None
+            self._feature_size = np.prod(self._input_shape)
+        if self._mem_len > 0:
+            self._feature_size += self._mem_len*self._latent_dim
+        self._prev_latent = None
+        self._fc = make_fc(self._feature_size, self._latent_dim, config['fc'])
+        
+    def forward(self, x, prev_latents=None, save_conv_activity=False):
+        """
+        prev_latents is shape (mem_len, latent_dim)
+        """
+
+        N, C, H, W = x.shape
+        if self._convs is not None:
+            x = self._convs(x)
+            if save_conv_activity:
+                self._prev_conv_activity = x.detach()
+        x = x.view(N, -1)
+        x = x.float()
+        prev_latents_provided = prev_latents != None
+        if self._mem_len > 0:
+            if not prev_latents_provided:
+                if self._prev_latent == None:
+                    self._prev_latent = torch.zeros(
+                        N, self._mem_len, self._latent_dim)
+                    x_device = x.get_device()
+                    if x_device != -1:
+                        self._prev_latent = self._prev_latent.to(x_device)
+                prev_latents = self._prev_latent
+
+            if self._eligibility_gamma != None:
+                for t in range(self._mem_len):
+                    scaling = self._eligibility_gamma**(t+1)
+                    prev_latents[:, t, :] = prev_latents[:, t, :] * scaling
+
+            x = torch.hstack((x, prev_latents.reshape(N, -1)))
+        x = self._fc(x)
+        if (self._mem_len > 0) and (not prev_latents_provided):
+            self._prev_latent = torch.hstack((
+                self._prev_latent[:,1:], x.unsqueeze(1)))
+        self._new_latent = x
+        return x
+
+    def get_curr_latent(self):
+        return self._prev_latent
+
+    def reset(self):
+        self._prev_latent = None
+
 class T(nn.Module):
     def __init__(
         self, env_spec, latent_dim,  config,
@@ -169,4 +234,38 @@ class Q(nn.Module):
     def forward(self, x):
         x = self._fc(x)
         return x
+
+class A2C(nn.Module):
+    def __init__(self, env_spec, latent_dim, config):
+        super().__init__()
+        self._env_spec = env_spec
+        self._n_actions = env_spec.actions.num_values
+        self._latent_dim = latent_dim
+        self.actor = Actor(latent_dim, self._n_actions, config['fc'])
+        self.critic = Critic(latent_dim, config['fc'])
+
+    def forward(self, x):
+        policy_dist = self.actor(x)
+        value = self.critic(x)
+        return policy_dist, value
+
+class Actor(nn.Module):
+    def __init__(self, input_size, action_size, config):
+        super(Actor, self).__init__()
+        self.fc = make_fc(input_size, action_size, config)
+
+    def forward(self, x):
+        x = torch.nn.functional.relu(self.fc(x))
+        x = torch.nn.functional.softmax(x, dim=-1)
+        return x
+
+class Critic(nn.Module):
+    def __init__(self, input_size, config):
+        super(Critic, self).__init__()
+        self.fc = make_fc(input_size, 1, config)
+
+    def forward(self, x):
+        x = self.fc(x)
+        return x
+
 

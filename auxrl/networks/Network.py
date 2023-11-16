@@ -2,11 +2,12 @@ import os
 import numpy as np
 import inspect
 import yaml
+import warnings
 from pathlib import Path
 import torch
 import torch.nn as nn
 from copy import deepcopy
-from auxrl.networks.Modules import Encoder, Q, T
+from auxrl.networks.Modules import Encoder, Q, T, RecurrentConcatenationEncoder
 
 NETWORK_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -43,10 +44,19 @@ class Network(object):
         with open(f'{NETWORK_DIR}/yamls/{self._network_yaml}.yaml') as f:
             config = yaml.load(f, Loader=yaml.FullLoader)
             update(config, self._yaml_mods)
-        self.encoder = Encoder(
-            env_spec, latent_dim, config['encoder'], mem_len,
-            eligibility_gamma=eligibility_gamma, mem_location=mem_location,
-            ).to(device)
+
+        if mem_len > 0:
+            warning_str = 'Encoder configuration overrides to concatenation-'
+            warning_str += 'based recurrency and ignores mem_location arg.'
+            warnings.warn(warning_str)
+            self.encoder = RecurrentConcatenationEncoder(
+                env_spec, latent_dim, config['encoder'], mem_len,
+                eligibility_gamma=eligibility_gamma).to(device)
+        else:
+            self.encoder = Encoder(
+                env_spec, latent_dim, config['encoder'], mem_len,
+                eligibility_gamma=eligibility_gamma, mem_location=mem_location,
+                ).to(device)
         if self._freeze_encoder:
             for p in self.encoder.parameters():
                 p.requires_grad = False

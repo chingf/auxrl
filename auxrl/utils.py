@@ -58,6 +58,50 @@ def run_train_episode(
     avg_episode_losses = [l/episode_steps for l in summed_episode_losses]
     return avg_episode_losses, episode_return, episode_steps
 
+def run_A2C_train_episode(
+    environment: dm_env.Environment, agent: acme.Actor, clip_norm: float=-1.):
+    """
+    Each episode is itself a loop which interacts first with the environment to
+    get an observation and then give that observation to the agent in order to
+    retrieve an action.
+
+    Updating is performed at the end of each episode!!!
+
+    Args:
+      environment: dm_env.Environment used to generate trajectories.
+      agent: acme.Actor for selecting actions in the run loop.
+    """
+
+    trajectory_info = {
+        'log_probs': [], 'values': [], 'rewards': [], 'masks': [],
+        'entropies': [], 'obs': [], 'actions': [], 'next_obs': []}
+    episode_steps = 0
+    episode_return = 0
+    timestep = environment.reset()
+    agent.reset()
+
+    while not timestep.last(): # Until terminal state reached
+        observation = timestep.observation
+        policy_dist, value = agent.actor_critic(observation)
+        value = value.item()
+        action = policy_dist.multinomial(num_samples=1).item()
+        log_prob = torch.log(policy_dist.squeeze(0)[action])
+        entropy = -torch.sum(policy_dist * torch.log(policy_dist), dim=1)
+        timestep = environment.step(action)
+        episode_steps += 1
+        episode_return += timestep.reward
+        trajectory_info['log_probs'].append(log_prob)
+        trajectory_info['values'].append(value)
+        trajectory_info['rewards'].append(timestep.reward)
+        trajectory_info['masks'].append(not timestep.last())
+        trajectory_info['entropies'].append(entropy)
+        trajectory_info['obs'].append(observation)
+        trajectory_info['actions'].append(action)
+        trajectory_info['next_obs'].append(timestep.observation)
+
+    episode_loss = agent.update(trajectory_info) # should be n_loss- length?
+    return episode_loss, episode_return, episode_steps
+
 def run_eval_episode(
     env: dm_env.Environment, agent: acme.Actor, n_test_episodes: int=1,
     verbose: bool=False, max_episode_steps=None):

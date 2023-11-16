@@ -15,57 +15,49 @@ import torch
 from acme import specs
 from acme import wrappers
 
-from auxrl.Agent import Agent
-from auxrl.networks.Network import Network
-from auxrl.environments.AlternatingT import Env as Env
-from auxrl.utils import run_train_episode, run_eval_episode
+from auxrl.A2CAgent import Agent
+from auxrl.networks.A2CNetwork import Network
+from auxrl.environments.GridWorld import Env as Env
+from auxrl.utils import run_A2C_train_episode, run_eval_episode
 from model_parameters.gridworld import *
 
-# Experiment Parameters
+# Command-line args
 job_idx = int(sys.argv[1])
 n_jobs = int(sys.argv[2])
 nn_yaml = sys.argv[3]
 internal_dim = int(sys.argv[4])
 
-# If manual GPU setting
-if len(sys.argv) > 5:
-    gpu_override = str(sys.argv[5])
-else:
-    gpu_override = None
+# Experiment Parameters
+load_function = selected_models_grid_shuffle
+load_function = mf0
+if nn_yaml == 'dm_large_encoder':
+    print('loading selected models for large encoder')
+    load_function = selected_models_large_encoder
+if nn_yaml == 'dm_large_q':
+    print('loading selected models for large q')
+    load_function = selected_models_large_q
+fname_prefix = 'test_a2c'
+n_iters = 10
+n_episodes = 601
 
-# CPU vs GPU running
+# Less used params
+random_seed = True
+size_maze = 4 #8
+fname_suffix = ''
+n_cpu_jobs = 56
+eval_every = 1
+save_net_every = 50
+continual_transfer = False
+
+# GPU selection
 try:
     n_gpus = (len(os.environ['CUDA_VISIBLE_DEVICES'])+1)/2
 except:
     n_gpus = 0
-
-# Now set GPU
 if n_gpus > 1:
-    if gpu_override == None:
-        device_num = str(job_idx % n_gpus)
-    else:
-        device_num = gpu_override
+    device_num = str(job_idx % n_gpus)
     my_env = os.environ
     my_env["CUDA_VISIBLE_DEVICES"] = device_num
-
-# Experiment Parameters
-load_function = test_small_mf_g0_only
-n_episodes = 61
-n_iters = 20
-epsilon = 0.4
-mem_len = 1
-mem_gamma = 1.
-mem_location = 3 # Placement in the MLP after encoder CNN
-train_seq_len = 10
-tcm_len = 0
-tcm_gamma = 0.
-fname_prefix = f'pomdp_test'
-
-# Less used params
-n_cpu_jobs = 56
-eval_every = 5
-save_net_every = 5
-fname_suffix = ''
 
 # Make directories
 if os.environ['USER'] == 'chingfang':
@@ -101,43 +93,35 @@ def run(arg):
     net_exists = f'network_ep{saved_epoch}.pth' in os.listdir(fname_nnet_dir)
     if net_exists:
         print(f'Skipping {fname}')
-        return
+        #return
     else:
         print(f'Running {fname}')
 
     parameters = {
         'fname': fname,
         'n_episodes': n_episodes,
-        'n_test_episodes': 1,
-        'agent_args': {
-            'loss_weights': loss_weights, 'lr': 1e-4,
-            'replay_capacity': 20_000, # 100_000
-            'epsilon': epsilon,
-            'batch_size': 64, 'target_update_frequency': 1000,
-            'train_seq_len': train_seq_len,
-            'pred_len':0, 'pred_TD': False,
-            },
-        'network_args': {
-            'latent_dim': internal_dim, 'network_yaml': nn_yaml,
-            'mem_len': mem_len, 'eligibility_gamma': mem_gamma,
-            'mem_location': mem_location,
-            },
-        'dset_args': {
-            'hide_goal': True, 'height': 7,
-            'temporal_context_len': tcm_len, 'temporal_context_gamma': tcm_gamma,
-            'penalty_for_walls': -1.,
-            },
-        'max_eval_episode_steps': 500,
+        'n_test_episodes': 10,
+        'continual_transfer': continual_transfer,
+        'agent_args': {'loss_weights': loss_weights, 'lr': 1e-6},
+        'network_args': {'latent_dim': internal_dim, 'network_yaml': nn_yaml},
+        'dset_args': {'layout': size_maze, 'shuffle_obs': True}
         }
     parameters = flatten(parameters)
     parameters.update(flatten(param_update))
     parameters = unflatten(parameters)
     with open(f'{param_dir}{_fname}.yaml', 'w') as outfile:
         yaml.dump(parameters, outfile, default_flow_style=False)
+    if random_seed: np.random.seed(i)
     env = Env(**parameters['dset_args'])
     env_spec = specs.make_environment_spec(env)
     network = Network(env_spec, device=device, **parameters['network_args'])
     agent = Agent(env_spec, network, device=device, **parameters['agent_args'])
+
+    with open(f'{fname_nnet_dir}goal.txt', 'w') as goalfile:
+        goalfile.write(str(env._goal_state))
+    if parameters['dset_args']['shuffle_obs']:
+        with open(f'{fname_nnet_dir}shuffle_indices.txt', 'w') as goalfile:
+            goalfile.write(str(env._shuffle_indices))
 
     result = {}
     result['episode'] = []
@@ -160,7 +144,7 @@ def run(arg):
 
     for episode in range(n_episodes):
         start = time.time()
-        losses, score, steps_per_episode = run_train_episode(env, agent)
+        losses, score, steps_per_episode = run_A2C_train_episode(env, agent)
         end = time.time()
         sec_per_step_SUM += (end-start)
         sec_per_step_NUM += steps_per_episode
@@ -180,8 +164,7 @@ def run(arg):
             print(f'[TRAIN SUMMARY] {500*sec_per_step} sec/ 500 steps')
             print(f'{sec_per_step_NUM} training steps elapsed.')
             score, steps_per_episode = run_eval_episode(
-                env, agent, parameters['n_test_episodes'],
-                max_episode_steps=parameters['max_eval_episode_steps'])
+                env, agent, parameters['n_test_episodes'])
             result['valid_score'].append(score)
             result['valid_steps_per_ep'].append(steps_per_episode)
             # Save plots tracking training progress
@@ -189,8 +172,8 @@ def run(arg):
             loss_keys = [
                 'train_loss', 'mf_loss', 'neg_random_loss',
                 'neg_neighbor_loss', 'pos_sample_loss']
-            for i, loss_key in enumerate(loss_keys):
-                ax = axs[i%3][i//3]
+            for key_idx, loss_key in enumerate(loss_keys):
+                ax = axs[key_idx%3][key_idx//3]
                 ax.plot(result[loss_key])
                 ax.set_ylabel(loss_key)
             plt.tight_layout()
@@ -231,7 +214,7 @@ assert(len(fname_grid) == len(loss_weights_grid))
 assert(len(fname_grid) == len(param_updates))
 fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
 
-# Collect argument combinations
+# Collect argument combination
 iters = np.arange(n_iters)
 args = []
 for arg_idx in range(len(fname_grid)):
@@ -252,4 +235,3 @@ else:
 end = time.time()
 
 print(f'ELAPSED TIME: {end-start} seconds')
-
