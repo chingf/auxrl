@@ -235,6 +235,47 @@ class Q(nn.Module):
         x = self._fc(x)
         return x
 
+### DISTRIBUTIONAL RL SECTION: IMPLICIT QUANTILE NETWORKS ###
+
+class IQN(nn.Module):
+    def __init__(
+            self, env_spec, latent_dim, config,
+            quantile_embed_dim=64, random_quantiles=True,
+            # TODO: does random affect training? need to match quantiles?
+            ):
+
+        super().__init__()
+        self._env_spec = env_spec
+        self._n_actions = env_spec.actions.num_values
+        self._latent_dim = latent_dim
+        self._quantile_embed_dim = quantile_embed_dim
+        self._random_quantiles = random_quantiles
+        # TODO: or start at 1
+        self._pis = torch.FloatTensor([np.pi*i for i in range(self._quantile_embed_dim)])
+        self._pis = self._pis.view(1, 1, self._quantile_embed_dim)
+
+        # The two networks used in the IQN Module
+        self._quantile_embed_net = nn.Sequential(
+            nn.Linear(self._quantile_embed_dim, self._latent_dim), nn.ReLU())
+        self._iqn_net = make_fc(latent_dim, self._n_actions, config['fc'])
+
+    def forward(self, x, n_quantiles=8):
+        device = x.get_device()
+        if device == -1: device = 'cpu'
+        batch_size = x.shape[0]
+        if self._random_quantiles:
+            quantiles = torch.rand(batch_size, n_quantiles).to(device).unsqueeze(-1)
+        else:
+            quantiles = torch.linspace(0, 1, n_quantiles).repeat(batch_size, 1)
+            quantiles = quantiles.to(device).unsqueeze(-1)
+        quantile_embeddings = self._quantile_embed_net(
+            torch.cos(quantiles*self._pis)) # (batch, n_quantiles, latent)
+        x = x.unsqueeze(1).repeat(1, n_quantiles, 1)
+        quantile_values = self._iqn_net(x * quantile_embeddings)
+        return quantile_values, quantiles
+
+### ON-POLICY ACTOR CRITIC MODEL ###
+
 class A2C(nn.Module):
     def __init__(self, env_spec, latent_dim, config):
         super().__init__()

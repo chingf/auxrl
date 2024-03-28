@@ -21,9 +21,9 @@ crar-fc: &crar-fc
   - [Linear, 16, auto]
 
 crar-fc-post-act: &crar-fc-post-act
-  - [Linear, auto, 16]
+  - [Linear, auto, 32]
   - *act
-  - [Linear, 16, auto]
+  - [Linear, 32, auto]
 
 encoder:
   convs: *encoder-convs
