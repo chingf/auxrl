@@ -3,9 +3,6 @@
 trap "exit" INT TERM ERR
 trap "kill 0" EXIT
 
-for JOB_IDX in {0..7}
-do
-    python 11_run_gridworld_A2C.py $JOB_IDX 8 dm 10 &
-done
-wait
+python IQN.py 0 1 iqn 8
+python IQN.py 0 1 iqn 6
 

@@ -4,6 +4,12 @@ def mf0():
     param_updates = [{},]
     return fname_grid, loss_weights_grid, param_updates
 
+def mf1():
+    fname_grid = ['mf1']
+    loss_weights_grid = [[0,0,0,1E1],]
+    param_updates = [{},]
+    return fname_grid, loss_weights_grid, param_updates
+
 def poort():
     fname_grid = [
         'mf0',

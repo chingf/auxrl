@@ -22,47 +22,18 @@ from auxrl.utils import run_train_episode, run_eval_episode
 from model_parameters.gridworld import *
 
 # Command-line args
-job_idx = 0 #int(sys.argv[1])
-n_jobs = 1 #int(sys.argv[2])
-nn_yaml = 'iqn' #sys.argv[3] #TODO
-internal_dim = 32 #int(sys.argv[4])
+job_idx = int(sys.argv[1])
+n_jobs = int(sys.argv[2])
+nn_yaml = sys.argv[3]
+internal_dim = int(sys.argv[4])
 epsilon = 1.0 #float(sys.argv[5]) # 1.0
-lr = 1e-4
-if len(sys.argv) > 6:
-    if sys.argv[6] == 'shuffle':
-        shuffle = True
-    else:
-        raise ValueError('Unrecognized flag')
-else:
-    shuffle = False
 
 # Experiment Parameters
-if shuffle:
-    load_function = selected_models_grid_shuffle
-else:
-    load_function = selected_models_grid
-if nn_yaml == 'dm_large_encoder':
-    print('loading selected models for large encoder')
-    load_function = selected_models_large_encoder
-if nn_yaml == 'dm_large_q':
-    print('loading selected models for large q')
-    load_function = selected_models_large_q
-fname_prefix = f'new_gridworld8x8'
-if epsilon < 1.0:
-    fname_prefix += f'_eps{epsilon}'
-n_iters = 45
-if shuffle:
-    fname_prefix += '_shuffobs'
-    if epsilon < 0.4:
-        n_episodes = 1501
-    elif epsilon < 0.6:
-        n_episodes = 1201
-    elif epsilon < 0.8:
-        n_episodes = 901
-    else:
-        n_episodes = 601
-else:
-    n_episodes = 351
+load_function = mf1
+fname_prefix = f'iqn'
+n_iters = 30
+n_episodes = 351
+shuffle = False
 
 # Less used params
 random_seed = True
@@ -91,7 +62,6 @@ elif 'SLURM_JOBID' in os.environ.keys():
 else:
     engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
 exp_dir = f'{fname_prefix}_{nn_yaml}_dim{internal_dim}{fname_suffix}/'
-exp_dir = 'test'
 for d in ['pickles/', 'nnets/', 'figs/', 'params/']:
     os.makedirs(f'{engram_dir}{d}{exp_dir}', exist_ok=True)
 pickle_dir = f'{engram_dir}pickles/{exp_dir}/'
@@ -128,10 +98,9 @@ def run(arg):
         'n_test_episodes': 10,
         'continual_transfer': continual_transfer,
         'agent_args': {
-            'loss_weights': loss_weights, 'lr': lr,
+            'loss_weights': loss_weights, 'lr': 1e-4,
             'replay_capacity': 20_000, 'epsilon': epsilon,
-            'batch_size': 64, 'target_update_frequency': 1000,
-            },
+            'batch_size': 64, 'target_update_frequency': 1000,},
         'network_args': {'latent_dim': internal_dim, 'network_yaml': nn_yaml},
         'dset_args': {'layout': size_maze, 'shuffle_obs': shuffle}
         }
@@ -195,7 +164,6 @@ def run(arg):
             sec_per_step = sec_per_step_SUM/sec_per_step_NUM
             print(f'[TRAIN SUMMARY] {500*sec_per_step} sec/ 500 steps')
             print(f'{sec_per_step_NUM} training steps elapsed.')
-            print(f'Update called {agent._n_updates} times.')
             score, steps_per_episode = run_eval_episode(
                 env, agent, parameters['n_test_episodes'])
             result['valid_score'].append(score)
@@ -241,30 +209,31 @@ def run(arg):
     with open(f'{pickle_dir}{fname}.p', 'wb') as f:
         pickle.dump(result, f)
 
-# Load model parameters
-fname_grid, loss_weights_grid, param_updates = load_function()
-assert(len(fname_grid) == len(loss_weights_grid))
-assert(len(fname_grid) == len(param_updates))
-fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
-
-# Collect argument combination
-iters = np.arange(n_iters)
-args = []
-for arg_idx in range(len(fname_grid)):
-    for i in iters:
-        fname = fname_grid[arg_idx]
-        loss_weights = loss_weights_grid[arg_idx]
-        param_update = param_updates[arg_idx]
-        args.append([fname, loss_weights, param_update, i])
-split_args = np.array_split(args, n_jobs)
-
-import time
-start = time.time()
-# Run relevant parallelization script
-if job_idx == -1:
-    cpu_parallel()
-else:
-    gpu_parallel(job_idx)
-end = time.time()
-
-print(f'ELAPSED TIME: {end-start} seconds')
+if __name__ == '__main__':
+    # Load model parameters
+    fname_grid, loss_weights_grid, param_updates = load_function()
+    assert(len(fname_grid) == len(loss_weights_grid))
+    assert(len(fname_grid) == len(param_updates))
+    fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
+    
+    # Collect argument combination
+    iters = np.arange(n_iters)
+    args = []
+    for arg_idx in range(len(fname_grid)):
+        for i in iters:
+            fname = fname_grid[arg_idx]
+            loss_weights = loss_weights_grid[arg_idx]
+            param_update = param_updates[arg_idx]
+            args.append([fname, loss_weights, param_update, i])
+    split_args = np.array_split(args, n_jobs)
+    
+    import time
+    start = time.time()
+    # Run relevant parallelization script
+    if job_idx == -1:
+        cpu_parallel()
+    else:
+        gpu_parallel(job_idx)
+    end = time.time()
+    
+    print(f'ELAPSED TIME: {end-start} seconds')

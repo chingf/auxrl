@@ -19,8 +19,6 @@ from sklearn.decomposition import PCA
 from acme import specs
 from acme import wrappers
 
-from auxrl.Agent import Agent
-from auxrl.networks.Network import Network
 from auxrl.environments.GridWorld import Env as Env
 from auxrl.utils import run_train_episode, run_eval_episode
 from model_parameters.gridworld import *
@@ -35,6 +33,13 @@ network_yaml = str(sys.argv[3]) #'dm'
 source_episode = int(sys.argv[4]) #250
 selected_fnames = None
 random_net = False
+
+if 'iqn' in generic_exp_name:
+    from auxrl.IQNAgent import Agent
+    from auxrl.networks.IQNNetwork import Network
+else:
+    from auxrl.Agent import Agent
+    from auxrl.networks.Network import Network
 
 # Set up paths
 device = 'cuda:0' if torch.cuda.is_available() else 'cpu'

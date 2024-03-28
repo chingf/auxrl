@@ -26,7 +26,7 @@ class Network(object):
 
     def __init__(
         self, env_spec, latent_dim, network_yaml, yaml_mods={},
-        device=torch.device('cpu'), freeze_encoder=False):
+        device=torch.device('cpu'), freeze_encoder=False, random_quantiles=True):
 
         self._env_spec = env_spec
         self._n_actions = env_spec.actions.num_values
@@ -35,6 +35,7 @@ class Network(object):
         self._yaml_mods = yaml_mods
         self._device = device
         self._freeze_encoder = freeze_encoder
+        self._random_quantiles = random_quantiles
 
         # Load and update yaml file
         with open(f'{NETWORK_DIR}/yamls/{self._network_yaml}.yaml') as f:
@@ -46,7 +47,9 @@ class Network(object):
         if self._freeze_encoder:
             for p in self.encoder.parameters():
                 p.requires_grad = False
-        self.Q = IQN(env_spec, latent_dim, config['iqn']).to(device)
+        self.Q = IQN(
+            env_spec, latent_dim, config['iqn'], random_quantiles=random_quantiles
+            ).to(device)
         self.T = T(env_spec, latent_dim, config['t']).to(device)
 
     def get_params(self):

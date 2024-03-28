@@ -241,7 +241,6 @@ class IQN(nn.Module):
     def __init__(
             self, env_spec, latent_dim, config,
             quantile_embed_dim=64, random_quantiles=True,
-            # TODO: does random affect training? need to match quantiles?
             ):
 
         super().__init__()
@@ -250,7 +249,6 @@ class IQN(nn.Module):
         self._latent_dim = latent_dim
         self._quantile_embed_dim = quantile_embed_dim
         self._random_quantiles = random_quantiles
-        # TODO: or start at 1
         self._pis = torch.FloatTensor([np.pi*i for i in range(self._quantile_embed_dim)])
         self._pis = self._pis.view(1, 1, self._quantile_embed_dim)
 

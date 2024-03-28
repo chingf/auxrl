@@ -31,7 +31,7 @@ class Agent(acme.Actor):
     def __init__(self,
         env_spec: specs.EnvironmentSpec, network: Network,
         loss_weights: list=[0,0,0,1], lr: float=1e-4, epsilon: float=1.,
-        replay_capacity: int=1_000_000, 
+        replay_capacity: int=1_000_000,
         batch_size: int=32, target_update_frequency: int=1000,
         device: torch.device=torch.device('cpu'), discount_factor: float=0.9):
 
@@ -137,7 +137,7 @@ class Agent(acme.Actor):
         if self._n_updates%self._target_update_frequency == 0:
             self._target_network.set_params(self._network.get_params())
 
-        # IQN DEBUGGING
+        # IQN update
         with torch.no_grad():
             target_next_q, quantiles = self._target_network.Q(next_z) # (N, Q, a)
             next_action = torch.argmax(target_next_q.mean(1), axis=1) # (N)
