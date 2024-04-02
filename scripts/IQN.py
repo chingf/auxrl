@@ -26,14 +26,20 @@ job_idx = int(sys.argv[1])
 n_jobs = int(sys.argv[2])
 nn_yaml = sys.argv[3]
 internal_dim = int(sys.argv[4])
-epsilon = 1.0 #float(sys.argv[5]) # 1.0
+epsilon = 1.0
+if len(sys.argv) > 5:
+    if sys.argv[5] == 'shuffle':
+        shuffle = True
+    else:
+        raise ValueError('Unrecognized flag')
+else:
+    shuffle = False
 
 # Experiment Parameters
-load_function = mf1
-fname_prefix = f'iqn'
+load_function = mfneg1
+fname_prefix = 'iqn_shuffobs' if shuffle else 'iqn'
 n_iters = 30
-n_episodes = 351
-shuffle = False
+n_episodes = 601 if shuffle else 351
 
 # Less used params
 random_seed = True
