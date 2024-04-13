@@ -99,7 +99,7 @@ class Agent(acme.Actor):
 
     def update(self, clip_norm=-1):
         batch_size = self._batch_size
-        if not self._replay_buffer.is_ready(batch_size):
+        if not self._replay_buffer.is_ready(batch_size, 1):
             return [0,0,0,0,0]
         device = self._device
         self._optimizer.zero_grad()

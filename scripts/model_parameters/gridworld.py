@@ -13,7 +13,7 @@ def basic_test():
         ]
     param_updates = [
         {},
-        {'agent_args': {'pred_TD': True, 'pred_gamma': 0.}},
+        {}
         ]
     return fname_grid, loss_weights_grid, param_updates
 parameter_map['basic_test'] = basic_test

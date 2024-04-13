@@ -14,8 +14,6 @@ import argparse
 from acme import specs
 from acme import wrappers
 
-from auxrl.Agent import Agent
-from auxrl.networks.Network import Network
 from auxrl.environments.GridWorld import Env as Env
 from auxrl.utils import run_train_episode, run_eval_episode
 from model_parameters.gridworld import parameter_map
@@ -32,6 +30,7 @@ parser.add_argument('-y', '--nn_yaml', type=str, default='dm')
 parser.add_argument('-e', '--epsilon', type=float, default=1.0)
 parser.add_argument('-d', '--discount_factor', type=float, default=0.9)
 parser.add_argument('-s', '--shuffle', action='store_true')
+parser.add_argument('-q', '--iqn', action='store_true')
 args = parser.parse_args()
 if (args.n_jobs != 1) and (args.job_idx is None):
     str_msg = 'Either specify job idx or set to CPU parallel (idx=-1) '
@@ -44,13 +43,15 @@ internal_dim = args.internal_dim
 epsilon = args.epsilon
 discount_factor = args.discount_factor
 shuffle = args.shuffle
+use_iqn = args.iqn
 
 # Set key experiment parameters
-fname_prefix = f'gridworld_discount{discount_factor}_eps{epsilon}'
+exp_dir = f'gridworld_discount{discount_factor}_eps{epsilon}'
+exp_dir += f'_{nn_yaml}_dim{internal_dim}'
 n_iters = 3
 load_function = parameter_map[args.load_function]
 if shuffle:
-    fname_prefix += '_shuffobs'
+    exp_dir += '_shuffobs/'
     if epsilon < 0.4:
         n_episodes = 1501
     elif epsilon < 0.6:
@@ -60,6 +61,7 @@ if shuffle:
     else:
         n_episodes = 601
 else:
+    exp_dir += '/'
     n_episodes = 351
 
 # Less-modified parameters
@@ -86,11 +88,25 @@ elif 'SLURM_JOBID' in os.environ.keys():
     engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl2/' # Axon Path
 else:
     raise ValueError('Define directory path for your given OS.')
-exp_dir = f'{fname_prefix}_{nn_yaml}_dim{internal_dim}/'
 for d in ['pickles/', 'nnets/', 'figs/', 'params/']:
     os.makedirs(f'{engram_dir}{d}{exp_dir}', exist_ok=True)
 pickle_dir = f'{engram_dir}pickles/{exp_dir}/'
 param_dir = f'{engram_dir}params/{exp_dir}/'
+
+# Agent handling
+if use_iqn:
+    from auxrl.IQNAgent import Agent
+    from auxrl.networks.IQNNetwork import Network
+else:
+    from auxrl.Agent import Agent
+    from auxrl.networks.Network import Network
+
+# Environment handling
+random_reward = False
+if random_reward:
+    from auxrl.environments.RandomRewardGridWorld import Env as Env
+else:
+    from auxrl.environments.GridWorld import Env as Env
 
 def gpu_parallel(job_idx):
     for _arg in split_args[job_idx]:
@@ -232,30 +248,32 @@ def run(arg):
     with open(f'{pickle_dir}{fname}.p', 'wb') as f:
         pickle.dump(result, f)
 
-# Load model parameters
-fname_grid, loss_weights_grid, param_updates = load_function()
-assert(len(fname_grid) == len(loss_weights_grid))
-assert(len(fname_grid) == len(param_updates))
-fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
-
-# Collect argument combination
-iters = np.arange(n_iters)
-args = []
-for arg_idx in range(len(fname_grid)):
-    for i in iters:
-        fname = fname_grid[arg_idx]
-        loss_weights = loss_weights_grid[arg_idx]
-        param_update = param_updates[arg_idx]
-        args.append([fname, loss_weights, param_update, i])
-split_args = np.array_split(args, n_jobs)
-
-# Run script (with some CPU/GPU management)
-import time
-start = time.time()
-if job_idx == -1: # Parallelize over CPUs
-    cpu_parallel()
-else:
-    gpu_parallel(job_idx)
-end = time.time()
-
-print(f'ELAPSED TIME: {end-start} seconds')
+if __name__ == '__main__':
+    # Load model parameters
+    fname_grid, loss_weights_grid, param_updates = load_function()
+    assert(len(fname_grid) == len(loss_weights_grid))
+    assert(len(fname_grid) == len(param_updates))
+    if use_iqn:
+        fname_grid = [f'iqn_{f}' for f in fname_grid]
+    
+    # Collect argument combination
+    iters = np.arange(n_iters)
+    args = []
+    for arg_idx in range(len(fname_grid)):
+        for i in iters:
+            fname = fname_grid[arg_idx]
+            loss_weights = loss_weights_grid[arg_idx]
+            param_update = param_updates[arg_idx]
+            args.append([fname, loss_weights, param_update, i])
+    split_args = np.array_split(args, n_jobs)
+    
+    # Run script (with some CPU/GPU management)
+    import time
+    start = time.time()
+    if job_idx == -1: # Parallelize over CPUs
+        cpu_parallel()
+    else:
+        gpu_parallel(job_idx)
+    end = time.time()
+    
+    print(f'ELAPSED TIME: {end-start} seconds')
