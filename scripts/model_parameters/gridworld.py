@@ -1,3 +1,51 @@
+def test_iqn():
+    fname_grid = [
+        'mf0',
+
+        'entro-2',
+        'entro-1',
+        'entro1',
+        'entro0',
+        'entro2',
+
+        'g0_-2_entro-1',
+        'g0_-2_entro-2',
+        'g0_-2_entro0',
+        'g0_-2_entro1',
+        ]
+    loss_weights_grid = [
+        [0, 0, 0, 1],
+
+        [0, 1E-2, 1E-2, 1],
+        [0, 1E-1, 1E-1, 1],
+        [0, 1E1, 1E1, 1],
+        [0, 1E0, 1E0, 1],
+        [0, 1E2, 1E2, 1],
+
+        [1E-2, 1E-1, 1E-1, 1],
+        [1E-2, 1E-2, 1E-2, 1],
+        [1E-2, 1E0, 1E0, 1],
+        [1E-2, 1E1, 1E1, 1],
+        ]
+    param_updates = [{}]*len(loss_weights_grid)
+    return fname_grid, loss_weights_grid, param_updates
+
+def test_iqn_cpc():
+    fname_grid = [
+        'g0_-2_entro-1',
+        'g0_-2_entro-2',
+        'g0_-2_entro0',
+        'g0_-2_entro1',
+        ]
+    loss_weights_grid = [
+        [1E-2, 1E-1, 1E-1, 1],
+        [1E-2, 1E-2, 1E-2, 1],
+        [1E-2, 1E0, 1E0, 1],
+        [1E-2, 1E1, 1E1, 1],
+        ]
+    param_updates = [{}]*len(loss_weights_grid)
+    return fname_grid, loss_weights_grid, param_updates
+
 def mf0():
     fname_grid = ['mf0']
     loss_weights_grid = [[0,0,0,1E0],]

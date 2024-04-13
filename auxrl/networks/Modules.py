@@ -240,7 +240,7 @@ class Q(nn.Module):
 class IQN(nn.Module):
     def __init__(
             self, env_spec, latent_dim, config,
-            quantile_embed_dim=64, random_quantiles=True,
+            quantile_embed_dim=64, random_quantiles=True, n_quantiles=8
             ):
 
         super().__init__()
@@ -249,6 +249,7 @@ class IQN(nn.Module):
         self._latent_dim = latent_dim
         self._quantile_embed_dim = quantile_embed_dim
         self._random_quantiles = random_quantiles
+        self._n_quantiles = n_quantiles
         self._pis = torch.FloatTensor([np.pi*i for i in range(self._quantile_embed_dim)])
         self._pis = self._pis.view(1, 1, self._quantile_embed_dim)
 
@@ -257,17 +258,19 @@ class IQN(nn.Module):
             nn.Linear(self._quantile_embed_dim, self._latent_dim), nn.ReLU())
         self._iqn_net = make_fc(latent_dim, self._n_actions, config['fc'])
 
-    def forward(self, x, n_quantiles=8):
+    def forward(self, x, n_quantiles=None):
+        if n_quantiles is None:
+            n_quantiles = self._n_quantiles
         device = x.get_device()
         if device == -1: device = 'cpu'
         batch_size = x.shape[0]
         if self._random_quantiles:
             quantiles = torch.rand(batch_size, n_quantiles).to(device).unsqueeze(-1)
         else:
-            quantiles = torch.linspace(0, 1, n_quantiles).repeat(batch_size, 1)
+            quantiles = torch.linspace(0.05, 0.95, n_quantiles).repeat(batch_size, 1)
             quantiles = quantiles.to(device).unsqueeze(-1)
         quantile_embeddings = self._quantile_embed_net(
-            torch.cos(quantiles*self._pis)) # (batch, n_quantiles, latent)
+            torch.cos(quantiles*self._pis.to(device))) # (batch, n_quantiles, latent)
         x = x.unsqueeze(1).repeat(1, n_quantiles, 1)
         quantile_values = self._iqn_net(x * quantile_embeddings)
         return quantile_values, quantiles

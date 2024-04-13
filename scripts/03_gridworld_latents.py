@@ -102,6 +102,7 @@ repr_dict = {
     'y': [],
     'quadrant': [],
     'goal_state': [],
+    'chosen_action': [],
     }
 
 # Collect output of transition model
@@ -133,6 +134,9 @@ for model_name in os.listdir(nnets_dir):
         parameters = yaml.safe_load(f)
     parameters['fname'] = f'{exp_name}/{model_name}'
     parameters['internal_dim'] = internal_dim
+    if 'iqn' in generic_exp_name:
+        parameters['random_quantiles'] = False
+        parameters['n_quantiles'] = 20
     env = Env(**parameters['dset_args'])
     env_spec = specs.make_environment_spec(env)
     network = Network(env_spec, device=device, **parameters['network_args'])
@@ -156,6 +160,7 @@ for model_name in os.listdir(nnets_dir):
     quadrant = [] # which quadrant
     x = []
     y = []
+    actions = []
     maze_width = env._layout_dims[0]
     maze_height = env._layout_dims[1]
     for _x in range(maze_width):
@@ -163,12 +168,14 @@ for model_name in os.listdir(nnets_dir):
             if env._layout[_x, _y] != -1:
                 env._start_state = env._state = (_x, _y)
                 obs = env.get_obs()
+                a = agent.select_action(obs, force_greedy=True).item()
                 all_possib_inp.append(obs)
                 _quadrant = 0 if _x < maze_width//2 else 2
                 _quadrant += (0 if _y < maze_height//2 else 1)
                 quadrant.append(_quadrant)
                 x.append(_x)
                 y.append(_y)
+                actions.append(a)
     with torch.no_grad():
         all_possib_inp = np.array(all_possib_inp)
         latents = agent._network.encoder(
@@ -204,6 +211,7 @@ for model_name in os.listdir(nnets_dir):
     repr_dict['conv_activity'].extend(conv_activity.tolist())
     repr_dict['x'].extend(x)
     repr_dict['y'].extend(y)
+    repr_dict['chosen_action'].extend(actions)
     repr_dict['quadrant'].extend(quadrant)
     repr_dict['goal_state'].extend([goal_state]*n_states)
         

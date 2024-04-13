@@ -27,10 +27,10 @@ import torch
 #torch.cuda.is_available = lambda : False
 
 ## Arguments
-internal_dim = 10 #int(sys.argv[1])
-generic_exp_name = 'iqn' #str(sys.argv[2]) #'gridworld8x8'
+internal_dim = 16 #int(sys.argv[1])
+generic_exp_name = 'iqn4_discount0.7_randreward_shuffobs' #str(sys.argv[2])
 network_yaml = 'iqn' #str(sys.argv[3]) #'dm'
-source_episode = 350 #int(sys.argv[4]) #250
+source_episode = 600 #int(sys.argv[4]) #250
 selected_fnames = None
 random_net = False
 
@@ -136,7 +136,7 @@ for model_name in os.listdir(nnets_dir):
             save_conv_activity=True)
         conv_activity = agent._network.encoder._prev_conv_activity.cpu().numpy()
     n_states = latents.shape[0]
-    quantile_vals, quantiles = agent._network.Q(latents)
+    quantile_vals, quantiles = agent._network.Q(latents, n_quantiles=100)
     n_states, n_quantiles, n_actions = quantile_vals.shape
     quantiles = quantiles[0,:,0] # Should be the same for each state
     latents = latents.cpu().numpy() # (states, latent_dim)

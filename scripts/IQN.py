@@ -17,7 +17,6 @@ from acme import wrappers
 
 from auxrl.IQNAgent import Agent
 from auxrl.networks.IQNNetwork import Network
-from auxrl.environments.GridWorld import Env as Env
 from auxrl.utils import run_train_episode, run_eval_episode
 from model_parameters.gridworld import *
 
@@ -26,20 +25,34 @@ job_idx = int(sys.argv[1])
 n_jobs = int(sys.argv[2])
 nn_yaml = sys.argv[3]
 internal_dim = int(sys.argv[4])
+discount = float(sys.argv[5])
 epsilon = 1.0
-if len(sys.argv) > 5:
-    if sys.argv[5] == 'shuffle':
+random_reward = True
+
+if len(sys.argv) > 6:
+    if sys.argv[6] == 'shuffle':
         shuffle = True
     else:
         raise ValueError('Unrecognized flag')
 else:
     shuffle = False
 
+if random_reward:
+    from auxrl.environments.RandomRewardGridWorld import Env as Env
+else:
+    from auxrl.environments.GridWorld import Env as Env
+
 # Experiment Parameters
-load_function = mfneg1
-fname_prefix = 'iqn_shuffobs' if shuffle else 'iqn'
-n_iters = 30
-n_episodes = 601 if shuffle else 351
+load_function = test_iqn#_cpc
+fname_prefix = f'iqn4_discount{discount}' # TODO
+n_iters = 15
+n_episodes = 351
+if random_reward:
+    fname_prefix += '_randreward'
+    n_episodes = 501
+if shuffle:
+    fname_prefix += '_shuffobs'
+    n_episodes = 601
 
 # Less used params
 random_seed = True
@@ -106,7 +119,9 @@ def run(arg):
         'agent_args': {
             'loss_weights': loss_weights, 'lr': 1e-4,
             'replay_capacity': 20_000, 'epsilon': epsilon,
-            'batch_size': 64, 'target_update_frequency': 1000,},
+            'batch_size': 64, 'target_update_frequency': 1000,
+            'discount_factor': discount,
+            },
         'network_args': {'latent_dim': internal_dim, 'network_yaml': nn_yaml},
         'dset_args': {'layout': size_maze, 'shuffle_obs': shuffle}
         }
@@ -170,8 +185,10 @@ def run(arg):
             sec_per_step = sec_per_step_SUM/sec_per_step_NUM
             print(f'[TRAIN SUMMARY] {500*sec_per_step} sec/ 500 steps')
             print(f'{sec_per_step_NUM} training steps elapsed.')
+            env.set_eval_mode(True)
             score, steps_per_episode = run_eval_episode(
                 env, agent, parameters['n_test_episodes'])
+            env.set_eval_mode(False)
             result['valid_score'].append(score)
             result['valid_steps_per_ep'].append(steps_per_episode)
             # Save plots tracking training progress

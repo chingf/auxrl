@@ -98,7 +98,7 @@ class Agent(acme.Actor):
         device = self._device
         self._optimizer.zero_grad()
         transitions_seq = self._replay_buffer.sample(
-            self._batch_size, self._replay_seq_len, respect_terminals=False)
+            self._batch_size, self._replay_seq_len)
         transitions = transitions_seq
         batch_size = self._batch_size
 
@@ -107,6 +107,8 @@ class Agent(acme.Actor):
         a = transitions.action.astype(int) # (N,1)
         r = torch.tensor(
             transitions.reward.astype(np.float32)).view(-1,1).to(device) # (N,1)
+        terminal = torch.tensor(
+            transitions.terminal.astype(np.float32)).view(-1,1).to(device) # (N,1)
         next_obs = torch.tensor(
             transitions.next_obs.astype(np.float32)).to(device)
         onehot_actions = np.zeros((batch_size, self._n_actions))
@@ -144,7 +146,8 @@ class Agent(acme.Actor):
             max_next_q = target_next_q[
                 np.arange(batch_size), :, next_action] # (N, Q)
             rewards = r.repeat(1, quantiles.shape[1])
-            target_q_vals = rewards + self._discount_factor*max_next_q
+            done = (1. - terminal).repeat(1, quantiles.shape[1])
+            target_q_vals = rewards + self._discount_factor*max_next_q*done #TODO
         current_q_vals, quantiles = self._network.Q(z)
         current_q_vals = current_q_vals[np.arange(batch_size), :, a.squeeze()]
         td_error = target_q_vals.unsqueeze(1) - current_q_vals.unsqueeze(2)

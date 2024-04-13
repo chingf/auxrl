@@ -90,6 +90,7 @@ class Env(dm_env.Environment):
         self.goal_state = goal_state
         self.transitions_swapped = False
         self._shuffle_states = shuffle_states
+        self._eval = False
         if self._observation_type == ObservationType.CIFAR:
             self._make_cifar_images()
         if shuffle_states:
@@ -207,6 +208,9 @@ class Env(dm_env.Environment):
         print('goal set')
         print(self._layout)
         self._goal_state = new_goal
+
+    def set_eval_mode(self, val):
+        self._eval = val
 
     def observation_spec(self):
         if self._observation_type is ObservationType.GRID:
