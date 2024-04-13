@@ -62,12 +62,12 @@ class ReplayBuffer(object):
 
     def sample(
         self, batch_size: int, seq_len: int=1,
-        respect_terminals: bool=False) -> Transitions:
+        no_terminals_in_sequence: bool=False) -> Transitions:
         ''' Sample a random batch of Transitions as a list. '''
 
         n_items = len(self.buffer)
         if seq_len > 1:
-            if respect_terminals:
+            if no_terminals_in_sequence:
                 terminals = [b.terminal for b in self.buffer]
                 n_terminals = len(terminals)
                 valid_indices = []

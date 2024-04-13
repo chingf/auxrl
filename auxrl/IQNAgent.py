@@ -27,6 +27,12 @@ Transitions = collections.namedtuple(
     'Transitions', ['state', 'action', 'reward', 'discount', 'next_state'])
 
 class Agent(acme.Actor):
+    """
+    Agent where the model-free component is an implicit quantile network.
+    This class does not have all the options of the Actor class (long horizon
+    prediction, POMDP), but it does support one-timestep prediction as an
+    auxiliary task to the base IQN agent.
+    """
 
     def __init__(self,
         env_spec: specs.EnvironmentSpec, network: Network,
@@ -53,7 +59,6 @@ class Agent(acme.Actor):
         self._optimizer = torch.optim.Adam(
             self._network.get_trainable_params(), lr=lr)
         self._n_updates = 0
-        self._replay_seq_len = 1
 
     def reset(self):
         self._network.encoder.reset()
@@ -93,14 +98,13 @@ class Agent(acme.Actor):
         return loss
 
     def update(self, clip_norm=-1):
-        if not self._replay_buffer.is_ready(self._batch_size, self._replay_seq_len):
+        batch_size = self._batch_size
+        if not self._replay_buffer.is_ready(batch_size):
             return [0,0,0,0,0]
         device = self._device
         self._optimizer.zero_grad()
-        transitions_seq = self._replay_buffer.sample(
-            self._batch_size, self._replay_seq_len)
+        transitions_seq = self._replay_buffer.sample(batch_size)
         transitions = transitions_seq
-        batch_size = self._batch_size
 
         # Unpack transition information
         obs = torch.tensor(transitions.obs.astype(np.float32)).to(device) # (N,C,H,W)
@@ -147,11 +151,11 @@ class Agent(acme.Actor):
                 np.arange(batch_size), :, next_action] # (N, Q)
             rewards = r.repeat(1, quantiles.shape[1])
             done = (1. - terminal).repeat(1, quantiles.shape[1])
-            target_q_vals = rewards + self._discount_factor*max_next_q*done #TODO
+            target_q_vals = rewards + self._discount_factor*max_next_q*done
         current_q_vals, quantiles = self._network.Q(z)
         current_q_vals = current_q_vals[np.arange(batch_size), :, a.squeeze()]
         td_error = target_q_vals.unsqueeze(1) - current_q_vals.unsqueeze(2)
-        assert td_error.shape == (td_error.shape[0], 8, 8), "wrong shape"
+        assert td_error.shape == (td_error.shape[0], 8, 8), "Wrong shape"
         kappa = 1.0
         huber_loss = self.get_huber_loss(td_error, kappa)
         quantile_loss = abs(quantiles - (td_error.detach()<0).float()) * huber_loss / kappa

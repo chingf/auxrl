@@ -31,33 +31,27 @@ class Agent(acme.Actor):
     def __init__(self,
         env_spec: specs.EnvironmentSpec, network: Network,
         loss_weights: list=[0,0,0,1], lr: float=1e-4,
-        pred_TD: bool=False, pred_gamma: float=0.,
-        pred_len: int=1, pred_scale: bool=False, # Only used if not pred_TD,
+        pred_TD: bool=False, pred_gamma: float=0., # short v. long horizon
         replay_capacity: int=1_000_000, epsilon: float=1.,
         batch_size: int=32, target_update_frequency: int=1000,
-        device: torch.device=torch.device('cpu'), train_seq_len: int=1,
-        entropy_temp: int=5, discount_factor: float=0.9,
-        respect_terminals: bool=False):
+        device: torch.device=torch.device('cpu'), train_seq_len: int=0,
+        discount_factor: float=0.9,
+        ):
 
         self._env_spec = env_spec
         self._loss_weights = loss_weights
         self._n_actions = env_spec.actions.num_values
         self._pred_TD = pred_TD
         self._pred_gamma = pred_gamma
-        self._pred_scale = pred_scale
-        self._pred_len = pred_len
         self._mem_len = network._mem_len
-        self._replay_seq_len = pred_len
+        self._replay_seq_len = 2 if pred_TD else 1
         if network._mem_len > 0:
-            if self._pred_len > 1:
-                raise ValueError('Incompatible mem/pred len.')
+            if pred_TD:
+                raise ValueError('POMDP + long horizon not implemented.')
             if train_seq_len < self._mem_len:
                 raise ValueError('Training length is too short.')
             self._replay_seq_len += train_seq_len
-        if self._pred_TD:
-            if self._replay_seq_len != 2:
-                warnings.warn('Overriding replay length to 2 for predictive TD loss!')
-            self._pred_len = self._replay_seq_len = 2
+
         # Initialize networks
         self._network = network
         self._target_network = network.copy()
@@ -68,10 +62,8 @@ class Agent(acme.Actor):
         self._lr = lr
         self._target_update_frequency = target_update_frequency
         self._device = device
-        self._entropy_temp = entropy_temp
         self._discount_factor = discount_factor
         self._train_seq_len = train_seq_len
-        self._respect_terminals = respect_terminals
         # Initialize optimizer
         self._optimizer = torch.optim.Adam(
             self._network.get_trainable_params(), lr=lr)
@@ -106,14 +98,17 @@ class Agent(acme.Actor):
         return self._network.encoder.get_curr_latent()
 
     def update(self, clip_norm=-1):
-        if not self._replay_buffer.is_ready(
-            self._batch_size, self._replay_seq_len):
+        """ End-to-end training of encoder, Q, and auxiliary networks."""
+
+        batch_size = self._batch_size
+        replay_seq_len = self._replay_seq_len
+        mem_len = self._mem_len
+        if not self._replay_buffer.is_ready(batch_size, replay_seq_len):
             return [0,0,0,0,0]
         device = self._device
         self._optimizer.zero_grad()
-        transitions_seq = self._replay_buffer.sample(
-            self._batch_size, self._replay_seq_len, self._respect_terminals)
-        if self._replay_seq_len > 1:
+        transitions_seq = self._replay_buffer.sample(batch_size, replay_seq_len)
+        if replay_seq_len > 1:
             transitions = transitions_seq[-1]
         else:
             transitions = transitions_seq
@@ -123,19 +118,21 @@ class Agent(acme.Actor):
         a = transitions.action.astype(int) # (N,1)
         r = torch.tensor(
             transitions.reward.astype(np.float32)).view(-1,1).to(device) # (N,1)
+        terminal = torch.tensor(
+            transitions.terminal.astype(np.float32)).view(-1,1).to(device) # (N,1)
         next_obs = torch.tensor(
             transitions.next_obs.astype(np.float32)).to(device)
-        onehot_actions = np.zeros((self._batch_size, self._n_actions))
-        onehot_actions[np.arange(self._batch_size), a.squeeze()] = 1
+        onehot_actions = np.zeros((batch_size, self._n_actions))
+        onehot_actions[np.arange(batch_size), a.squeeze()] = 1
         onehot_actions = torch.as_tensor(onehot_actions, device=self._device).float()
 
-        # Burn in latents for POMDP
-        if self._mem_len > 0:
-            _latents = np.array(transitions_seq[self._mem_len].latent.astype(np.float32))
+        # If in the POMDP setting (memory > 0), burn in latents
+        if mem_len > 0:
+            _latents = np.array(transitions_seq[mem_len].latent.astype(np.float32))
             _latents = torch.as_tensor(_latents).squeeze(1) # (N, mem_len, latent)
             _latents = _latents.to(device)
 
-            for t in range(self._mem_len, self._replay_seq_len):
+            for t in range(mem_len, replay_seq_len):
                 _obs_t = torch.tensor( # (N,C,H,W)
                     transitions_seq[t].obs.astype(np.float32)).to(device)
                 z = self._network.encoder(_obs_t, prev_latents=_latents)
@@ -176,38 +173,46 @@ class Agent(acme.Actor):
 
         # Negative Sample Loss (entropy)
         rolled = torch.roll(z, 1, dims=0)
+        entropy_temp = 5
         loss_neg_random = torch.mean(torch.exp(
-            -self._entropy_temp * torch.norm(z - rolled, dim=1)))
+            -entropy_temp * torch.norm(z - rolled, dim=1)))
         loss_neg_neighbor = torch.mean(torch.exp(
-            -self._entropy_temp * torch.norm(z - next_z, dim=1)))
+            -entropy_temp * torch.norm(z - next_z, dim=1)))
 
-        # Q Loss and target network update
+        # Update target network if needed
         if self._n_updates%self._target_update_frequency == 0:
             self._target_network.set_params(self._network.get_params())
-        if self._mem_len > 0:
-            _latents = np.array(transitions_seq[self._mem_len].latent.astype(np.float32))
-            _latents = torch.as_tensor(_latents).squeeze(1) # (N, mem_len, latent)
-            _latents = _latents.to(device)
 
-            for t in range(self._mem_len, self._replay_seq_len):
+        # DDQN update
+        if mem_len > 0:
+            _latents = np.array(transitions_seq[mem_len].latent)
+            _latents = torch.as_tensor(_latents.astype(np.float32)).squeeze(1)
+            _latents = _latents.to(device) # (N, mem_len, latent_size)
+
+            for t in range(mem_len, replay_seq_len):
                 _obs_t = torch.tensor( # (N,C,H,W)
                     transitions_seq[t].obs.astype(np.float32)).to(device)
                 z = self._network.encoder(_obs_t, prev_latents=_latents)
                 _latents = torch.hstack((
-                    _latents[:,1:], self._network.encoder._new_latent.unsqueeze(1)))
-            target_next_z = self._network.encoder(next_obs, prev_latents=_latents)
+                    _latents[:,1:],
+                    self._network.encoder._new_latent.unsqueeze(1)))
+            target_next_z = self._network.encoder(next_obs, _latents)
         else:
             target_next_z = self._target_network.encoder(next_obs) # (N, z)
-        target_next_q = self._target_network.Q(target_next_z)  # (N, a)
-        next_q = self._network.Q(next_z)
-        argmax_next_q = torch.argmax(next_q, axis=1)
-        max_next_q = target_next_q[
-            np.arange(self._batch_size), argmax_next_q].reshape((-1,1))
-        Q_target = r + self._discount_factor*max_next_q
-        q_vals = self._network.Q(z)
-        q_vals = q_vals[np.arange(self._batch_size), a.squeeze()]
+        with torch.no_grad():
+            target_next_q = self._target_network.Q(target_next_z)  # (N, a)
+            next_q = self._network.Q(next_z)
+            next_action = torch.argmax(next_q, axis=1)
+            max_next_q = target_next_q[
+                np.arange(batch_size), next_action].reshape((-1,1))
+            done = 1. - terminal
+            target_q_vals = r + self._discount_factor*max_next_q*done
+            target_q_vals = target_q_vals.squeeze()
+        current_q_vals = self._network.Q(z)
+        current_q_vals = current_q_vals[np.arange(batch_size), a.squeeze()]
         loss_Q = torch.mean(
-            torch.nn.functional.mse_loss(q_vals, Q_target.squeeze(), reduction='none'))
+            torch.nn.functional.mse_loss(current_q_vals, target_q_vals,
+            reduction='none'))
 
         # Aggregate all losses and update parameters
         all_losses = self._loss_weights[0] * loss_pos_sample \

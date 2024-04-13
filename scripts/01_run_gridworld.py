@@ -7,10 +7,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 import time
-import shortuuid
-from flatten_dict import flatten
-from flatten_dict import unflatten
+from flatten_dict import flatten, unflatten
 import torch
+import argparse
 
 from acme import specs
 from acme import wrappers
@@ -19,37 +18,37 @@ from auxrl.Agent import Agent
 from auxrl.networks.Network import Network
 from auxrl.environments.GridWorld import Env as Env
 from auxrl.utils import run_train_episode, run_eval_episode
-from model_parameters.gridworld import *
+from model_parameters.gridworld import parameter_map
 
-# Command-line args
-job_idx = int(sys.argv[1])
-n_jobs = int(sys.argv[2])
-nn_yaml = sys.argv[3]
-internal_dim = int(sys.argv[4])
-epsilon = float(sys.argv[5]) # 1.0
-if len(sys.argv) > 6:
-    if sys.argv[6] == 'shuffle':
-        shuffle = True
-    else:
-        raise ValueError('Unrecognized flag')
-else:
-    shuffle = False
+# Parse required command-line arguments
+parser = argparse.ArgumentParser()
+parser.add_argument('internal_dim', type=int, help='Latent size.')
+parser.add_argument('load_function', type=str, help='Model parameters.')
 
-# Experiment Parameters
-if shuffle:
-    load_function = selected_models_grid_shuffle
-else:
-    load_function = selected_models_grid
-if nn_yaml == 'dm_large_encoder':
-    print('loading selected models for large encoder')
-    load_function = selected_models_large_encoder
-if nn_yaml == 'dm_large_q':
-    print('loading selected models for large q')
-    load_function = selected_models_large_q
-fname_prefix = f'new_gridworld8x8'
-if epsilon < 1.0:
-    fname_prefix += f'_eps{epsilon}'
-n_iters = 45
+# Parse optional arguments
+parser.add_argument('-i', '--job_idx', type=int, help='Index into N jobs.')
+parser.add_argument('-n', '--n_jobs', type=int, default=1)
+parser.add_argument('-y', '--nn_yaml', type=str, default='dm')
+parser.add_argument('-e', '--epsilon', type=float, default=1.0)
+parser.add_argument('-d', '--discount_factor', type=float, default=0.9)
+parser.add_argument('-s', '--shuffle', action='store_true')
+args = parser.parse_args()
+if (args.n_jobs != 1) and (args.job_idx is None):
+    str_msg = 'Either specify job idx or set to CPU parallel (idx=-1) '
+    str_msg += 'if you are running multiple jobs.'
+    parser.error(str_msg)
+job_idx = 0 if args.job_idx is None else args.job_idx
+n_jobs = args.n_jobs
+nn_yaml = args.nn_yaml
+internal_dim = args.internal_dim
+epsilon = args.epsilon
+discount_factor = args.discount_factor
+shuffle = args.shuffle
+
+# Set key experiment parameters
+fname_prefix = f'gridworld_discount{discount_factor}_eps{epsilon}'
+n_iters = 3
+load_function = parameter_map[args.load_function]
 if shuffle:
     fname_prefix += '_shuffobs'
     if epsilon < 0.4:
@@ -63,14 +62,12 @@ if shuffle:
 else:
     n_episodes = 351
 
-# Less used params
+# Less-modified parameters
 random_seed = True
 size_maze = 8
-fname_suffix = ''
 n_cpu_jobs = 56
 eval_every = 1
 save_net_every = 50
-continual_transfer = False
 
 # GPU selection
 try:
@@ -82,14 +79,14 @@ if n_gpus > 1:
     my_env = os.environ
     my_env["CUDA_VISIBLE_DEVICES"] = device_num
 
-# Make directories
+# Directory and path management
 if os.environ['USER'] == 'chingfang':
-    engram_dir = '/Volumes/aronov-locker/Ching/rl/' # Local Path
+    engram_dir = '/Volumes/aronov-locker/Ching/rl2/' # Local Path
 elif 'SLURM_JOBID' in os.environ.keys():
-    engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
+    engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl2/' # Axon Path
 else:
-    engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
-exp_dir = f'{fname_prefix}_{nn_yaml}_dim{internal_dim}{fname_suffix}/'
+    raise ValueError('Define directory path for your given OS.')
+exp_dir = f'{fname_prefix}_{nn_yaml}_dim{internal_dim}/'
 for d in ['pickles/', 'nnets/', 'figs/', 'params/']:
     os.makedirs(f'{engram_dir}{d}{exp_dir}', exist_ok=True)
 pickle_dir = f'{engram_dir}pickles/{exp_dir}/'
@@ -123,13 +120,13 @@ def run(arg):
     parameters = {
         'fname': fname,
         'n_episodes': n_episodes,
-        'n_test_episodes': 10,
-        'continual_transfer': continual_transfer,
+        'n_test_episodes': 15,
         'agent_args': {
             'loss_weights': loss_weights, 'lr': 1e-4,
             'replay_capacity': 20_000, 'epsilon': epsilon,
             'batch_size': 64, 'target_update_frequency': 1000,
-            'train_seq_len': 1},
+            'discount_factor': discount_factor
+            },
         'network_args': {'latent_dim': internal_dim, 'network_yaml': nn_yaml},
         'dset_args': {'layout': size_maze, 'shuffle_obs': shuffle}
         }
@@ -170,9 +167,6 @@ def run(arg):
     goal_reset_episode = n_episodes//2 + 1
 
     for episode in range(n_episodes):
-        if continual_transfer and (episode == goal_reset_episode):
-            env.reset(reset_goal=True)
-            agent._replay_buffer.flush()
         start = time.time()
         losses, score, steps_per_episode = run_train_episode(env, agent)
         end = time.time()
@@ -255,10 +249,10 @@ for arg_idx in range(len(fname_grid)):
         args.append([fname, loss_weights, param_update, i])
 split_args = np.array_split(args, n_jobs)
 
+# Run script (with some CPU/GPU management)
 import time
 start = time.time()
-# Run relevant parallelization script
-if job_idx == -1:
+if job_idx == -1: # Parallelize over CPUs
     cpu_parallel()
 else:
     gpu_parallel(job_idx)

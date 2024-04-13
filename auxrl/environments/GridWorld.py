@@ -90,7 +90,7 @@ class Env(dm_env.Environment):
         self.goal_state = goal_state
         self.transitions_swapped = False
         self._shuffle_states = shuffle_states
-        self._eval = False
+        self._eval = False # Not used in regular Gridworld
         if self._observation_type == ObservationType.CIFAR:
             self._make_cifar_images()
         if shuffle_states:
