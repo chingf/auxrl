@@ -27,6 +27,15 @@ def mf0():
 parameter_map['mf0'] = mf0
 
 
+def mf1():
+    fname_grid = ['mf1']
+    loss_weights_grid = [[0,0,0,1E1]]
+    param_updates = [{}]
+    return fname_grid, loss_weights_grid, param_updates
+parameter_map['mf0'] = mf0
+
+
+
 def no_q():
     fname_grid = [
         'noQ_g0.5_-3_entro-3',
@@ -174,14 +183,15 @@ parameter_map['full_gridsearch'] = full_gridsearch
 
 
 def mf_gridsearch():
-    fname_grid = ['mf0', 'mf-1', 'mf1', 'mf2']
+    fname_grid = ['mf0', 'mf-1', 'mf1', 'mf2', 'mf-2']
     loss_weights_grid = [
         [0,0,0,1E0],
         [0,0,0,1E-1],
         [0,0,0,1E1],
         [0,0,0,1E2],
+        [0,0,0,1E-2],
         ]
-    param_updates = [{}, {}, {}, {}]
+    param_updates = [{}, {}, {}, {}, {}]
     return fname_grid, loss_weights_grid, param_updates
 parameter_map['mf_gridsearch'] = mf_gridsearch
 
@@ -264,21 +274,22 @@ parameter_map['selected_models_large_q'] = selected_models_large_q
 
 
 def selected_models_gridworld():
+    """ IQN will need to be run separately at gamma=0.7, 1E0 LR"""
     fname_grid = [
-        'mf1',
-        'entro0',
-        'g0_-2_entro1',
-        'g0.25_-2_entro0',
-        'g0.5_-2_entro1',
-        'g0.8_-4_entro1'
+        'mf0',
+        'entro-1',
+        'g0_-2_entro-1',
+        'g0.25_-2_entro-2',
+        'g0.5_-2_entro-1',
+        'g0.8_-4_entro-1'
         ]
     loss_weights_grid = [
-        [0, 0, 0, 1E1],
-        [0, 1E-0, 1E-0, 1],
-        [1E-2, 1E1, 1E1, 1],
-        [1E-2, 1E0, 1E0, 1],
-        [1E-2, 1E1, 1E1, 1],
-        [1E-4, 1E1, 1E1, 1],
+        [0, 0, 0, 1E0],
+        [0, 1E-1, 1E-1, 1],
+        [1E-2, 1E-1, 1E-1, 1],
+        [1E-2, 1E-2, 1E-2, 1],
+        [1E-2, 1E-1, 1E-1, 1],
+        [1E-4, 1E-1, 1E-1, 1],
         ]
     param_updates = [
         {},
@@ -322,21 +333,22 @@ parameter_map['selected_models_cifar'] = selected_models_cifar
 
 
 def selected_models_grid_shuffle():
+    """ IQN will need to be run separately at gamma=0.7, 1E1 LR"""
     fname_grid = [
         'mf0',
-        'entro0',
-        'g0_-2_entro-1',
-        'g0.25_-2_entro0',
-        'g0.5_-3_entro0',
-        'g0.8_-4_entro0'
+        'entro-2',
+        'g0_-2_entro-2',
+        'g0.25_-2_entro-2',
+        'g0.5_-3_entro-2',
+        'g0.8_-4_entro-2'
         ]
     loss_weights_grid = [
         [0, 0, 0, 1E0],
-        [0, 1E0, 1E0, 1],
-        [1E-2, 1E-1, 1E-1, 1],
-        [1E-2, 1E0, 1E0, 1],
-        [1E-3, 1E0, 1E0, 1],
-        [1E-4, 1E0, 1E0, 1],
+        [0, 1E-2, 1E-2, 1],
+        [1E-2, 1E-2, 1E-2, 1],
+        [1E-2, 1E-2, 1E-2, 1],
+        [1E-3, 1E-2, 1E-2, 1],
+        [1E-4, 1E-2, 1E-2, 1],
         ]
     param_updates = [
         {},

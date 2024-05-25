@@ -48,7 +48,7 @@ use_iqn = args.iqn
 # Set key experiment parameters
 exp_dir = f'gridworld_discount{discount_factor}_eps{epsilon}'
 exp_dir += f'_{nn_yaml}_dim{internal_dim}'
-n_iters = 3
+n_iters = 35
 load_function = parameter_map[args.load_function]
 if shuffle:
     exp_dir += '_shuffobs/'
@@ -124,14 +124,6 @@ def run(arg):
     fname_fig_dir = f'{engram_dir}figs/{exp_dir}/{fname}/'
     for _dir in [fname_nnet_dir, fname_fig_dir]:
         os.makedirs(_dir, exist_ok=True)
-
-    saved_epoch = int(save_net_every * (n_episodes//save_net_every))
-    net_exists = f'network_ep{saved_epoch}.pth' in os.listdir(fname_nnet_dir)
-    if net_exists:
-        print(f'Skipping {fname}')
-        return
-    else:
-        print(f'Running {fname}')
 
     parameters = {
         'fname': fname,
@@ -264,6 +256,17 @@ if __name__ == '__main__':
             fname = fname_grid[arg_idx]
             loss_weights = loss_weights_grid[arg_idx]
             param_update = param_updates[arg_idx]
+
+            # Is this already done?
+            fname_i = f'{fname}_{i}'
+            fname_i_nnet_dir = f'{engram_dir}nnets/{exp_dir}/{fname_i}/'
+            saved_epoch = int(save_net_every * (n_episodes//save_net_every))
+            if os.path.isdir(fname_i_nnet_dir):
+                net_exists = f'network_ep{saved_epoch}.pth' in os.listdir(fname_i_nnet_dir)
+                if net_exists:
+                    print(f'Skipping {fname_i}')
+                    continue
+
             args.append([fname, loss_weights, param_update, i])
     split_args = np.array_split(args, n_jobs)
     
