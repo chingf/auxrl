@@ -45,6 +45,6 @@ plt.rcParams['font.sans-serif'] = ['DejaVu Sans'] + plt.rcParams['font.sans-seri
 
 import os
 if os.environ['USER'] == 'chingfang':
-    engram_dir = '/Volumes/aronov-locker/Ching/rl/'
+    engram_dir = '/Volumes/aronov-locker/Ching/rl2/'
 else:
-    engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/'
+    engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl2/'

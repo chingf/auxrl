@@ -14,7 +14,7 @@ import argparse
 from acme import specs
 from acme import wrappers
 
-from auxrl.environments.GridWorld import Env as Env
+from auxrl.environments.GridWorld import Env as Env, ObservationType
 from auxrl.utils import run_train_episode, run_eval_episode
 from model_parameters.gridworld import parameter_map
 
@@ -31,6 +31,7 @@ parser.add_argument('-e', '--epsilon', type=float, default=1.0)
 parser.add_argument('-d', '--discount_factor', type=float, default=0.9)
 parser.add_argument('-s', '--shuffle', action='store_true')
 parser.add_argument('-q', '--iqn', action='store_true')
+parser.add_argument('-c', '--cifar', action='store_true')
 args = parser.parse_args()
 if (args.n_jobs != 1) and (args.job_idx is None):
     str_msg = 'Either specify job idx or set to CPU parallel (idx=-1) '
@@ -44,13 +45,15 @@ epsilon = args.epsilon
 discount_factor = args.discount_factor
 shuffle = args.shuffle
 use_iqn = args.iqn
+use_cifar = args.cifar
 
 # Set key experiment parameters
-exp_dir = f'gridworld_discount{discount_factor}_eps{epsilon}'
+exp_dir = f'gridworld' if not use_cifar else 'gridworld_cifar'
+exp_dir += f'_discount{discount_factor}_eps{epsilon}'
 exp_dir += f'_{nn_yaml}_dim{internal_dim}'
-n_iters = 35
+n_iters = 25
 load_function = parameter_map[args.load_function]
-if shuffle:
+if shuffle or use_cifar:
     exp_dir += '_shuffobs/'
     if epsilon < 0.4:
         n_episodes = 1501
@@ -138,6 +141,8 @@ def run(arg):
         'network_args': {'latent_dim': internal_dim, 'network_yaml': nn_yaml},
         'dset_args': {'layout': size_maze, 'shuffle_obs': shuffle}
         }
+    if use_cifar:
+        parameters['dset_args']['observation_type'] = ObservationType.CIFAR
     parameters = flatten(parameters)
     parameters.update(flatten(param_update))
     parameters = unflatten(parameters)
@@ -154,6 +159,9 @@ def run(arg):
     if parameters['dset_args']['shuffle_obs']:
         with open(f'{fname_nnet_dir}shuffle_indices.txt', 'w') as goalfile:
             goalfile.write(str(env._shuffle_indices))
+    if use_cifar:
+        with open(f'{fname_nnet_dir}image_indices.txt', 'w') as goalfile:
+            goalfile.write(str(env._cifar_images_indices))
 
     result = {}
     result['episode'] = []

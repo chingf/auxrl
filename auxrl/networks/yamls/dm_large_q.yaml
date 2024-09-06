@@ -12,6 +12,7 @@ encoder-fc: &encoder-fc
   - [Linear, auto, 32]
   - *act
   - [Linear, 32, auto]
+  - [Identity,]
 
 crar-fc: &crar-fc
   - *act
@@ -27,10 +28,21 @@ large-crar-fc: &large-crar-fc
   - *act
   - [Linear, 16, auto]
 
+large-crar-fc-post-act: &large-crar-fc-post-act
+  - [Linear, auto, 32]
+  - *act
+  - [Linear, 32, 16]
+  - *act
+  - [Linear, 16, auto]
+
 encoder:
   convs: *encoder-convs
   fc: *encoder-fc
   flatten: False
+
+iqn:
+  convs: *none
+  fc: *large-crar-fc-post-act
 
 q:
   convs: *none

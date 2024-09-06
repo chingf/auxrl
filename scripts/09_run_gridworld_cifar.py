@@ -7,18 +7,16 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 import time
-from flatten_dict import flatten
-from flatten_dict import unflatten
+from flatten_dict import flatten, unflatten
 import torch
+import argparse
 
 from acme import specs
 from acme import wrappers
 
-from auxrl.Agent import Agent
-from auxrl.networks.Network import Network
 from auxrl.environments.GridWorld import Env as Env, ObservationType
 from auxrl.utils import run_train_episode, run_eval_episode
-from model_parameters.gridworld import *
+from model_parameters.gridworld import parameter_map
 
 # Command-line args
 job_idx = int(sys.argv[1])

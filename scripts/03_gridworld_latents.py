@@ -11,9 +11,8 @@ import os
 import re
 import time
 import shortuuid
-from flatten_dict import flatten
-from flatten_dict import unflatten
 import torch
+from flatten_dict import flatten, unflatten
 from sklearn.decomposition import PCA
 
 from acme import specs
@@ -21,38 +20,38 @@ from acme import wrappers
 
 from auxrl.environments.GridWorld import Env as Env
 from auxrl.utils import run_train_episode, run_eval_episode
-from model_parameters.gridworld import *
-
-import torch
+from auxrl.IQNAgent import Agent as IQNAgent
+from auxrl.networks.IQNNetwork import Network as IQNNetwork
+from auxrl.Agent import Agent
+from auxrl.networks.Network import Network
+from model_parameters.gridworld import parameter_map
 #torch.cuda.is_available = lambda : False
+
 
 ## Arguments
 internal_dim = int(sys.argv[1])
 generic_exp_name = str(sys.argv[2]) #'gridworld8x8'
 network_yaml = str(sys.argv[3]) #'dm'
 source_episode = int(sys.argv[4]) #250
-selected_fnames = None
+shuff_obs = True
+selected_fnames = parameter_map['selected_models_gridworld']()[0]
 random_net = False
-
-if 'iqn' in generic_exp_name:
-    from auxrl.IQNAgent import Agent
-    from auxrl.networks.IQNNetwork import Network
-else:
-    from auxrl.Agent import Agent
-    from auxrl.networks.Network import Network
 
 # Set up paths
 device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 if 'SLURM_JOBID' in os.environ.keys():
-    engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
+    engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl2/' # Axon Path
 else:
-    engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
+    engram_dir = '/home/cf2794/engram/Ching/rl2/' # Cortex Path
 exp_name = f'{generic_exp_name}_{network_yaml}_dim{internal_dim}'
+if shuff_obs:
+    exp_name += '_shuffobs'
 latents_dir = f'{engram_dir}latents/{exp_name}/'
 nnets_dir = f'{engram_dir}nnets/{exp_name}/'
 pickle_dir = f'{engram_dir}pickles/{exp_name}/'
 analysis_dir = f'{engram_dir}analysis/{exp_name}/'
 os.makedirs(analysis_dir, exist_ok=True)
+
 
 ## Helper functions
 def get_gini(var_ratio):
@@ -117,12 +116,12 @@ T_dict = {
     'goal_state': [],
     }
 
+
 # Iterate through models
 for model_name in os.listdir(nnets_dir):
     string_split = model_name.rfind('_')
     fname = model_name[:string_split]
     if (selected_fnames != None) and (fname not in selected_fnames): continue
-    if not fname.startswith(generic_exp_name): continue
     iteration = int(model_name[string_split+1:])
     model_nnet_dir = f'{nnets_dir}{model_name}/'
     if not os.path.exists(f'{model_nnet_dir}network_ep{source_episode}.pth'):
@@ -134,13 +133,16 @@ for model_name in os.listdir(nnets_dir):
         parameters = yaml.safe_load(f)
     parameters['fname'] = f'{exp_name}/{model_name}'
     parameters['internal_dim'] = internal_dim
-    if 'iqn' in generic_exp_name:
-        parameters['random_quantiles'] = False
-        parameters['n_quantiles'] = 20
     env = Env(**parameters['dset_args'])
     env_spec = specs.make_environment_spec(env)
-    network = Network(env_spec, device=device, **parameters['network_args'])
-    agent = Agent(env_spec, network, device=device, **parameters['agent_args'])
+    if 'iqn' in fname:
+        parameters['random_quantiles'] = False
+        parameters['n_quantiles'] = 20
+        network = IQNNetwork(env_spec, device=device, **parameters['network_args'])
+        agent = IQNAgent(env_spec, network, device=device, **parameters['agent_args'])
+    else:
+        network = Network(env_spec, device=device, **parameters['network_args'])
+        agent = Agent(env_spec, network, device=device, **parameters['agent_args'])
     with open(f'{model_nnet_dir}goal.txt', 'r') as goalfile: # Setting of goal
         goal_state = str(goalfile.read())
         goal_state = [int(goal_state[1]), int(goal_state[-2])]
