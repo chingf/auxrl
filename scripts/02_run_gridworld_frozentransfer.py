@@ -12,53 +12,64 @@ import shortuuid
 from flatten_dict import flatten
 from flatten_dict import unflatten
 import torch
+import argparse
 
 from acme import specs
 from acme import wrappers
 
-from auxrl.Agent import Agent
-from auxrl.networks.Network import Network
 from auxrl.environments.GridWorld import Env as Env
 from auxrl.utils import run_train_episode, run_eval_episode
 from model_parameters.gridworld import *
 
-# Command-line args
-job_idx = int(sys.argv[1])
-n_jobs = int(sys.argv[2])
-nn_yaml = sys.argv[3]
-internal_dim = int(sys.argv[4])
-if len(sys.argv) > 5:
-    if sys.argv[5] == 'shuffle':
-        shuffle = True
-    else:
-        raise ValueError('Unrecognized flag')
-else:
-    shuffle = False
+# Parse required command-line arguments
+parser = argparse.ArgumentParser()
+parser.add_argument('internal_dim', type=int, help='Latent size.')
+
+# Parse optional arguments
+parser.add_argument('-i', '--job_idx', type=int, help='Index into N jobs.')
+parser.add_argument('-n', '--n_jobs', type=int, default=1)
+parser.add_argument('-y', '--nn_yaml', type=str, default='dm_large_q')
+parser.add_argument('-e', '--epsilon', type=float, default=1.0)
+parser.add_argument('-d', '--discount_factor', type=float, default=0.9)
+parser.add_argument('-q', '--iqn', action='store_true')
+args = parser.parse_args()
+if (args.n_jobs != 1) and (args.job_idx is None):
+    str_msg = 'Either specify job idx or set to CPU parallel (idx=-1) '
+    str_msg += 'if you are running multiple jobs.'
+    parser.error(str_msg)
+job_idx = 0 if args.job_idx is None else args.job_idx
+n_jobs = args.n_jobs
+nn_yaml = args.nn_yaml
+internal_dim = args.internal_dim
+epsilon = args.epsilon
+discount_factor = args.discount_factor
+use_iqn = args.iqn
+shuffle = True
 
 # Experiment Parameters
-load_function = selected_models_grid_shuffle
+load_function = 'selected_models_grid_shuffle'
 if nn_yaml == 'dm_large_encoder':
-    load_function = selected_models_large_encoder
+    load_function = 'selected_models_large_encoder'
 if nn_yaml == 'dm_large_q':
-    load_function = selected_models_large_q
-source_prefix = f'new_gridworld8x8'
-if shuffle:
-    source_prefix += '_shuffobs'
+    load_function = 'selected_models_large_q'
+if use_iqn:
+    load_function = 'mf1'  # For large-Q network model
+load_function = parameter_map[load_function]
+source_exp_dir = f'gridworld_discount{discount_factor}_'
+source_exp_dir += f'eps{epsilon}_{nn_yaml}_dim{internal_dim}_shuffobs'
+transfer_exp_dir = f'frozentransfer_{source_exp_dir}'
 source_episode = 600
-fname_prefix = f'frozenrandomtransfer_{source_prefix}'
 n_episodes = 601
-n_iters = 45
+n_iters = 15
 
 # Less changed args
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 eval_every = 1
 save_net_every = 50
 size_maze = 8
-source_suffix = ''
-fname_suffix = ''
 random_seed = True
-random_source = False
-encoder_only = True
-freeze_encoder = True
+encoder_only = True  # Load only the encoder
+freeze_encoder = True  # Don't finetune encoder
 n_cpu_jobs = 56 # Only used in event of CPU paralellization
 
 # If manual GPU setting
@@ -84,64 +95,60 @@ if n_gpus > 1:
 
 # Make directories
 if os.environ['USER'] == 'chingfang':
-    engram_dir = '/Volumes/aronov-locker/Ching/rl/' # Local Path
+    engram_dir = '/Volumes/aronov-locker/Ching/rl2/' # Local Path
 elif 'SLURM_JOBID' in os.environ.keys():
-    engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl/' # Axon Path
+    engram_dir = '/mnt/smb/locker/aronov-locker/Ching/rl2/' # Axon Path
 else:
-    engram_dir = '/home/cf2794/engram/Ching/rl/' # Cortex Path
-exp_dir = f'{fname_prefix}_{nn_yaml}_dim{internal_dim}{fname_suffix}/'
-source_dir = f'{source_prefix}_{nn_yaml}_dim{internal_dim}{source_suffix}/'
+    engram_dir = '/home/cf2794/engram/Ching/rl2/' # Cortex Path
 for d in ['pickles/', 'nnets/', 'figs/', 'params/']:
-    os.makedirs(f'{engram_dir}{d}{exp_dir}', exist_ok=True)
-pickle_dir = f'{engram_dir}pickles/{exp_dir}/'
-param_dir = f'{engram_dir}params/{exp_dir}/'
+    os.makedirs(f'{engram_dir}{d}{transfer_exp_dir}', exist_ok=True)
+source_param_dir = f'{engram_dir}params/{source_exp_dir}/'
+source_nnet_dir = f'{engram_dir}nnets/{source_exp_dir}/'
+transfer_pickle_dir = f'{engram_dir}pickles/{transfer_exp_dir}/'
+transfer_param_dir = f'{engram_dir}params/{transfer_exp_dir}/'
+transfer_nnet_dir = f'{engram_dir}nnets/{transfer_exp_dir}/'
+transfer_fig_dir = f'{engram_dir}figs/{transfer_exp_dir}/'
+
+# Agent handling
+if use_iqn:
+    from auxrl.IQNAgent import Agent
+    from auxrl.networks.IQNNetwork import Network
+else:
+    from auxrl.Agent import Agent
+    from auxrl.networks.Network import Network
 
 def gpu_parallel(job_idx):
     for _arg in split_args[job_idx]:
         run(_arg)
 
 def cpu_parallel():
-    job_results = Parallel(n_jobs=n_cpu_jobs)(delayed(run)(arg) for arg in args)
+    job_results = Parallel(
+        n_jobs=n_cpu_jobs)(delayed(run)(arg) for arg in args)
 
 def run(arg):
-    _fname, source_fname, loss_weights, param_update, i = arg
-    print(_fname)
-    print(loss_weights)
-    source_nnet_dir = f'{engram_dir}nnets/{source_dir}'
-    if source_fname is None:
-        load_network = None
-        prev_pos_goal = None
-    else:
-        source_fname_path = f'{source_nnet_dir}'
-        if random_source:
-            source_fname_options = [
-                s for s in os.listdir(source_nnet_dir) if \
-                (re.search(f"^({source_fname})_\\d+", s) != None)]
-            source_fname_idx = np.random.choice(len(source_fname_options))
-            source_fname_path += f'{source_fname_options[source_fname_idx]}/'
-        else:
-            source_fname_path += f'{source_fname}_{i}/'
-        load_network = [f'{source_fname_path}', source_episode]
-        with open(f'{source_fname_path}goal.txt', 'r') as goalfile:
-            prev_pos_goal = str(goalfile.read())
-            prev_pos_goal = [int(prev_pos_goal[1]), int(prev_pos_goal[-2])]
-
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print(device)
+    _fname, loss_weights, param_update, i = arg
     fname = f'{_fname}_{i}'
-    fname_nnet_dir = f'{engram_dir}nnets/{exp_dir}/{fname}/'
-    fname_fig_dir = f'{engram_dir}figs/{exp_dir}/{fname}/'
-    for _dir in [fname_nnet_dir, fname_fig_dir]:
-        os.makedirs(_dir, exist_ok=True)
-
+    fname_source_nnet_dir = f'{source_nnet_dir}{fname}/'
+    load_network = [fname_source_nnet_dir, source_episode]
+    with open(f'{fname_source_nnet_dir}goal.txt', 'r') as goalfile:
+        prev_pos_goal = str(goalfile.read())
+        prev_pos_goal = [int(prev_pos_goal[1]), int(prev_pos_goal[-2])]
     saved_epoch = int(save_net_every * (n_episodes//save_net_every))
-    net_exists = f'network_ep{saved_epoch}.pth' in os.listdir(fname_nnet_dir)
-    if net_exists:
+    source_net_exists = f'network_ep{source_episode}.pth' in os.listdir(
+        fname_source_nnet_dir)
+    transfer_net_exists = os.path.isfile(
+        f'{transfer_nnet_dir}{fname}/network_ep{saved_epoch}.pth')
+    if (not source_net_exists) or (transfer_net_exists):
         print(f'Skipping {fname}')
         return
-    else:
-        print(f'Running {fname}')
 
+    # Make transfer directories
+    fname_transfer_nnet_dir = f'{transfer_nnet_dir}{fname}/'
+    fname_transfer_fig_dir = f'{transfer_fig_dir}{fname}/'
+    os.makedirs(fname_transfer_nnet_dir, exist_ok=True)
+    os.makedirs(fname_transfer_fig_dir, exist_ok=True)
+
+    # Set parameters
     parameters = {
         'source_network_path': load_network,
         'source_network_episode': source_episode,
@@ -152,8 +159,7 @@ def run(arg):
         'agent_args': {
             'loss_weights': loss_weights, 'lr': 1e-3,
             'replay_capacity': 100_000, 'epsilon': 1.0,
-            'batch_size': 64, 'target_update_frequency': 1000,
-            'train_seq_len': 1},
+            'batch_size': 64, 'target_update_frequency': 1000},
         'network_args': {
             'latent_dim': internal_dim, 'network_yaml': nn_yaml,
             'freeze_encoder': freeze_encoder},
@@ -164,29 +170,25 @@ def run(arg):
     parameters = flatten(parameters)
     parameters.update(flatten(param_update))
     parameters = unflatten(parameters)
-    with open(f'{param_dir}{_fname}.yaml', 'w') as outfile:
+    with open(f'{transfer_param_dir}{_fname}.yaml', 'w') as outfile:
         yaml.dump(parameters, outfile, default_flow_style=False)
     if random_seed: np.random.seed(i)
     env = Env(**parameters['dset_args'])
     env = wrappers.SinglePrecisionWrapper(env)
     env_spec = specs.make_environment_spec(env)
-    with open(f'{fname_nnet_dir}goal.txt', 'w') as goalfile:
+    with open(f'{fname_transfer_nnet_dir}goal.txt', 'w') as goalfile:
         goalfile.write(str(env._goal_state))
     if parameters['dset_args']['shuffle_obs']:
-        with open(f'{fname_nnet_dir}shuffle_indices.txt', 'w') as goalfile:
+        with open(f'{fname_transfer_nnet_dir}shuffle_indices.txt', 'w') as goalfile:
             goalfile.write(str(env._shuffle_indices))
     network = Network(env_spec, device=device, **parameters['network_args'])
     agent = Agent(env_spec, network, device=device, **parameters['agent_args'])
 
     try:
-        if load_network is not None:
-            print('Loading network')
-            agent.load_network(load_network[0], load_network[1], encoder_only)
+        agent.load_network(load_network[0], load_network[1], encoder_only)
     except:
         print(f'ERROR LOADING {load_network[0]}, {load_network[1]}')
         return
-
-    os.makedirs(fname_nnet_dir, exist_ok=True)
 
     result = {}
     result['episode'] = []
@@ -241,61 +243,63 @@ def run(arg):
                 ax.plot(result[loss_key])
                 ax.set_ylabel(loss_key)
             plt.tight_layout()
-            plt.savefig(f'{fname_fig_dir}train_losses.png')
+            plt.savefig(f'{fname_transfer_fig_dir}train_losses.png')
             plt.figure()
             plt.plot(result['train_score'])
             plt.ylabel('Training Score'); plt.xlabel('Training Episodes')
             plt.tight_layout()
-            plt.savefig(f'{fname_fig_dir}train_scores.png')
+            plt.savefig(f'{fname_transfer_fig_dir}train_scores.png')
             plt.figure()
             plt.plot(
                 result['episode'][::eval_every],
                 result['valid_score'][::eval_every])
             plt.ylabel('Validation Score'); plt.xlabel('Training Episodes')
             plt.tight_layout()
-            plt.savefig(f'{fname_fig_dir}valid_scores.png')
+            plt.savefig(f'{fname_transfer_fig_dir}valid_scores.png')
             plt.figure()
             plt.plot(
                 result['episode'][::eval_every],
                 result['valid_steps_per_ep'][::eval_every])
             plt.ylabel('Validation Steps to Goal'); plt.xlabel('Training Episodes')
             plt.tight_layout()
-            plt.savefig(f'{fname_fig_dir}valid_steps.png')
+            plt.savefig(f'{fname_transfer_fig_dir}valid_steps.png')
             plt.close('all')
         else:
             result['valid_score'].append(None)
             result['valid_steps_per_ep'].append(None)
         if episode % save_net_every == 0:
-            agent.save_network(fname_nnet_dir, episode)
+            agent.save_network(fname_transfer_nnet_dir, episode)
 
     # Save pickle
-    with open(f'{pickle_dir}{fname}.p', 'wb') as f:
+    with open(f'{transfer_pickle_dir}{fname}.p', 'wb') as f:
         pickle.dump(result, f)
 
-# Load model parameters
-fname_grid, loss_weights_grid, param_updates = load_function()
-source_fnames = [f'{source_prefix}_{f}' for f in fname_grid]
-fname_grid = [f'{fname_prefix}_{f}' for f in fname_grid]
-
-# Collect argument combinations
-iters = np.arange(n_iters)
-args = []
-for arg_idx in range(len(fname_grid)):
-    for i in iters:
-        fname = fname_grid[arg_idx]
-        source_fname = source_fnames[arg_idx]
-        loss_weights = loss_weights_grid[arg_idx]
-        param_update = param_updates[arg_idx]
-        args.append([fname, source_fname, loss_weights, param_update, i])
-split_args = np.array_split(args, n_jobs)
-
-import time
-start = time.time()
-# Run relevant parallelization script
-if job_idx == -1:
-    cpu_parallel()
-else:
-    gpu_parallel(job_idx)
-end = time.time()
-
-print(f'ELAPSED TIME: {end-start} seconds')
+if __name__ == '__main__':
+    # Load model parameters
+    fname_grid, loss_weights_grid, param_updates = load_function()
+    assert(len(fname_grid) == len(loss_weights_grid))
+    assert(len(fname_grid) == len(param_updates))
+    if use_iqn:
+        fname_grid = [f'iqn_{f}' for f in fname_grid]
+    
+    # Collect argument combinations
+    iters = np.arange(n_iters)
+    args = []
+    for arg_idx in range(len(fname_grid)):
+        for i in iters:
+            fname = fname_grid[arg_idx]
+            loss_weights = loss_weights_grid[arg_idx]
+            param_update = param_updates[arg_idx]
+            args.append([fname, loss_weights, param_update, i])
+    split_args = np.array_split(args, n_jobs)
+    
+    import time
+    start = time.time()
+    # Run relevant parallelization script
+    if job_idx == -1:
+        cpu_parallel()
+    else:
+        gpu_parallel(job_idx)
+    end = time.time()
+    
+    print(f'ELAPSED TIME: {end-start} seconds')
